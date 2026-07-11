@@ -1,0 +1,13 @@
+.env
+*.env
+
+docker/postgres/data/
+docker/postgres/backups/
+
+logs/
+backup/
+
+*.log
+
+.vscode/
+.idea/
