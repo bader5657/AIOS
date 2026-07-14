@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "document_id": "DOC-YYYYMMDD-000001",
+  "original_filename": "",
+  "stored_filename": "",
+  "media_type": "",
+  "file_extension": "",
+  "file_size_bytes": 0,
+  "checksum_sha256": "",
+  "source": {
+    "channel": "telegram",
+    "telegram_user_id": "",
+    "telegram_chat_id": "",
+    "telegram_message_id": ""
+  },
+  "classification": {
+    "category": "",
+    "entity_type": "",
+    "entity_id": "",
+    "tags": []
+  },
+  "storage": {
+    "temporary_path": "",
+    "permanent_path": "",
+    "status": "received"
+  },
+  "processing": {
+    "reader": "",
+    "text_extracted": false,
+    "summary_created": false,
+    "memory_saved": false,
+    "requires_confirmation": true
+  },
+  "timestamps": {
+    "received_at": "",
+    "processed_at": ""
+  }
+}

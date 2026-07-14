@@ -1,20 +1,15 @@
-# AIOS CHANGELOG
+# Changelog
 
-## Build 20260711-0002
+## 0.1.0-alpha
 
-### Added
-- Docker Network
-- PostgreSQL 17
-- PostgreSQL Health Check
-- Swap 4 GB
-- UFW Firewall
-- Fail2ban
+Initial Production Alpha
 
-### Changed
-- Security Baseline completed.
-- Workspace ownership moved to aiosadmin.
+Added
 
-### Fixed
-- Docker permission for aiosadmin.
-- SSH configuration.
-- Documentation permission issues.
+- Telegram Adapter
+- Mission Control
+- Universal Ingestion
+- Storage Engine
+- Metadata Engine
+- Automatic Document Manifest
+- systemd Integration

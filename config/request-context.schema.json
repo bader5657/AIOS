@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "request_id": "REQ-YYYYMMDD-000001",
+  "conversation_id": "",
+  "parent_request_id": null,
+
+  "source": {
+    "channel": "telegram",
+    "gateway": "telegram-gateway",
+    "user_id": "",
+    "chat_id": "",
+    "message_id": ""
+  },
+
+  "user": {
+    "display_name": "",
+    "language": "id",
+    "timezone": "Asia/Jakarta"
+  },
+
+  "input": {
+    "message_type": "text",
+    "raw_text": "",
+    "normalized_text": "",
+    "attachments": [],
+    "links": []
+  },
+
+  "context": {
+    "current_priority": "shoegabox_admin",
+    "conversation_summary": "",
+    "related_entity_type": "",
+    "related_entity_id": ""
+  },
+
+  "routing": {
+    "selected_mode": "",
+    "selected_specialist": "",
+    "confidence": 0,
+    "requires_clarification": false,
+    "clarification_question": ""
+  },
+
+  "processing": {
+    "status": "received",
+    "requires_confirmation": false,
+    "approved": false,
+    "memory_candidate": false
+  },
+
+  "timestamps": {
+    "received_at": "",
+    "processed_at": ""
+  }
+}

@@ -2,24 +2,41 @@
 
 Artificial Intelligence Operating System
 
-## Purpose
+Version: 0.1.0-alpha
 
-AIOS adalah platform otomatisasi bisnis berbasis AI yang dibangun secara modular.
+## Current Capabilities
 
-## Current Build
+- Telegram Bot
+- Mission Control
+- Universal Ingestion
+- Storage Engine
+- Metadata Engine
+- Automatic Document Manifest
+- systemd Service
 
-Version : 1.0.0
+## Project Structure
 
-Build : 20260711-0002
+core/
+    adapters/
+    app/
+    ingestion/
+    mission/
+    storage/
 
-Phase : AIOS Platform
+## Current Status
 
-## Components
+Foundation Completed
 
-- PostgreSQL
-- Docker
-- Docker Compose
-- UFW
-- Fail2ban
-- Swap
+Asset Pipeline Completed
 
+Mission Control Completed
+
+Next Milestone
+
+AI Pipeline
+
+Brain
+
+Specialist Router
+
+Business Specialists

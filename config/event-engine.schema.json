@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "engine": "AIOS Event Engine",
+
+  "events": {
+    "message_received": {},
+    "document_received": {},
+    "image_received": {},
+    "voice_received": {},
+    "link_received": {},
+    "order_requested": {},
+    "transaction_requested": {}
+  },
+
+  "dispatch": {
+    "mode": "publish_subscribe",
+    "retry": true,
+    "max_retry": 3
+  },
+
+  "consumers": [
+    "aios_brain",
+    "specialist_router",
+    "memory",
+    "admin",
+    "finance",
+    "content",
+    "creative",
+    "cto"
+  ]
+}
