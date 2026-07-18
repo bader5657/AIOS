@@ -11,3 +11,6 @@ backup/
 
 .vscode/
 .idea/
+
+__pycache__/
+*.py[cod]
