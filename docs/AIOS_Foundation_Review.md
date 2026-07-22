@@ -46,11 +46,11 @@ Dokumen ini tidak menggantikan Blueprint maupun Roadmap.
 | Lifecycle | ✅ |
 | State | ✅ |
 | Serialization | ✅ |
-| Repository | ⏳ |
-| Storage | ⏳ |
-| Repository Test | ⏳ |
-| Storage Test | ⏳ |
-| Final Review | ⏳ |
+| Repository | ✅ |
+| Storage | ✅ |
+| Repository Test | ✅ |
+| Storage Test | ✅ |
+| Final Review | ✅ |
 
 ---
 
