@@ -56,7 +56,6 @@ Dokumen ini tidak menggantikan Blueprint maupun Roadmap.
 
 # Review Notes
 
-Belum ada.
 
 ---
 
