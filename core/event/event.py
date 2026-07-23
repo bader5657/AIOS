@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -10,7 +10,10 @@ class Event:
     event_id: str
     event_name: str
     payload: dict[str, Any]
-    created_at: datetime = field(default_factory=datetime.utcnow)
+
+    created_at: datetime = field(
+        default_factory=lambda: datetime.now(UTC)
+    )
 
     def __post_init__(self) -> None:
         if not self.event_id.strip():

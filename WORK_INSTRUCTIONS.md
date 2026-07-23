@@ -1,18 +1,30 @@
 # AIOS Work Instructions
 
-## Purpose
+## Project Status
 
-This repository follows the AIOS Blueprint.
+AIOS is currently in the implementation phase.
 
-The Blueprint is the single source of truth.
+The Blueprint is frozen.
 
-The Roadmap defines implementation order.
+The Roadmap is frozen.
 
-Do not redesign architecture.
+Implementation must follow the Blueprint.
 
 ---
 
-# Core Principles
+## Source of Truth
+
+Priority:
+
+1. Blueprint
+2. Roadmap
+3. Existing implementation
+
+Never create a second source of truth.
+
+---
+
+## Engineering Principles
 
 - Business First
 - Simplicity First
@@ -22,77 +34,58 @@ Do not redesign architecture.
 
 ---
 
-# Architecture Rules
+## Development Workflow
 
-Never modify architecture unless explicitly requested.
+Implement one milestone at a time.
 
-Never redesign completed modules.
+Never leave incomplete work.
 
-Never change project structure without approval.
+Do not redesign architecture.
 
-Always preserve backward compatibility.
-
----
-
-# Development Rules
-
-Implement only one small milestone at a time.
-
-Keep commits small.
-
-Do not leave partially implemented features.
+Do not modify frozen modules unless explicitly requested.
 
 ---
 
-# Testing Rules
+## Testing
 
-Every change must satisfy:
-
-- All unit tests pass.
-- No warnings.
-- Code compiles successfully.
-- Repository remains clean.
-
-Always run:
+Before every commit:
 
 python3 -m pytest tests/unit
 
-before committing.
+Requirements:
+
+- All tests pass
+- No warnings
+- Repository compiles successfully
 
 ---
 
-# Commit Rules
-
-Commit only after:
-
-- Tests pass
-- No warnings
-- git status clean
+## Commit Policy
 
 Use Conventional Commits.
 
-Example:
+Examples:
 
-feat(core-platform): add event dispatcher
+feat(core-platform): add event engine
 
----
+fix(storage): resolve metadata issue
 
-# Documentation
-
-Update documentation whenever architecture changes.
-
-Never allow documentation to diverge from implementation.
+docs: update implementation guide
 
 ---
 
-# AI Assistant Behavior
+## AI Assistant Rules
 
-When working on this repository:
+Always:
 
 - Read Blueprint first.
 - Read Roadmap second.
-- Follow implementation order.
-- Never invent roadmap items.
-- Never skip milestones.
-- Stop after completing one milestone.
+- Respect frozen architecture.
+- Stop after one completed milestone.
 - Report progress before continuing.
+
+Never:
+
+- Invent roadmap items.
+- Skip milestones.
+- Change architecture.
