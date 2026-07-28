@@ -7,7 +7,7 @@ Status: Approved repository authority
 Authority: Project Owner
 
 Published scope: DF-03A.1, DF-03A.2A, DF-03B.1, DF-03C.1, DF-03D.1,
-DF-03E.1A, and the DF-04 Customer Domain contract through DF-04.6
+DF-03E.1A, and the DF-04 Customer Domain contract through DF-04.7
 
 This document is the repository source of truth for the Domain Foundation
 contracts explicitly published below.
@@ -1121,14 +1121,141 @@ Customer Event Exposure
 Customer uses only AggregateRoot record_event, pending_events, pull_events,
 and clear_events. No Customer-specific exposure API, dispatch, persistence,
 EventEnvelope creation, publisher, or event bus is published.
-CustomerRepository
-CustomerRepository is an abstract Repository specialization for Customer and
-CustomerId. It exposes exactly inherited save(customer), get(customer_id),
-exists(customer_id), delete(customer_id), and list(), with inherited behavior.
-It adds no find_by_name, search, pagination, database behavior, PostgreSQL or
-in-memory implementation, uniqueness checks, or transactions.
-Implementation authority: core/domain/customer/repository.py
-Test authority: tests/unit/domain/customer/test_customer_repository.py
+
+DF-04.7 CustomerRepository
+
+Published Scope
+
+DF-04.7 publishes only the CustomerRepository domain interface. It specializes
+the published base Repository contract for the Customer aggregate and
+CustomerId identity. It does not publish a concrete repository implementation,
+storage mechanism, persistence mapping, or infrastructure adapter.
+
+Specialization and Abstract Status
+
+CustomerRepository is an abstract specialization of:
+
+Repository[Customer, CustomerId]
+
+CustomerRepository inherits the five abstract Repository methods. It must not
+redeclare or override them. Its effective specialized interface is:
+
+- save(aggregate: Customer) -> None
+- get(entity_id: CustomerId) -> Customer | None
+- exists(entity_id: CustomerId) -> bool
+- delete(entity_id: CustomerId) -> bool
+- list() -> tuple[Customer, ...]
+
+All five methods are synchronous. CustomerRepository remains abstract and
+cannot be instantiated until a later concrete implementation supplies all five
+inherited operations. It exposes no additional public operation.
+
+Save
+
+save accepts exactly one Customer aggregate for creation or update and returns
+None. The Customer identity is the storage identity. Saving a Customer whose
+CustomerId is not present creates one logical repository entry. Saving a
+Customer whose CustomerId is already present updates that logical entry to the
+supplied Customer. It must not create a second entry, raise a duplicate error,
+or perform uniqueness checks on name, address, city, notes, or any other
+Customer data.
+
+The interface does not prescribe object copying, storage technology, session
+behavior, or persistence timing. save must not pull, clear, publish, dispatch,
+persist, or otherwise inspect Customer pending events as repository behavior.
+
+Get
+
+get returns the Customer matching the supplied CustomerId. When no matching
+Customer exists, it returns None. It must not raise EntityNotFoundError or
+another missing-customer exception.
+
+Exists
+
+exists returns True when exactly one logical entry matching the supplied
+CustomerId exists and False when none exists. It has no side effects.
+
+Delete
+
+delete removes the logical entry matching the supplied CustomerId. It returns
+True when an entry was removed and False when no matching entry existed.
+Deleting a missing Customer is a no-op and must not raise a missing-customer
+exception.
+
+List
+
+list returns every stored Customer exactly once as an immutable tuple ordered
+by Customer.id.value in ascending Python string order. Re-saving an existing
+CustomerId updates its logical entry and does not otherwise affect ordering.
+When the repository is empty, list returns the empty tuple.
+
+Restrictions
+
+CustomerRepository adds no find_by_name, search, filtering, pagination,
+counting, database behavior, PostgreSQL or in-memory implementation, storage
+state, caching, ORM or SQLAlchemy behavior, SQL, filesystem behavior,
+serialization, transaction, unit-of-work, event behavior, infrastructure or
+adapter behavior, framework dependency, or uniqueness check beyond identifying
+one logical entry by CustomerId.
+
+Implementation Authority
+
+DF-04.7 implementation authority is limited to:
+
+core/domain/customer/repository.py
+
+DF-04.7 focused test authority is limited to:
+
+tests/unit/domain/customer/test_customer_repository.py
+
+Required Focused Tests
+
+The authorized CustomerRepository test file must verify at minimum:
+
+- CustomerRepository is abstract and cannot be instantiated;
+- CustomerRepository specializes exactly Repository[Customer, CustomerId];
+- save, get, exists, delete, and list are inherited and not redeclared;
+- the effective specialized signatures and return types match this contract;
+- all five inherited operations remain synchronous and abstract;
+- no additional public operation is exposed;
+- save is documented as creation-or-update returning None;
+- duplicate CustomerId means update of one logical entry, not duplication or
+  error;
+- no uniqueness rule exists for Customer data other than entry identity;
+- get returns None for a missing Customer and introduces no missing-customer
+  exception;
+- exists has exact True and False semantics without side effects;
+- delete has exact True and False semantics and missing delete is a no-op;
+- list returns an immutable tuple in ascending Customer.id.value string order;
+- an empty repository lists as the empty tuple;
+- the interface defines no constructor, storage state, or concrete behavior;
+- no event pulling, clearing, persistence, publication, or dispatch behavior is
+  introduced;
+- no prohibited dependency, query API, package export, or infrastructure
+  behavior is introduced; and
+- only Python standard-library typing or inspection dependencies and published
+  Customer domain dependencies are used.
+
+DF-04.7 Completion Gate
+
+DF-04.7 is complete only when CustomerRepository exists only at its authorized
+source path; it is an abstract Repository[Customer, CustomerId] specialization;
+all five operations are inherited without redeclaration and no additional
+public operation exists; its generic specialization and effective API match
+this contract; the authorized focused tests pass; the full domain test suite
+passes; core and tests compile; git diff --check and dependency, public-API,
+abstractness, and prohibited-behavior audits pass; no Customer package export
+or other domain contract changes; and only repository.py and
+test_customer_repository.py are modified by the later implementation slice.
+
+DF-04.7 and DF-04.8 Boundary
+
+DF-04.7 owns only publication and implementation of the CustomerRepository
+interface and its focused tests. DF-04.8 owns full Customer domain verification
+only. DF-04.8 must not add or change CustomerRepository behavior, signatures,
+ordering, persistence, infrastructure, package exports, or any other domain
+contract.
+
 Customer Package Authority
 core/domain/customer/__init__.py and tests/unit/domain/customer/__init__.py are
 authorized. The public package exports only published Customer symbols.
