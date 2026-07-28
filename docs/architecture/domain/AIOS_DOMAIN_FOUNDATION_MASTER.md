@@ -7,7 +7,7 @@ Status: Approved repository authority
 Authority: Project Owner
 
 Published scope: DF-03A.1, DF-03A.2A, DF-03B.1, DF-03C.1, DF-03D.1,
-DF-03E.1A
+DF-03E.1A, and the complete DF-04 Customer Domain contract
 
 This document is the repository source of truth for the Domain Foundation
 contracts explicitly published below.
@@ -523,7 +523,131 @@ infrastructure;
 framework dependencies;
 asynchronous methods;
 automatic event generation.
-6. Published Domain Foundation Implementation Scope
+6. Customer Identity Contract
+Purpose
+CustomerId is the identity type of the Customer aggregate.
+Type and Value
+CustomerId is an immutable ValueObject wrapping exactly one Python str value.
+The underlying public value is named:
+value
+CustomerId must inherit from the published ValueObject foundation.
+CustomerId must not inherit from Entity.
+The CustomerId value must be supplied externally. CustomerId must not
+generate identifiers automatically.
+Validation
+The value:
+- must be a str;
+- must not be empty;
+- must not contain only whitespace; and
+- must not have leading or trailing whitespace.
+Leading and trailing whitespace must not be silently trimmed.
+Invalid construction must raise DomainValidationError.
+Immutability
+CustomerId must be technically immutable after construction.
+Equality and Hashing
+Equality is value-based and includes the exact concrete ValueObject type.
+Two CustomerId instances are equal when their string values are equal.
+Hashing must use the same concrete type and value and must remain consistent
+with equality.
+Public API
+CustomerId exposes exactly one public property:
+value
+No additional public behavior is authorized.
+Restrictions
+The Customer Identity contract must not contain or introduce:
+- UUID dependencies;
+- automatic identifier generation;
+- database sequence generation;
+- database behavior;
+- persistence mapping;
+- serialization;
+- Customer aggregate behavior;
+- repository behavior;
+- event behavior; or
+- framework dependencies.
+7. Customer Domain Contract
+DF-04 Objective
+DF-04 publishes the complete Customer Domain contract: Customer value objects,
+the Customer aggregate and business rules, Customer domain events and event
+exposure, and the CustomerRepository interface. This is domain authority only.
+Customer Value Objects
+CustomerName, CustomerAddress, and CustomerCity are immutable ValueObjects,
+each wrapping exactly one public str property: value. Each value must be a str,
+not empty or whitespace-only, and have no leading or trailing whitespace.
+CustomerName and CustomerCity require at least 2 characters; CustomerAddress
+requires at least 5. Values are not trimmed or normalized. Invalid construction
+raises DomainValidationError. Equality and hashing follow ValueObject.
+Implementation and test authority:
+- core/domain/customer/customer_name.py
+- tests/unit/domain/customer/test_customer_name.py
+- core/domain/customer/customer_address.py
+- tests/unit/domain/customer/test_customer_address.py
+- core/domain/customer/customer_city.py
+- tests/unit/domain/customer/test_customer_city.py
+Customer Aggregate
+Customer is an AggregateRoot with identity type CustomerId. Required state:
+- id: CustomerId
+- name: CustomerName
+- address: CustomerAddress
+- city: CustomerCity
+- notes: str | None
+All except notes are required. Notes default to None; when supplied they must
+be str. Empty notes are allowed and preserved verbatim. Identity is not
+generated. Invalid input raises DomainValidationError. Public read-only
+properties are id, name, address, city, and notes. Approved operations:
+- change_name(name: CustomerName) -> None
+- change_address(address: CustomerAddress) -> None
+- change_city(city: CustomerCity) -> None
+- change_notes(notes: str | None) -> None
+Exact required ValueObject types must be supplied; None is invalid for name,
+address, and city. Notes may be None. Equal assignment is allowed, changes no
+state, and records no event. Unequal updates change only the matching field,
+preserve identity, and record the matching event after the state change. No
+lifecycle/status, delete, deactivate, archive, merge, or restore behavior is
+published. Equality and hashing use inherited identity semantics.
+Implementation authority: core/domain/customer/customer.py
+Test authority: tests/unit/domain/customer/test_customer.py
+Customer Business Rules
+- CustomerId is required and immutable.
+- name, address, and city are required; notes are optional.
+- duplicate names, addresses, and cities are allowed.
+- the aggregate enforces no uniqueness.
+- no Customer lifecycle/status exists in DF-04.
+- domain objects perform no database or cross-Customer lookup.
+Customer Domain Events
+Exactly CustomerCreated, CustomerNameChanged, CustomerAddressChanged,
+CustomerCityChanged, and CustomerNotesChanged are published. All inherit
+DomainEvent and its id, occurred_at, and event_name fields. CustomerCreated
+also has customer_id, name, address, city, and notes. CustomerNameChanged has
+customer_id, previous_name, and new_name. CustomerAddressChanged has
+customer_id, previous_address, and new_address. CustomerCityChanged has
+customer_id, previous_city, and new_city. CustomerNotesChanged has customer_id,
+previous_notes, and new_notes.
+CustomerCreated is recorded once during successful construction. Change
+methods record matching events after successful unequal state changes. Equal
+assignment records none. Change events preserve previous and new values.
+Event IDs and occurred_at must come from an approved event-factory dependency;
+Customer must not generate them. No explicit event-factory authority exists in
+the repository, so event creation integration is a separate blocked slice.
+No factory API or generation policy may be inferred.
+Event implementation authority: core/domain/customer/events.py
+Event test authority: tests/unit/domain/customer/test_customer_events.py
+Customer Event Exposure
+Customer uses only AggregateRoot record_event, pending_events, pull_events,
+and clear_events. No Customer-specific exposure API, dispatch, persistence,
+EventEnvelope creation, publisher, or event bus is published.
+CustomerRepository
+CustomerRepository is an abstract Repository specialization for Customer and
+CustomerId. It exposes exactly inherited save(customer), get(customer_id),
+exists(customer_id), delete(customer_id), and list(), with inherited behavior.
+It adds no find_by_name, search, pagination, database behavior, PostgreSQL or
+in-memory implementation, uniqueness checks, or transactions.
+Implementation authority: core/domain/customer/repository.py
+Test authority: tests/unit/domain/customer/test_customer_repository.py
+Customer Package Authority
+core/domain/customer/__init__.py and tests/unit/domain/customer/__init__.py are
+authorized. The public package exports only published Customer symbols.
+8. Published Domain Foundation Implementation Scope
 The implementation authority currently published is:
 core/domain/
 ├── exceptions.py
@@ -532,7 +656,16 @@ core/domain/
 ├── aggregate_root.py
 ├── repository.py
 ├── domain_event.py
-└── event_envelope.py
+├── event_envelope.py
+└── customer/
+    ├── __init__.py
+    ├── customer_id.py
+    ├── customer_name.py
+    ├── customer_address.py
+    ├── customer_city.py
+    ├── customer.py
+    ├── events.py
+    └── repository.py
 The matching unit-test scope is:
 tests/unit/domain/
 ├── test_exceptions.py
@@ -542,10 +675,18 @@ tests/unit/domain/
 ├── test_event_exposure.py
 ├── test_repository.py
 ├── test_domain_event.py
-└── test_event_envelope.py
-Implementations may add required __init__.py package markers when necessary,
-but those files must not expose unpublished contracts.
-7. Required Published Contract Tests
+├── test_event_envelope.py
+└── customer/
+    ├── __init__.py
+    ├── test_customer_id.py
+    ├── test_customer_name.py
+    ├── test_customer_address.py
+    ├── test_customer_city.py
+    ├── test_customer.py
+    ├── test_customer_events.py
+    └── test_customer_repository.py
+Package markers must not expose unpublished contracts.
+9. Required Published Contract Tests
 Tests must verify at minimum:
 Exceptions
 DomainError inherits from Exception;
@@ -680,18 +821,60 @@ equality follows the published exact-type and field rules;
 hashing is consistent with equality;
 no unpublished API exists;
 no prohibited dependency exists.
-8. Explicitly Unpublished Contracts
+Required CustomerId Tests
+Tests in tests/unit/domain/customer/test_customer_id.py must verify at minimum:
+CustomerId inherits from ValueObject and does not inherit from Entity;
+construction requires exactly one externally supplied value;
+value is a str and is publicly readable through the value property;
+empty, whitespace-only, leading-whitespace, and trailing-whitespace values are
+rejected with DomainValidationError;
+invalid whitespace is not silently trimmed;
+CustomerId is technically immutable after construction;
+equal string values compare equal and different string values compare unequal;
+a different concrete ValueObject type with the same string value compares
+unequal;
+equal CustomerId instances produce equal hashes;
+CustomerId instances can be used as dictionary keys and set members;
+CustomerId does not generate identifiers automatically;
+CustomerId exposes exactly one public property, value;
+no additional public behavior exists;
+no prohibited dependency or behavior exists.
+Required Customer Domain Tests
+The authorized Customer tests must verify all published construction,
+validation, immutability, exact-type, equality, hashing, read-only property,
+update, same-value, identity-preservation, business-rule, event field, event
+recording, event exposure, abstract repository specialization, inherited
+repository API, package export, and prohibited-behavior requirements.
+Customer event tests must accept externally supplied DomainEvent base fields
+and must not invent event-factory integration while its authority is blocked.
+10. DF-04 Implementation and Completion
+Mandatory implementation sequence:
+- DF-04.1 CustomerId implementation
+- DF-04.2 CustomerName, CustomerAddress, CustomerCity
+- DF-04.3 Customer aggregate without event creation integration
+- DF-04.4 Customer domain events
+- DF-04.5 Event-factory authority/integration gate
+- DF-04.6 Customer event recording integration
+- DF-04.7 CustomerRepository interface
+- DF-04.8 Full Customer domain verification
+- DF-04.9 Customer baseline commit
+Each slice modifies only authorized files, runs focused tests and the full
+domain suite, compiles core and tests, stops on missing authority, and does not
+commit until its verification gate passes.
+DF-04 is complete only when every published Customer value object, aggregate,
+business rule, event, exposure behavior, repository interface, and package
+export is implemented only in its authorized path; all required focused and
+full-domain tests pass; core and tests compile; no prohibited behavior or
+unpublished API is present; event creation and recording use explicitly
+published event-factory authority; and the verified Customer baseline commit
+is created. Until event-factory authority is published and DF-04.5 passes,
+DF-04.6 and overall DF-04 completion remain blocked.
+11. Explicitly Unpublished Contracts
 The following contracts exist in the approved architecture history but their
 full approved text has not yet been published into this repository:
 event dispatch;
 event persistence;
-Customer aggregate contract;
-Customer repository contract;
-Customer business rules contract;
-Customer identity contract;
-Customer name contract;
-Customer address contract;
-Customer city contract;
+Customer event-factory dependency and integration contract;
 Conversation aggregate contract;
 Conversation repository contract;
 Conversation event contract;
@@ -700,9 +883,8 @@ These items are marked:
 Not Yet Published
 They must not be reconstructed, inferred, or implemented from this document.
 Their implementation requires a later Project Owner publication decision.
-9. Current Restrictions
-Until additional contracts are published, do not implement:
-Customer;
+12. Current Restrictions
+Do not implement outside the published Customer authority:
 Conversation;
 event dispatch;
 event persistence;
@@ -710,12 +892,12 @@ PostgreSQL domain mapping;
 Telegram integration;
 dependency injection;
 infrastructure adapters.
-10. Governance Rule
+13. Governance Rule
 Published sections of this master document are implementation authority.
 Unpublished sections are only a registry of missing authority.
 When implementation behavior is not defined by a published section, stop and
 report the missing authority instead of inventing behavior.
-11. Change Control
+14. Change Control
 Changes to this document require an explicit Project Owner decision.
 Codex must not silently expand, reinterpret, or redesign the published
 contracts.
