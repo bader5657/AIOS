@@ -7,7 +7,7 @@ Status: Approved repository authority
 Authority: Project Owner
 
 Published scope: DF-03A.1, DF-03A.2A, DF-03B.1, DF-03C.1, DF-03D.1,
-DF-03E.1A, and the DF-04 Customer Domain contract through DF-04.5
+DF-03E.1A, and the DF-04 Customer Domain contract through DF-04.6
 
 This document is the repository source of truth for the Domain Foundation
 contracts explicitly published below.
@@ -756,8 +756,8 @@ DF-04.4 publishes event record classes only. It does not publish an event
 factory, ID generation, timestamp generation, Customer event recording
 integration, automatic event creation, dispatch, an event bus, publication,
 persistence, serialization, EventEnvelope creation, or infrastructure
-dependencies. CustomerCreated construction integration remains deferred to
-DF-04.5, and update-event integration remains deferred to DF-04.6. No factory
+dependencies. CustomerCreated construction integration and update-event
+integration both remain deferred to DF-04.6. No factory
 API or generation policy may be inferred.
 Event implementation authority: core/domain/customer/events.py
 Event test authority: tests/unit/domain/customer/test_customer_events.py
@@ -892,6 +892,213 @@ unequal change operations request matching changed events, and when Customer
 records returned events through AggregateRoot. No DF-04.6 dependency-wiring or
 recording API is published by DF-04.5 and none may be inferred from this
 factory contract.
+
+Customer Event Recording Integration
+
+DF-04.6 Purpose and Scope
+
+DF-04.6 integrates Customer, CustomerEventFactory, the five published Customer
+events, and AggregateRoot Event Exposure. Customer owns the business decision
+to create and record its events. CustomerEventFactory only constructs the
+requested event record. AggregateRoot only owns and exposes the pending-event
+collection. DF-04.6 does not redesign any of those contracts and adds no
+integration for another aggregate.
+
+Project Owner Decision: Factory Integration and Ownership
+
+Customer constructs exactly one no-argument CustomerEventFactory internally
+during successful construction and retains it for the Customer lifetime. The
+factory is not injected, supplied per operation, obtained from a locator or
+registry, stored globally, or publicly exposed. Its DF-04.5 API, statelessness,
+validation, identity equality, and event-name mapping remain unchanged.
+
+Project Owner Decision: Event ID and Timestamp Sources
+
+Customer receives two required keyword-only event-metadata sources. Each is a
+zero-argument callable:
+
+```text
+event_id_source: Callable[[], object]
+occurred_at_source: Callable[[], datetime]
+```
+
+The complete DF-04.6 Customer constructor is:
+
+```text
+Customer(
+    customer_id: CustomerId,
+    name: CustomerName,
+    address: CustomerAddress,
+    city: CustomerCity,
+    notes: str | None = None,
+    *,
+    event_id_source: Callable[[], object],
+    occurred_at_source: Callable[[], datetime],
+)
+```
+
+This supersedes only the DF-04.3 constructor signature. It does not change the
+five Customer state properties or the four update signatures and None return
+types. Both sources must be callable. A non-callable source raises
+DomainValidationError before source invocation or event recording. Customer
+retains the sources internally without adding a public property or method.
+
+For every event attempt Customer calls event_id_source exactly once and then
+occurred_at_source exactly once, passing both results unchanged to the matching
+factory method. The caller that supplies each source owns its generation
+policy. Customer owns only invocation timing; CustomerEventFactory continues
+to own neither value. DomainEvent and the concrete event validate the results,
+including the non-None ID and timezone-aware datetime requirements.
+
+Customer and CustomerEventFactory do not import or call uuid, datetime.now,
+datetime.utcnow, time.time, or another identity or current-time generator. No
+default, fallback, module-level, global, locator-provided, or implicit source
+is authorized.
+
+event_name Ownership
+
+Customer never supplies event_name. CustomerEventFactory remains the sole
+owner of the fixed method-to-event_name mapping from DF-04.5, and each concrete
+event validates that name under DF-04.4.
+
+CustomerCreated Recording Flow
+
+After validating Customer fields and both sources, Customer initializes its
+AggregateRoot state and performs this exact order:
+
+1. construct and retain one CustomerEventFactory;
+2. call event_id_source once;
+3. call occurred_at_source once;
+4. request CustomerCreated using those results unchanged and the exact
+   validated constructor state;
+5. establish name, address, city, and notes as Customer state; and
+6. record the returned CustomerCreated exactly once through record_event.
+
+Successful construction therefore exposes exactly one pending CustomerCreated
+whose payload contains the exact original CustomerId, CustomerName,
+CustomerAddress, CustomerCity, and notes objects. Construction failure exposes
+no Customer instance and performs no recording. CustomerCreated is not
+recreated after pull_events or clear_events and is never recorded by an update.
+
+Update-event Recording Flow and Required Ordering
+
+For change_name, change_address, change_city, and change_notes, Customer:
+
+1. validates the new value;
+2. detects equality with current matching state;
+3. returns None immediately for an equal value;
+4. retains the current value as the exact previous payload value;
+5. calls event_id_source once;
+6. calls occurred_at_source once;
+7. requests the matching event from CustomerEventFactory with metadata,
+   identity, previous value, and validated new value unchanged;
+8. changes only the matching state field;
+9. records the returned event exactly once through record_event; and
+10. returns None.
+
+change_name maps to create_customer_name_changed, change_address to
+create_customer_address_changed, change_city to create_customer_city_changed,
+and change_notes to create_customer_notes_changed. Event creation deliberately
+precedes state mutation for failure atomicity; recording remains after the
+state change as required by the published Customer rule.
+
+No-op and Failure Atomicity
+
+An equal update invokes neither source nor factory, changes no state, records
+no event, and leaves pending events unchanged. Validation, source, or
+event-construction failure propagates unchanged and leaves both Customer state
+and the complete prior pending-event snapshot unchanged. No failed operation
+records an event. The guarantee covers published domain and collaborator
+failures, not process failure, memory exhaustion, interpreter failure, or
+caller-controlled re-entrant source side effects.
+
+Pending-event Lifecycle, Ordering, Duplicates, and Exposure
+
+Customer uses only record_event, pending_events, pull_events, and clear_events.
+It adds no Customer-specific exposure API and update methods never return event
+instances. CustomerCreated is first after construction. Every later successful
+unequal operation appends exactly one matching event, preserving successful
+business-operation order. No-op and failed operations add nothing.
+
+DF-04.6 performs no content deduplication. Distinct successful operations may
+produce equal events when caller-owned metadata and payloads make them equal;
+AggregateRoot retains each in invocation order. Customer records a returned
+event only once for its operation.
+
+pending_events returns an immutable ordered tuple snapshot without clearing.
+pull_events returns that snapshot and clears pending events. clear_events
+safely removes all pending events. Pulling or clearing changes no Customer
+state, mutates no event, and recreates no event.
+
+Authorized Dependencies and Files
+
+DF-04.6 implementation authority is limited to:
+
+- core/domain/customer/customer.py
+
+DF-04.6 focused test authority is limited to:
+
+- tests/unit/domain/customer/test_customer.py
+
+Customer may import only standard-library Callable and datetime types required
+by this contract plus the published AggregateRoot, DomainValidationError,
+Customer value types, and CustomerEventFactory. DF-04.6 does not authorize
+changes to event_factory.py, events.py, aggregate_root.py, domain_event.py,
+event_envelope.py, package exports, or any other file. It authorizes no new
+public property, public method, source file, test file, provider class, or
+protocol class.
+
+Explicit Prohibitions
+
+DF-04.6 introduces no persistence; repository access or writes; dispatch;
+publication; event bus; handlers; retries; serialization or deserialization;
+JSON or dictionary conversion; EventEnvelope creation or storage;
+infrastructure, application, adapter, or framework dependency; ORM, database,
+PostgreSQL, filesystem, network, or Telegram behavior; automatic or Customer-
+owned ID or timestamp generation; service locator, registry, container, hidden
+global state, or mutable factory state; asynchronous behavior; or Customer-
+specific event exposure API.
+
+Required Focused Tests
+
+The authorized Customer test file must verify at minimum:
+
+- the exact constructor signature and required keyword-only sources;
+- rejection of non-callable sources before invocation or recording;
+- exactly one CustomerCreated with exact original state after construction;
+- exactly one matching event for every unequal update and none for equal ones;
+- exact previous/new payloads and unchanged metadata objects;
+- ID-then-timestamp source order and exactly one call per event attempt;
+- successful operation ordering across multiple updates;
+- immutable pending snapshots, ordered pull-and-clear, and safe clear;
+- no recreation after pull or clear;
+- validation, ID-source, timestamp-source, and event-construction failures leave
+  state and prior events unchanged;
+- None update returns and exposure only through AggregateRoot;
+- equal event instances from distinct operations remain ordered;
+- no unrelated public API or package export; and
+- no prohibited dependency or behavior.
+
+DF-04.6 Completion Gate
+
+DF-04.6 is complete only when the internal factory and two metadata sources
+match this contract; construction records CustomerCreated exactly once; every
+successful unequal update records exactly one matching event; no-op and failed
+operations leave state and events intact; metadata, payload, and event_name
+ownership are exact; event order and inherited exposure behavior are preserved;
+Customer update APIs remain unchanged; no foundation, factory, event, envelope,
+or package-export contract changes; focused Customer and full domain tests
+pass; core and tests compile; git diff --check and dependency, public-API, and
+prohibited-behavior audits pass; and only customer.py and test_customer.py are
+modified by the later implementation slice.
+
+DF-04.6 and DF-04.7 Boundary
+
+DF-04.6 ends at in-memory Customer event creation, recording, and exposure.
+DF-04.7 owns only the separately published CustomerRepository interface.
+Neither slice authorizes save-integrated event pulling, publication,
+persistence, outbox, dispatch, unit-of-work, transaction, or changes to the
+other slice's behavior.
 
 DF-04.5 Completion Gate
 DF-04.5 is complete only when:
@@ -1211,7 +1418,6 @@ The following contracts exist in the approved architecture history but their
 full approved text has not yet been published into this repository:
 event dispatch;
 event persistence;
-Customer event-recording dependency and integration contract;
 Conversation aggregate contract;
 Conversation repository contract;
 Conversation event contract;
@@ -1227,7 +1433,8 @@ event dispatch;
 event persistence;
 PostgreSQL domain mapping;
 Telegram integration;
-dependency injection;
+dependency injection other than the exact DF-04.6 Customer metadata-source
+constructor parameters;
 infrastructure adapters.
 13. Governance Rule
 Published sections of this master document are implementation authority.
