@@ -7,7 +7,7 @@ Status: Approved repository authority
 Authority: Project Owner
 
 Published scope: DF-03A.1, DF-03A.2A, DF-03B.1, DF-03C.1, DF-03D.1,
-DF-03E.1A, and the complete DF-04 Customer Domain contract
+DF-03E.1A, and the DF-04 Customer Domain contract through DF-04.5
 
 This document is the repository source of truth for the Domain Foundation
 contracts explicitly published below.
@@ -616,22 +616,300 @@ Customer Business Rules
 - domain objects perform no database or cross-Customer lookup.
 Customer Domain Events
 Exactly CustomerCreated, CustomerNameChanged, CustomerAddressChanged,
-CustomerCityChanged, and CustomerNotesChanged are published. All inherit
-DomainEvent and its id, occurred_at, and event_name fields. CustomerCreated
-also has customer_id, name, address, city, and notes. CustomerNameChanged has
-customer_id, previous_name, and new_name. CustomerAddressChanged has
-customer_id, previous_address, and new_address. CustomerCityChanged has
-customer_id, previous_city, and new_city. CustomerNotesChanged has customer_id,
-previous_notes, and new_notes.
-CustomerCreated is recorded once during successful construction. Change
-methods record matching events after successful unequal state changes. Equal
-assignment records none. Change events preserve previous and new values.
-Event IDs and occurred_at must come from an approved event-factory dependency;
-Customer must not generate them. No explicit event-factory authority exists in
-the repository, so event creation integration is a separate blocked slice.
-No factory API or generation policy may be inferred.
+CustomerCityChanged, and CustomerNotesChanged are published by DF-04.4. No
+other concrete Customer domain-event class is published.
+
+All five classes inherit from the published DomainEvent foundation and remain
+immutable domain records. Every constructor uses keyword-only parameters and
+receives id, occurred_at, and event_name externally. A concrete event must not
+generate an event ID, timestamp, or event name. The inherited DomainEvent
+contract governs validation and immutability of id, occurred_at, and
+event_name.
+
+CustomerCreated
+
+Exact event_name: customer.created
+
+Constructor:
+
+CustomerCreated(
+    *,
+    id,
+    occurred_at,
+    event_name,
+    customer_id: CustomerId,
+    name: CustomerName,
+    address: CustomerAddress,
+    city: CustomerCity,
+    notes: str | None,
+)
+
+Payload fields are customer_id, name, address, city, and notes. customer_id
+must be exactly CustomerId; name must be exactly CustomerName; address must be
+exactly CustomerAddress; city must be exactly CustomerCity; and notes must be
+str or None. Notes are preserved verbatim. Invalid payload values raise
+DomainValidationError.
+
+CustomerNameChanged
+
+Exact event_name: customer.name_changed
+
+Constructor:
+
+CustomerNameChanged(
+    *,
+    id,
+    occurred_at,
+    event_name,
+    customer_id: CustomerId,
+    previous_name: CustomerName,
+    new_name: CustomerName,
+)
+
+Payload fields are customer_id, previous_name, and new_name. customer_id must
+be exactly CustomerId; previous_name and new_name must each be exactly
+CustomerName; and previous_name and new_name must differ. Invalid payload
+values raise DomainValidationError.
+
+CustomerAddressChanged
+
+Exact event_name: customer.address_changed
+
+Constructor:
+
+CustomerAddressChanged(
+    *,
+    id,
+    occurred_at,
+    event_name,
+    customer_id: CustomerId,
+    previous_address: CustomerAddress,
+    new_address: CustomerAddress,
+)
+
+Payload fields are customer_id, previous_address, and new_address. customer_id
+must be exactly CustomerId; previous_address and new_address must each be
+exactly CustomerAddress; and previous_address and new_address must differ.
+Invalid payload values raise DomainValidationError.
+
+CustomerCityChanged
+
+Exact event_name: customer.city_changed
+
+Constructor:
+
+CustomerCityChanged(
+    *,
+    id,
+    occurred_at,
+    event_name,
+    customer_id: CustomerId,
+    previous_city: CustomerCity,
+    new_city: CustomerCity,
+)
+
+Payload fields are customer_id, previous_city, and new_city. customer_id must
+be exactly CustomerId; previous_city and new_city must each be exactly
+CustomerCity; and previous_city and new_city must differ. Invalid payload
+values raise DomainValidationError.
+
+CustomerNotesChanged
+
+Exact event_name: customer.notes_changed
+
+Constructor:
+
+CustomerNotesChanged(
+    *,
+    id,
+    occurred_at,
+    event_name,
+    customer_id: CustomerId,
+    previous_notes: str | None,
+    new_notes: str | None,
+)
+
+Payload fields are customer_id, previous_notes, and new_notes. customer_id must
+be exactly CustomerId; previous_notes and new_notes must each be str or None;
+and previous_notes and new_notes must differ. Note values are preserved
+verbatim. Invalid payload values raise DomainValidationError.
+
+For every concrete event, the externally supplied event_name must equal its
+exact published value. A mismatch raises DomainValidationError; it must not be
+silently replaced or normalized.
+
+All base and payload fields are immutable after successful construction.
+Concrete implementations may use private slots plus read-only properties or
+another standard-library-only mechanism with equivalent externally observable
+immutability. No payload list, dictionary, or other mutable collection is
+published.
+
+Concrete Customer-event equality requires the exact same concrete event class,
+equal inherited id, occurred_at, and event_name fields, and equal complete
+concrete payload fields. Hashing uses the exact concrete event class, all
+inherited equality fields, and all concrete payload equality fields. Equal
+events have equal hashes. Events of different concrete classes are unequal
+even when all comparable values otherwise match, and comparison with a
+non-event value is unequal.
+
+DF-04.4 publishes event record classes only. It does not publish an event
+factory, ID generation, timestamp generation, Customer event recording
+integration, automatic event creation, dispatch, an event bus, publication,
+persistence, serialization, EventEnvelope creation, or infrastructure
+dependencies. CustomerCreated construction integration remains deferred to
+DF-04.5, and update-event integration remains deferred to DF-04.6. No factory
+API or generation policy may be inferred.
 Event implementation authority: core/domain/customer/events.py
 Event test authority: tests/unit/domain/customer/test_customer_events.py
+Customer Event Factory
+DF-04.5 publishes CustomerEventFactory as a concrete, stateless class. It is
+not an abstract base class or interface and has no subclasses or extension
+contract.
+
+Implementation authority:
+core/domain/customer/event_factory.py
+
+Test authority:
+tests/unit/domain/customer/test_customer_event_factory.py
+
+Construction
+CustomerEventFactory() takes no arguments and creates no providers, values, or
+mutable state. Positional or keyword constructor arguments are invalid and
+raise TypeError. The class defines no custom equality or hashing behavior;
+instances retain standard identity-based object equality and hashing.
+
+Public API
+The complete published public API consists only of these instance methods:
+
+create_customer_created(
+    *,
+    id: object,
+    occurred_at: datetime,
+    customer_id: CustomerId,
+    name: CustomerName,
+    address: CustomerAddress,
+    city: CustomerCity,
+    notes: str | None,
+) -> CustomerCreated
+
+create_customer_name_changed(
+    *,
+    id: object,
+    occurred_at: datetime,
+    customer_id: CustomerId,
+    previous_name: CustomerName,
+    new_name: CustomerName,
+) -> CustomerNameChanged
+
+create_customer_address_changed(
+    *,
+    id: object,
+    occurred_at: datetime,
+    customer_id: CustomerId,
+    previous_address: CustomerAddress,
+    new_address: CustomerAddress,
+) -> CustomerAddressChanged
+
+create_customer_city_changed(
+    *,
+    id: object,
+    occurred_at: datetime,
+    customer_id: CustomerId,
+    previous_city: CustomerCity,
+    new_city: CustomerCity,
+) -> CustomerCityChanged
+
+create_customer_notes_changed(
+    *,
+    id: object,
+    occurred_at: datetime,
+    customer_id: CustomerId,
+    previous_notes: str | None,
+    new_notes: str | None,
+) -> CustomerNotesChanged
+
+Every parameter after self is keyword-only. Missing required parameters,
+positional arguments, or unexpected parameters raise TypeError. Each method
+returns exactly the concrete event type shown in its signature and maps to no
+other event class.
+
+Event Creation Policy
+The caller owns and supplies id and occurred_at for every operation. The
+factory must pass both values unchanged to the event constructor. The id type
+is object: DF-04.5 publishes no narrower event-ID type, but None remains
+invalid under DomainEvent. The occurred_at value must satisfy the published
+DomainEvent timezone-aware datetime contract.
+
+The caller does not supply event_name. CustomerEventFactory owns selection of
+the exact published event_name and passes it to the matching constructor:
+- create_customer_created uses customer.created;
+- create_customer_name_changed uses customer.name_changed;
+- create_customer_address_changed uses customer.address_changed;
+- create_customer_city_changed uses customer.city_changed; and
+- create_customer_notes_changed uses customer.notes_changed.
+
+The factory does not generate, replace, derive, cache, or otherwise own id or
+occurred_at. It owns only the fixed method-to-event_name mapping.
+
+Validation and Normalization
+CustomerEventFactory performs no duplicate validation. It delegates all base
+field and payload validation to the matching concrete event constructor.
+DomainValidationError from that constructor propagates unchanged. The factory
+must not catch, replace, wrap, or translate that exception.
+
+The factory must not trim, coerce, normalize, copy, substitute, or otherwise
+transform any caller-supplied value. Every supplied value is passed unchanged
+to the matching event constructor.
+
+Aggregate Interaction
+CustomerEventFactory creates and returns event objects only. It must not
+receive a Customer or AggregateRoot, access Customer state, invoke Customer
+behavior, call record_event, inspect or mutate pending events, or otherwise
+perform event-recording integration.
+
+Dependencies and Restrictions
+DF-04.5 may import only Python standard-library types needed by the published
+signatures and published Customer domain types. It must not introduce:
+- UUID generation or any other event-ID generation;
+- datetime.now(), datetime.utcnow(), or any current-time call;
+- a clock, ID provider, timestamp provider, or dependency-injection contract;
+- repositories, persistence, ORM, database access, or network access;
+- serialization or deserialization;
+- dispatch, publication, an event bus, or handler execution;
+- EventEnvelope construction or storage;
+- application, adapter, infrastructure, or framework dependencies; or
+- mutable factory state, caching, registration, or configuration.
+
+DF-04.5 and DF-04.6 Boundary
+DF-04.5 owns only the stateless CustomerEventFactory contract, construction of
+the five published Customer event records from explicit caller values, and
+focused factory tests. It does not alter Customer or AggregateRoot and does
+not integrate event recording.
+
+DF-04.6 owns all Customer integration: how a Customer receives or accesses a
+factory, when Customer construction requests CustomerCreated, when successful
+unequal change operations request matching changed events, and when Customer
+records returned events through AggregateRoot. No DF-04.6 dependency-wiring or
+recording API is published by DF-04.5 and none may be inferred from this
+factory contract.
+
+DF-04.5 Completion Gate
+DF-04.5 is complete only when:
+- CustomerEventFactory exists only at its authorized source path;
+- its constructor and five-method public API exactly match this contract;
+- every method returns the exact mapped concrete Customer event;
+- caller-supplied id, occurred_at, and payload values are preserved unchanged;
+- the factory supplies only the exact mapped event_name;
+- validation and DomainValidationError behavior remain delegated unchanged;
+- no normalization, generation, aggregate interaction, recording, envelope,
+  or prohibited dependency is present;
+- the authorized focused tests pass;
+- the full domain test suite passes;
+- core and tests compile; and
+- only the authorized factory source and factory test paths are modified by
+  the implementation slice.
+
+No Customer package-export change is authorized by DF-04.5.
 Customer Event Exposure
 Customer uses only AggregateRoot record_event, pending_events, pull_events,
 and clear_events. No Customer-specific exposure API, dispatch, persistence,
@@ -665,6 +943,7 @@ core/domain/
     ├── customer_city.py
     ├── customer.py
     ├── events.py
+    ├── event_factory.py
     └── repository.py
 The matching unit-test scope is:
 tests/unit/domain/
@@ -684,6 +963,7 @@ tests/unit/domain/
     ├── test_customer_city.py
     ├── test_customer.py
     ├── test_customer_events.py
+    ├── test_customer_event_factory.py
     └── test_customer_repository.py
 Package markers must not expose unpublished contracts.
 9. Required Published Contract Tests
@@ -845,15 +1125,72 @@ validation, immutability, exact-type, equality, hashing, read-only property,
 update, same-value, identity-preservation, business-rule, event field, event
 recording, event exposure, abstract repository specialization, inherited
 repository API, package export, and prohibited-behavior requirements.
-Customer event tests must accept externally supplied DomainEvent base fields
-and must not invent event-factory integration while its authority is blocked.
+Required Customer Event Tests
+Tests in tests/unit/domain/customer/test_customer_events.py must verify at
+minimum:
+exactly CustomerCreated, CustomerNameChanged, CustomerAddressChanged,
+CustomerCityChanged, and CustomerNotesChanged are published as concrete
+Customer event classes;
+all five classes inherit from DomainEvent;
+all five constructor signatures are exact and keyword-only;
+the exact event_name mapping is CustomerCreated to customer.created,
+CustomerNameChanged to customer.name_changed, CustomerAddressChanged to
+customer.address_changed, CustomerCityChanged to customer.city_changed, and
+CustomerNotesChanged to customer.notes_changed;
+valid construction preserves all externally supplied base and payload fields;
+customer_id, Customer name, Customer address, and Customer city payloads use
+the exact required published types;
+invalid payload values raise DomainValidationError;
+each changed event requires its previous and new values to differ;
+notes accept str or None and are preserved verbatim;
+all inherited base and concrete payload fields are immutable;
+equality includes the exact concrete event class, all inherited base fields,
+and every concrete payload field;
+any differing equality field makes events unequal;
+equal events produce equal hashes;
+events work as dictionary keys and set members;
+different concrete event classes compare unequal;
+comparison with a non-event value is unequal;
+event IDs, timestamps, and event names are externally supplied and no
+generation exists;
+a mismatched event_name raises DomainValidationError and is not replaced or
+normalized;
+the Customer event module contains no factory or automatic event creation, and
+no Customer event recording,
+dispatch, event bus, publication, persistence, serialization, EventEnvelope
+creation, infrastructure dependency, Customer construction integration, or
+Customer update integration exists; and
+only the Python standard library and published domain dependencies are
+imported.
+Required Customer Event Factory Tests
+Tests in tests/unit/domain/customer/test_customer_event_factory.py must verify
+at minimum:
+- CustomerEventFactory is concrete and constructible with no arguments;
+- constructor arguments are rejected;
+- the exact five-method public API and keyword-only signatures;
+- missing, positional, and unexpected method arguments are rejected;
+- every method returns exactly its mapped concrete Customer event class;
+- the exact method-to-event_name mapping;
+- caller-supplied id, occurred_at, and payload objects are preserved unchanged;
+- timezone-aware occurred_at values are accepted and invalid values propagate
+  DomainValidationError from the event constructor;
+- every invalid base or payload value produces the event constructor's
+  DomainValidationError without wrapping or translation;
+- no caller-supplied value is normalized, coerced, copied, or substituted;
+- the factory has no mutable state and uses standard object identity equality;
+- the factory does not access Customer or AggregateRoot and records no event;
+- no ID or timestamp generation, current-time call, provider, repository,
+  persistence, serialization, dispatch, EventEnvelope, infrastructure, ORM,
+  network, database, caching, registration, or configuration exists; and
+- only the Python standard library and published Customer domain dependencies
+  are imported.
 10. DF-04 Implementation and Completion
 Mandatory implementation sequence:
 - DF-04.1 CustomerId implementation
 - DF-04.2 CustomerName, CustomerAddress, CustomerCity
 - DF-04.3 Customer aggregate without event creation integration
-- DF-04.4 Customer domain events
-- DF-04.5 Event-factory authority/integration gate
+- DF-04.4 Customer domain events (ready for implementation)
+- DF-04.5 CustomerEventFactory
 - DF-04.6 Customer event recording integration
 - DF-04.7 CustomerRepository interface
 - DF-04.8 Full Customer domain verification
@@ -867,14 +1204,14 @@ export is implemented only in its authorized path; all required focused and
 full-domain tests pass; core and tests compile; no prohibited behavior or
 unpublished API is present; event creation and recording use explicitly
 published event-factory authority; and the verified Customer baseline commit
-is created. Until event-factory authority is published and DF-04.5 passes,
-DF-04.6 and overall DF-04 completion remain blocked.
+is created. Until DF-04.5 passes, DF-04.6 and overall DF-04 completion
+remain blocked.
 11. Explicitly Unpublished Contracts
 The following contracts exist in the approved architecture history but their
 full approved text has not yet been published into this repository:
 event dispatch;
 event persistence;
-Customer event-factory dependency and integration contract;
+Customer event-recording dependency and integration contract;
 Conversation aggregate contract;
 Conversation repository contract;
 Conversation event contract;
