@@ -11,3 +11,12 @@ backup/
 
 .vscode/
 .idea/
+
+__pycache__/
+*.py[cod]
+
+# Python virtual environment
+.venv/
+
+# Pytest cache
+.pytest_cache/

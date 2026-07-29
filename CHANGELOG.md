@@ -1,15 +1,9 @@
 # Changelog
 
-## 0.1.0-alpha
+All notable changes to AIOS will be documented here.
 
-Initial Production Alpha
+## Unreleased
 
-Added
+### Added
 
-- Telegram Adapter
-- Mission Control
-- Universal Ingestion
-- Storage Engine
-- Metadata Engine
-- Automatic Document Manifest
-- systemd Integration
+- Documentation foundation.
