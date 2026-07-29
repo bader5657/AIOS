@@ -7,7 +7,7 @@ Status: Approved repository authority
 Authority: Project Owner
 
 Published scope: DF-03A.1, DF-03A.2A, DF-03B.1, DF-03C.1, DF-03D.1,
-DF-03E.1A, and the DF-04 Customer Domain contract through DF-04.7
+DF-03E.1A, and the DF-04 Customer Domain contract through DF-04.8
 
 This document is the repository source of truth for the Domain Foundation
 contracts explicitly published below.
@@ -1255,6 +1255,217 @@ interface and its focused tests. DF-04.8 owns full Customer domain verification
 only. DF-04.8 must not add or change CustomerRepository behavior, signatures,
 ordering, persistence, infrastructure, package exports, or any other domain
 contract.
+
+DF-04.8 Full Customer Domain Verification
+
+Purpose
+
+DF-04.8 is the verification-only slice for the complete published Customer
+Domain baseline through DF-04.7. Its purpose is to prove, without changing the
+baseline, that the Customer identity, value objects, aggregate, business rules,
+events, event factory, event recording and exposure, repository interface,
+package boundary, and their shared Domain Foundation dependencies form one
+consistent implementation of the published authority.
+
+Responsibilities
+
+DF-04.8 must:
+
+- verify every published Customer contract through DF-04.7 as one baseline;
+- verify that cross-contract inheritance, type relationships, signatures,
+  return types, validation, immutability, equality, hashing, event metadata,
+  event ordering, repository abstraction, and package exports remain exact;
+- run every authorized focused Customer unit test and the complete Domain unit
+  test suite;
+- compile all files under core and tests;
+- audit dependencies, public APIs, package exports, prohibited behavior, file
+  scope, whitespace, generated files, and repository status; and
+- produce the exact verification evidence required below for handoff to
+  DF-04.9.
+
+Verification-Only Scope
+
+DF-04.8 publishes no implementation slice. It must inspect and execute the
+existing baseline only. It authorizes no source, test, documentation,
+configuration, package-marker, schema, script, or dependency-file modification.
+It authorizes no new file and no deletion, rename, formatting rewrite, repair,
+refactor, generated artifact, commit, tag, or push.
+
+If any required check fails or any contract mismatch is found, DF-04.8 must
+stop and report the failure under the governing published contract. Correction
+belongs to the owning earlier DF-04 slice and requires a separately authorized
+change; it must not be performed within DF-04.8.
+
+DF-04.7 Boundary
+
+DF-04.7 owns CustomerRepository publication, implementation, and focused tests.
+DF-04.8 may verify those artifacts but must not add, remove, redeclare, override,
+or change any CustomerRepository method, annotation, semantic rule, test,
+dependency, docstring, package export, or file. DF-04.8 does not publish a
+concrete repository implementation.
+
+DF-04.9 Boundary
+
+DF-04.8 owns verification and its reported evidence only. DF-04.9 owns the
+Customer baseline commit step. DF-04.8 must not commit or push. DF-04.9 must not
+change the verified file content; any content change invalidates the DF-04.8
+evidence and requires DF-04.8 verification to run again before a baseline
+commit may be created.
+
+The exact DF-04.9 commit message is:
+
+DF-04.9: Complete Customer baseline
+
+Authorized Read-Only Source Paths
+
+DF-04.8 may inspect as contract evidence only these published Domain source paths:
+
+- core/domain/exceptions.py
+- core/domain/entity.py
+- core/domain/value_object.py
+- core/domain/aggregate_root.py
+- core/domain/repository.py
+- core/domain/domain_event.py
+- core/domain/event_envelope.py
+- core/domain/customer/__init__.py
+- core/domain/customer/customer_id.py
+- core/domain/customer/customer_name.py
+- core/domain/customer/customer_address.py
+- core/domain/customer/customer_city.py
+- core/domain/customer/customer.py
+- core/domain/customer/events.py
+- core/domain/customer/event_factory.py
+- core/domain/customer/repository.py
+
+These paths are verification inputs, not modification authority. No source
+modification is authorized. The required compileall command may compile other
+existing files under core and tests only as a repository-wide syntax check; it
+does not authorize inspecting their behavior, changing them, or treating them
+as DF-04.8 contract evidence.
+
+Authorized Read-Only Test Paths
+
+DF-04.8 may inspect, discover, and execute only the published Domain tests
+under:
+
+tests/unit/domain/
+
+This includes the published shared Domain tests and these focused Customer
+test paths:
+
+- tests/unit/domain/customer/test_customer_id.py
+- tests/unit/domain/customer/test_customer_name.py
+- tests/unit/domain/customer/test_customer_address.py
+- tests/unit/domain/customer/test_customer_city.py
+- tests/unit/domain/customer/test_customer.py
+- tests/unit/domain/customer/test_customer_events.py
+- tests/unit/domain/customer/test_customer_event_factory.py
+- tests/unit/domain/customer/test_customer_repository.py
+
+The package markers tests/unit/domain/customer/__init__.py and any published
+tests/unit/domain package marker are read-only verification inputs. Existing
+tests must not be modified, and no test may be created, deleted, renamed,
+skipped, weakened, or replaced.
+
+Public API and Implementation Behavior
+
+DF-04.8 requires the complete public API and implementation behavior to remain
+exactly those published by DF-03 and DF-04.1 through DF-04.7. DF-04.8 publishes
+no new public symbol, method, property, constructor parameter, return type,
+exception, event, package export, or behavior. It authorizes no implementation
+change, including a change presented as a verification fix.
+
+Prohibited Behavior
+
+DF-04.8 must not introduce or modify:
+
+- Customer lifecycle, status, archive, merge, restore, or deletion behavior;
+- identifier, event-ID, or timestamp generation beyond the published sources;
+- event dispatch, publication, persistence, transport, routing, retry, outbox,
+  handler, bus, or EventEnvelope integration;
+- save-integrated event inspection, pulling, clearing, or recording;
+- a concrete repository, storage state, caching, search, filtering, pagination,
+  counting, transaction, or unit-of-work behavior;
+- persistence, database, PostgreSQL, ORM, SQLAlchemy, SQL, filesystem,
+  serialization, JSON, infrastructure, adapter, Telegram, network, framework,
+  configuration, or registration behavior; or
+- Conversation or other unpublished domain behavior.
+
+Dependency Restrictions
+
+All verified Domain source must continue to depend only on the Python standard
+library and the exact published Domain dependencies allowed by the owning
+contract. Customer modules may depend only on published shared Domain and
+Customer modules. The shared Domain Foundation must not depend on Customer or
+another concrete business domain. No application, adapter, infrastructure,
+storage, framework, database, network, Telegram, ORM, serialization, or
+third-party dependency is authorized.
+
+Required Focused Unit-Test Matrix
+
+DF-04.8 must execute, without modification, every focused Customer test listed
+in Authorized Read-Only Test Paths. Together those tests must verify:
+
+- CustomerId construction, validation, immutability, equality, hashing, exact
+  public API, external identity ownership, and prohibited behavior;
+- CustomerName, CustomerAddress, and CustomerCity construction, exact minimum
+  lengths, whitespace rules, preservation, immutability, equality, hashing,
+  exact public APIs, and prohibited behavior;
+- Customer construction, exact source injection, state, validation, read-only
+  API, identity behavior, updates, no-ops, failure atomicity, business rules,
+  event creation, recording, exposure, ordering, and prohibited behavior;
+- all five Customer events, exact constructors, event names, payloads,
+  validation, immutability, equality, hashing, and prohibited integration;
+- CustomerEventFactory construction, exact API, mappings, preservation,
+  delegated validation, statelessness, and prohibited behavior; and
+- CustomerRepository specialization, inherited API and annotations,
+  abstractness, documented operation semantics, ordering, empty behavior,
+  dependencies, and absence of concrete behavior.
+
+The complete Domain suite must additionally verify all published shared
+foundation contracts on which Customer depends. No passing test substitutes
+for the dependency, public-API, package-export, prohibited-behavior, or file
+scope audits.
+
+Required Verification Evidence
+
+A successful DF-04.8 report must record:
+
+- repository root, branch, local HEAD, comparison with origin/main, and clean or
+  explicitly scoped repository status before verification;
+- a passing result and test count for each focused Customer test file;
+- a passing result and total test count for the complete Customer test suite;
+- a passing result and total test count for the complete Domain test suite run
+  with python3 -m unittest discover -s tests/unit/domain -p "test_*.py" -v;
+- successful python3 -m compileall -q core tests;
+- successful git diff --check;
+- a passing dependency audit and public-API audit;
+- confirmation that Customer package exports are unchanged and exact;
+- confirmation that no prohibited behavior or dependency exists;
+- confirmation that no unrelated or unauthorized path changed;
+- confirmation that no __pycache__, .pyc, or other generated artifact remains;
+  and
+- final repository status and the exact verified commit or diff scope handed to
+  DF-04.9.
+
+DF-04.8 Completion Gate
+
+DF-04.8 is complete only when every required focused Customer test and the
+complete Customer and Domain suites pass; core and tests compile; git diff
+--check passes; dependency, public-API, package-export, prohibited-behavior,
+generated-artifact, and exact file-scope audits pass; all required evidence is
+recorded; no contract contradiction or unpublished behavior is present; and
+the verification run changes no repository file. Any failed check, missing
+evidence, unauthorized change, or generated artifact blocks completion.
+
+Exact Handoff to DF-04.9
+
+The DF-04.8 handoff consists only of the exact verified commit or diff scope,
+the complete passing verification evidence, and repository status proving that
+the verified content has not changed. DF-04.9 may create the Customer baseline
+commit only from that exact verified content. DF-04.9 must make no content
+change and must rerun DF-04.8 if the candidate content or repository scope
+changes before commit. Push authority is not published by DF-04.8.
 
 Customer Package Authority
 core/domain/customer/__init__.py and tests/unit/domain/customer/__init__.py are
