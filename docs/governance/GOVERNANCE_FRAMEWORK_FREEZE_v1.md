@@ -4,23 +4,23 @@
 
 REVIEWED
 
-This is a consistency-review record only. It is not a Governance Decision, does not approve any Draft document, and creates no new authority.
+This is a consistency-review record only. It is not a Governance Decision and did not itself approve any Draft document or create new authority. Governance Decisions 002–007 subsequently received explicit Project Owner approval on 2026-07-30 and are now `APPROVED` and `ACTIVE` for their declared scopes.
 
 ## Purpose
 
 Certify that Governance Decisions 001–007 were reviewed together as one governance framework for internal consistency, authority boundaries, repository lifecycle, branch policy, release policy, version policy, milestone policy, and change management.
 
-This review preserves every reviewed document's recorded status and scope. Governance Decision 001 is `APPROVED`. Governance Decisions 002–007 are `DRAFT`; this review does not promote, approve, publish, or activate them.
+This review preserved every document status and scope at the time of review. Governance Decision 001 was `APPROVED`; Governance Decisions 002–007 were then `DRAFT`. This earlier review did not promote, approve, publish, or activate them. Their later approval and activation derives only from explicit Project Owner approval recorded on 2026-07-30.
 
 ## Reviewed Documents
 
 - `docs/governance/GOVERNANCE_DECISION_001.md` — approved governance publication record.
-- `docs/governance/GOVERNANCE_DECISION_002.md` — Draft repository artifact lifecycle governance.
-- `docs/governance/GOVERNANCE_DECISION_003.md` — Draft branch and merge governance.
-- `docs/governance/GOVERNANCE_DECISION_004.md` — Draft release governance.
-- `docs/governance/GOVERNANCE_DECISION_005.md` — Draft versioning governance.
-- `docs/governance/GOVERNANCE_DECISION_006.md` — Draft milestone governance.
-- `docs/governance/GOVERNANCE_DECISION_007.md` — Draft change-management governance.
+- `docs/governance/GOVERNANCE_DECISION_002.md` — repository artifact lifecycle governance; now `APPROVED` and `ACTIVE` by later explicit Project Owner approval.
+- `docs/governance/GOVERNANCE_DECISION_003.md` — branch and merge governance; now `APPROVED` and `ACTIVE` by later explicit Project Owner approval.
+- `docs/governance/GOVERNANCE_DECISION_004.md` — release governance; now `APPROVED` and `ACTIVE` by later explicit Project Owner approval.
+- `docs/governance/GOVERNANCE_DECISION_005.md` — versioning governance; now `APPROVED` and `ACTIVE` by later explicit Project Owner approval.
+- `docs/governance/GOVERNANCE_DECISION_006.md` — milestone governance; now `APPROVED` and `ACTIVE` by later explicit Project Owner approval.
+- `docs/governance/GOVERNANCE_DECISION_007.md` — change-management governance; now `APPROVED` and `ACTIVE` by later explicit Project Owner approval.
 
 ## Framework Consistency
 
@@ -114,4 +114,4 @@ This review does not:
 
 ## Decision Summary
 
-Governance Decisions 001–007 were reviewed together and are internally consistent when applied according to their own explicit status and scope. The review found no duplicated or circular approval authority and no conflict across lifecycle, branch, release, version, milestone, or change-management governance. This record creates no new authority and does not approve Governance Decisions 002–007, which remain `DRAFT`.
+Governance Decisions 001–007 were reviewed together and are internally consistent when applied according to their own explicit status and scope. The review found no duplicated or circular approval authority and no conflict across lifecycle, branch, release, version, milestone, or change-management governance. This record created no new authority and did not approve Governance Decisions 002–007. Those decisions later became `APPROVED` and `ACTIVE` only through explicit Project Owner approval recorded on 2026-07-30.

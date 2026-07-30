@@ -1,7 +1,8 @@
 # AIOS Governance Decision 006
 
 Status:
-DRAFT
+APPROVED
+ACTIVE
 
 Decision ID:
 GD-006
@@ -82,7 +83,7 @@ This decision does not create or change milestones, roadmap scope, architecture,
 ## Evidence
 
 - **[E1]** `docs/governance/GOVERNANCE_DECISION_001.md` — Project Owner approval and governance stages.
-- **[E2]** `docs/governance/GOVERNANCE_DECISION_002.md` — explicit lifecycle evidence and review/approval distinction; status `DRAFT`.
+- **[E2]** `docs/governance/GOVERNANCE_DECISION_002.md` — Active lifecycle evidence and review/approval distinction.
 - **[E3]** Commit `da9d692`, `docs/AIOS_Roadmap_Frozen.md` — frozen scope, `Not Started`, progress, and completion-plus-verification update rule.
 - **[E4]** Commit `e6ac77a`, `PROJECT_STATUS.md` — historical milestone labels, Frozen Roadmap reference, and prohibition on invented items.
 - **[E5]** `docs/reviews/AIOS_RELEASE_REVIEW_v0.4.md` — exact reviewed baseline, verification evidence, approval, and no milestone reopening or extension.
@@ -102,7 +103,8 @@ None. Documentation only.
 
 ## Approval
 
-This document remains `DRAFT`; approval of GD-006 is not recorded. Approval beyond identified repository authority: Not defined in repository.
+The Project Owner explicitly approved Governance Decision 006 on 2026-07-30.
+Its approved substance is Active for its declared scope.
 
 ## History
 
@@ -110,3 +112,4 @@ This document remains `DRAFT`; approval of GD-006 is not recorded. Approval beyo
 |---|---|---|
 | 2026-07-30 | DRAFT | Skeleton created in commit `7eec0cc`. |
 | 2026-07-30 | DRAFT | Milestone governance draft completed; approval not recorded. |
+| 2026-07-30 | APPROVED / ACTIVE | Explicit Project Owner approval recorded; approved substance activated for its declared scope. |

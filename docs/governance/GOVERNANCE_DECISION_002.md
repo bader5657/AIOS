@@ -1,7 +1,8 @@
 # AIOS Governance Decision 002
 
 Status:
-DRAFT
+APPROVED
+ACTIVE
 
 Decision ID:
 GD-002
@@ -157,7 +158,8 @@ None. This documentation-only decision authorizes no source, test, architecture,
 
 ## Approval
 
-This document remains `DRAFT`. It does not record approval of Governance Decision 002. Approval beyond the authority already identified in the repository: Not defined in repository.
+The Project Owner explicitly approved Governance Decision 002 on 2026-07-30.
+Its approved substance is Active for its declared scope.
 
 ## Decision Summary
 
@@ -169,3 +171,4 @@ Repository artifacts move through explicit, evidence-bearing lifecycle states: D
 |---|---|---|
 | 2026-07-30 | DRAFT | Governance Decision 002 skeleton created in commit `7eec0cc`. |
 | 2026-07-30 | DRAFT | Repository lifecycle draft completed; approval not recorded. |
+| 2026-07-30 | APPROVED / ACTIVE | Explicit Project Owner approval recorded; approved substance activated for its declared scope. |

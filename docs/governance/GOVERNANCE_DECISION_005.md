@@ -1,7 +1,8 @@
 # AIOS Governance Decision 005
 
 Status:
-DRAFT
+APPROVED
+ACTIVE
 
 Decision ID:
 GD-005
@@ -71,7 +72,7 @@ This decision does not change `VERSION`; approve a version or release; define co
 ## Evidence
 
 - **[E1]** `docs/governance/GOVERNANCE_DECISION_001.md` — Project Owner approval and official-record effect.
-- **[E2]** `docs/governance/GOVERNANCE_DECISION_002.md` — artifact and `VERSION` lifecycle treatment; status `DRAFT`.
+- **[E2]** `docs/governance/GOVERNANCE_DECISION_002.md` — Active artifact and `VERSION` lifecycle treatment.
 - **[E3]** `VERSION` — `0.1.0-alpha`.
 - **[E4]** `README.md` — `0.1.0-alpha` version statement.
 - **[E5]** `CHANGELOG.md` — `0.1.0-alpha` release entry.
@@ -94,7 +95,8 @@ None. Documentation only.
 
 ## Approval
 
-This document remains `DRAFT`; approval of GD-005 is not recorded. Approval beyond identified repository authority: Not defined in repository.
+The Project Owner explicitly approved Governance Decision 005 on 2026-07-30.
+Its approved substance is Active for its declared scope.
 
 ## History
 
@@ -102,3 +104,4 @@ This document remains `DRAFT`; approval of GD-005 is not recorded. Approval beyo
 |---|---|---|
 | 2026-07-30 | DRAFT | Skeleton created in commit `7eec0cc`. |
 | 2026-07-30 | DRAFT | Versioning governance draft completed; approval not recorded. |
+| 2026-07-30 | APPROVED / ACTIVE | Explicit Project Owner approval recorded; approved substance activated for its declared scope. |

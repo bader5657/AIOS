@@ -1,7 +1,8 @@
 # AIOS Governance Decision 004
 
 Status:
-DRAFT
+APPROVED
+ACTIVE
 
 Decision ID:
 GD-004
@@ -72,7 +73,7 @@ This decision does not approve a release candidate or baseline; create a candida
 ## Evidence
 
 - **[E1]** `docs/governance/GOVERNANCE_DECISION_001.md` — approval record, Project Owner approval, and publication effect.
-- **[E2]** `docs/governance/GOVERNANCE_DECISION_002.md` — lifecycle and review/approval distinction; status `DRAFT`.
+- **[E2]** `docs/governance/GOVERNANCE_DECISION_002.md` — Active lifecycle and review/approval distinction.
 - **[E3]** `docs/reviews/AIOS_RELEASE_REVIEW_v0.4.md` — approved review, exact baseline, gates, evidence, scope limits, and tag statement.
 - **[E4]** `VERSION` — `0.1.0-alpha`.
 - **[E5]** `README.md` — repository version statement.
@@ -93,7 +94,8 @@ None. Documentation only.
 
 ## Approval
 
-This document remains `DRAFT`; approval of GD-004 is not recorded. Approval beyond identified repository authority: Not defined in repository.
+The Project Owner explicitly approved Governance Decision 004 on 2026-07-30.
+Its approved substance is Active for its declared scope.
 
 ## History
 
@@ -101,3 +103,4 @@ This document remains `DRAFT`; approval of GD-004 is not recorded. Approval beyo
 |---|---|---|
 | 2026-07-30 | DRAFT | Skeleton created in commit `7eec0cc`. |
 | 2026-07-30 | DRAFT | Release governance draft completed; approval not recorded. |
+| 2026-07-30 | APPROVED / ACTIVE | Explicit Project Owner approval recorded; approved substance activated for its declared scope. |

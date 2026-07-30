@@ -1,7 +1,8 @@
 # AIOS Governance Decision 003
 
 Status:
-DRAFT
+APPROVED
+ACTIVE
 
 Decision ID:
 GD-003
@@ -78,7 +79,7 @@ This decision does not create, rename, merge, archive, or delete a branch; act o
 ## Evidence
 
 - **[E1]** `docs/governance/GOVERNANCE_DECISION_001.md` — approval process and official-record effect upon commit.
-- **[E2]** `docs/governance/GOVERNANCE_DECISION_002.md` — artifact lifecycle and branch/PR authority constraints; status `DRAFT`.
+- **[E2]** `docs/governance/GOVERNANCE_DECISION_002.md` — Active artifact lifecycle and branch/PR authority constraints.
 - **[E3]** `docs/reviews/AIOS_RELEASE_REVIEW_v0.4.md` — reviewed `main` baseline, Git history, and clean-tree review.
 - **[E4]** Git branch state on 2026-07-30 — local `main`, `origin/main`, and two remote `sprint-*` branches.
 - **[E5]** `docs/architecture/domain/AIOS_DOMAIN_FOUNDATION_MASTER.md` — Project Owner authority.
@@ -97,7 +98,8 @@ None. Documentation only.
 
 ## Approval
 
-This document remains `DRAFT`; approval of GD-003 is not recorded. Approval beyond identified repository authority: Not defined in repository.
+The Project Owner explicitly approved Governance Decision 003 on 2026-07-30.
+Its approved substance is Active for its declared scope.
 
 ## History
 
@@ -105,3 +107,4 @@ This document remains `DRAFT`; approval of GD-003 is not recorded. Approval beyo
 |---|---|---|
 | 2026-07-30 | DRAFT | Skeleton created in commit `7eec0cc`. |
 | 2026-07-30 | DRAFT | Branch and merge governance draft completed; approval not recorded. |
+| 2026-07-30 | APPROVED / ACTIVE | Explicit Project Owner approval recorded; approved substance activated for its declared scope. |
