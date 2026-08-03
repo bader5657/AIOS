@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `AIOS_LAYER_ARCHITECTURE.md` |
-| Status | **APPROVED** |
+| Status | **PUBLISHED** |
 | Document class | Layer Authority |
 | Approval authority | Project Owner |
 | Effective authority | None until Published and explicitly Active |
@@ -207,6 +207,7 @@ The Project Owner instruction dated 2026-08-03 explicitly approved Phase 2 and r
 | 2026-08-03 | Proposed | Content completed and submitted for Final Architecture Review. |
 | 2026-08-03 | Reviewed | Final Architecture Review completed with no substantive conflict in scope. |
 | 2026-08-03 | Approved | Project Owner approval applied after successful review. |
+| 2026-08-03 | Published | Approved document and approval record accepted into repository history in commit `4c7eb10`. |
 
 ## Publication and Activation
 
