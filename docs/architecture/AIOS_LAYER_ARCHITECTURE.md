@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Document | `AIOS_LAYER_ARCHITECTURE.md` |
-| Status | **PUBLISHED** |
+| Status | **ACTIVE** |
 | Document class | Layer Authority |
 | Approval authority | Project Owner |
-| Effective authority | None until Published and explicitly Active |
+| Effective authority | Current Layer Authority for the declared scope |
 
 ## Purpose
 
@@ -197,7 +197,7 @@ No substantive conflict was found within the declared scope.
 
 ## Approval Record
 
-The Project Owner instruction dated 2026-08-03 explicitly approved Phase 2 and required transition through Proposed, Reviewed, Approved, Published, and Active after the stated review and lifecycle gates were satisfied. The substantive and review requirements are satisfied. This document is **Approved** but remains non-authoritative until Published and explicitly Active.
+The Project Owner instruction dated 2026-08-03 explicitly approved Phase 2 and required transition through Proposed, Reviewed, Approved, Published, and Active after the stated review and lifecycle gates were satisfied. Those requirements are satisfied.
 
 ## Lifecycle History
 
@@ -208,7 +208,8 @@ The Project Owner instruction dated 2026-08-03 explicitly approved Phase 2 and r
 | 2026-08-03 | Reviewed | Final Architecture Review completed with no substantive conflict in scope. |
 | 2026-08-03 | Approved | Project Owner approval applied after successful review. |
 | 2026-08-03 | Published | Approved document and approval record accepted into repository history in commit `4c7eb10`. |
+| 2026-08-03 | Active | Published document explicitly activated for its declared Layer Authority scope after publication commit `be2d1c8`. |
 
 ## Publication and Activation
 
-Publication requires this approved document and approval record to enter accepted repository history. Activation requires publication plus explicit Active status or an accepted repository record establishing current Layer Authority for the declared scope.
+The approved document and approval record entered accepted repository history in commit `4c7eb10`. Publication was explicitly recorded in commit `be2d1c8`. This document is now explicitly Active as current Layer Authority only for its declared scope.
