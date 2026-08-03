@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | Document | `AIOS_AUTHORITY_HIERARCHY.md` |
-| Status | **PUBLISHED** |
-| Activation | **Pending repository activation** |
+| Status | **ACTIVE** |
+| Activation | **Explicitly activated by Project Owner on 2026-08-03** |
 | Document class | Architecture authority foundation |
 | Approval authority | Project Owner |
-| Effective authority | None until explicitly Active |
+| Effective authority | Current authority for the declared architecture-governance scope |
 
 ## Why This Document Is Required
 
@@ -173,16 +173,23 @@ AIOS Authority Hierarchy
   ↓
 AIOS Canonical Model
   ↓
-AIOS Pipeline Model
+AIOS Pipeline Model (optional, only if approved)
   ↓
 AIOS Layer Architecture
   ↓
 ADRs that lock decisions within the approved authority above them
+  ↓
+Execution Plan
+  ↓
+Implementation
 ```
 
 This order establishes derivation and constraint, not implementation sequence
-or permission. A lower document may constrain its own narrower scope but may
-not modify, enlarge, contradict, or supersede a higher document.
+or permission. It is the Architecture Authority Documentation Order, not the
+AIOS Roadmap. Authority documents may not change, replace, or reorder the
+approved implementation Roadmap. A lower document may constrain its own
+narrower scope but may not modify, enlarge, contradict, or supersede a higher
+document.
 
 Precedence and scope are separate. Higher precedence does not grant unlimited
 scope: the Blueprint remains highest for architecture and system design, but it
@@ -196,6 +203,81 @@ scope. They are not inserted into the derivation chain above as interchangeable
 architecture definitions.
 
 ## Rules
+
+### AIOS Architecture Growth Rule
+
+A new authority document may be created only when all of the following are
+true:
+
+1. an architectural gap is proven;
+2. the gap cannot be expressed by any existing authority;
+3. the gap has implementation impact; and
+4. the Project Owner explicitly approves creation of the new authority scope.
+
+A new authority document must never be created merely because:
+
+- it might be useful;
+- it makes documentation cleaner;
+- it is technically interesting;
+- it may help future implementation; or
+- similar projects usually have one.
+
+Authority grows only when existing authority can no longer express a stable
+architectural concept. This principle applies to every future authority
+document in AIOS.
+
+### AIOS Evidence First Rule
+
+Architecture shall grow from evidence, not from prediction.
+
+An Architecture Decision Record (ADR) shall not be created from speculation.
+
+An ADR may only be created when:
+
+1. implementation produces more than one valid architectural choice;
+2. the choice has long-term architectural consequences;
+3. existing authority cannot resolve the decision; and
+4. the Project Owner approves recording the decision.
+
+Architecture follows evidence.
+
+Documentation follows architecture.
+
+Evidence follows implementation.
+
+This rule complements the AIOS Architecture Growth Rule. It does not replace,
+relax, or bypass any requirement of that rule.
+
+The governance order for an evidence-backed architecture decision is:
+
+```text
+Implementation
+  ↓
+Evidence
+  ↓
+Architecture Decision
+  ↓
+ADR
+  ↓
+Implementation Standard, if required
+```
+
+The following speculative order is not authorized:
+
+```text
+Architecture
+  ↓
+Speculation
+  ↓
+ADR
+  ↓
+Implementation
+```
+
+No ADR, Future ADR, Future Authority, Canonical Flow, Pipeline Model, Runtime
+Authority, or additional authority may be created merely because it might be
+needed. Every new authority remains subject to the AIOS Architecture Growth
+Rule.
 
 ### 1. Authority Order
 
@@ -245,11 +327,15 @@ higher document.
   scope they explicitly activate or authorize.
 - The Canonical Model, when Active, may define canonical object identity and
   vocabulary only.
-- The Pipeline Model, when Active, may define canonical object flow,
-  transformation, inputs, outputs, and lifecycle transitions only.
+- The Pipeline Model, if separately approved and Active, may define only
+  canonical object flow, conceptual object transformation, and shared
+  cross-layer pipeline vocabulary. It is not workflow, runtime,
+  orchestration, scheduling, routing, an execution pipeline, or an
+  implementation specification.
 - The Layer Architecture, when Active, may define layer ownership,
   responsibility, dependencies, communication, and boundaries only, using the
-  approved Canonical and Pipeline Models.
+  approved Canonical Model and, only if separately approved and Active, the
+  optional Pipeline Model.
 - ADRs may lock only an already authorized decision within their declared
   scope. An ADR may not manufacture missing authority.
 - Source code, tests, reviews, README, CHANGELOG, journals, status reports,
@@ -391,6 +477,8 @@ The following remain outside this document:
 | Project Owner approval | GD-001 Approval Record; GD-002 Repository Lifecycle; Domain Foundation Master Document Status |
 | Approval, publication, and activation are distinct | GD-001 Repository Impact; GD-002 Repository Lifecycle, Transition Rules, and Governance Rules |
 | Scope-limited authority | GD-002 Governance Rules 4 and 6; GD-003 through GD-007 Authority, Scope, and Conflict Resolution sections |
+| Authority growth requires a proven gap, implementation impact, and explicit approval | Project Owner instruction dated 2026-08-03 establishing the AIOS Architecture Growth Rule |
+| ADR creation requires implementation evidence, unresolved valid choices, long-term consequences, and explicit approval | Project Owner instruction dated 2026-08-03 establishing the AIOS Evidence First Rule |
 | Branch, PR, merge, or presence does not create authority | GD-002 Governance Rules 2–5; GD-003 Rules 1–6 |
 | Supersession preserves history | GD-002 Historical, Deprecated, and Archived lifecycle treatment; GD-007 Rules 8, 10–12 |
 | Frozen Roadmap cannot be expanded by status reporting | `docs/AIOS_Roadmap_Frozen.md`, Update Rules 3 and 4; GD-006 Rules 7 and 10 |
@@ -456,11 +544,35 @@ The review confirmed:
 The Project Owner instruction dated 2026-08-03 authorizes this completed review
 and approval. The document is therefore **Reviewed** and **Approved**.
 
-**Status:** Published
+**Publication status at original review:** Published
 
-**Activation:** Pending repository activation
+## Evidence First Final Governance Review
 
-Publication records the completed review and approval in accepted repository
-history. Under GD-002, publication does not itself activate this document; it
-remains non-authoritative until activation is explicitly recorded.
+Final Governance Review of the AIOS Evidence First Rule was completed on
+2026-08-03 against the Blueprint, this Authority Hierarchy, the Active
+Canonical Model, the Active Layer Architecture, and active Governance
+Decisions.
 
+The review confirmed:
+
+- the rule complements and does not weaken the AIOS Architecture Growth Rule;
+- the Blueprint, authority order, precedence, authority scopes, Canonical
+  Model, and Layer Architecture remain unchanged;
+- implementation is not granted authority to invent architecture;
+- evidence does not itself create an ADR or authority;
+- every ADR still requires an unresolved architectural choice, long-term
+  consequence, insufficient existing authority, and Project Owner approval;
+- GD-002 lifecycle requirements and GD-007 managed-change requirements remain
+  applicable; and
+- no ADR, future authority, implementation standard, implementation contract,
+  runtime behavior, or implementation scope is created by this rule.
+
+No governance conflict was found.
+
+## Activation Record
+
+Publication of this document was recorded in accepted repository history by
+commit `4466062`. The Project Owner instruction dated 2026-08-03 explicitly
+declares the Authority Hierarchy Active and approves the AIOS Evidence First
+Rule. This document is therefore Active for its declared
+architecture-governance scope.
