@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **REVIEW PASSED — APPROVED — PUBLICATION PENDING** |
+| Status | **REVIEW PASSED — APPROVED — PUBLISHED** |
 | Review and approval authority | Project Owner |
 | Reviewed draft commit | 605f860 |
 | Source authority baseline | 91797b6b97176f96fc60787926d801311e59b15f |
@@ -30,3 +30,7 @@ Reviewed, and Approved by this record. Review is distinct from approval.
 Approval is not publication. The commit accepting this approved record and
 approved extensions will be the publication evidence. Activation must follow
 in a later explicit accepted commit.
+
+## Publication
+
+The approved authority extensions and this review record were Published in accepted main commit 0cdbb6d. Activation is recorded separately after that publication.

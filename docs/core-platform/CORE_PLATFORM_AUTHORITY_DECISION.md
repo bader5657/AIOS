@@ -113,7 +113,7 @@ scope, EF-07 execution, or Core Platform implementation.
 
 | Field | Value |
 |---|---|
-| Status | **APPROVED — PUBLICATION PENDING** |
+| Status | **ACTIVE** |
 | Authority class | Existing Core Platform Authority Decision |
 | Project Owner instruction | 2026-08-05 |
 | Accepted source baseline | 91797b6b97176f96fc60787926d801311e59b15f |
@@ -169,3 +169,5 @@ result, routing decision, Asset, Event, Message, or Task object is created.
 | 2026-08-05 | Proposed | Complete scoped content submitted for formal review; no authority effect. |
 | 2026-08-05 | Reviewed | Authority, scope, dependency, canonical, phase, and prohibited-path review PASS against draft commit 605f860. |
 | 2026-08-05 | Approved | Project Owner instruction explicitly approves execution of this scoped lifecycle after PASS review; publication remains pending accepted commit. |
+| 2026-08-05 | Published | Approved extension accepted into main history in commit 0cdbb6d. |
+| 2026-08-05 | Active | Explicitly activated by Project Owner instruction for the declared Stage 3.1.4 prerequisite scope after publication. |
