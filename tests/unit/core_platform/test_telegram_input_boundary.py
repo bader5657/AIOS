@@ -6,7 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 with patch.dict(sys.modules, {"telegram": SimpleNamespace(Message=object)}):
-    from core.app.input_classifier import InputType, classify_telegram_message
+    from core.app.input_classifier import (
+        InputType,
+        classify_telegram_message,
+        recognize_telegram_message,
+    )
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -41,33 +45,121 @@ class TestTelegramInputClassifier(unittest.TestCase):
                 self.assertEqual(classify_telegram_message(message), expected)
 
     def test_document_transport_covers_blueprint_file_inputs(self):
-        for filename in (
-            "report.pdf",
-            "letter.doc",
-            "letter.docx",
-            "ledger.xls",
-            "ledger.xlsx",
-            "export.csv",
-        ):
+        cases = (
+            ("report.pdf", InputType.PDF),
+            ("letter.doc", InputType.DOC),
+            ("letter.docx", InputType.DOC),
+            ("ledger.xls", InputType.SPREADSHEET),
+            ("ledger.xlsx", InputType.SPREADSHEET),
+            ("export.csv", InputType.SPREADSHEET),
+            ("workbook.ods", InputType.SPREADSHEET),
+        )
+
+        for filename, expected in cases:
             message = telegram_message(
                 document=SimpleNamespace(file_name=filename)
             )
-            with self.subTest(filename=filename):
+            with self.subTest(filename=filename, expected=expected):
                 self.assertEqual(
-                    classify_telegram_message(message),
+                    recognize_telegram_message(message),
+                    expected,
+                )
+
+    def test_unrecognized_document_remains_generic_document(self):
+        for filename in (None, "notes.txt", "archive.zip"):
+            with self.subTest(filename=filename):
+                message = telegram_message(
+                    document=SimpleNamespace(file_name=filename)
+                )
+                self.assertEqual(
+                    recognize_telegram_message(message),
                     InputType.DOCUMENT,
                 )
 
-    def test_link_inputs_remain_text_at_the_adapter_boundary(self):
-        for value in (
-            "https://example.com/article",
-            "https://www.youtube.com/watch?v=example",
-        ):
-            with self.subTest(value=value):
+    def test_classifies_web_link_and_complete_youtube_host_set(self):
+        cases = (
+            ("https://example.com/article", InputType.WEB_LINK),
+            ("https://youtube.com/watch?v=example", InputType.YOUTUBE_LINK),
+            ("https://www.youtube.com/watch?v=example", InputType.YOUTUBE_LINK),
+            ("https://m.youtube.com/watch?v=example", InputType.YOUTUBE_LINK),
+            ("https://youtu.be/example", InputType.YOUTUBE_LINK),
+        )
+
+        for value, expected in cases:
+            with self.subTest(value=value, expected=expected):
                 self.assertEqual(
-                    classify_telegram_message(telegram_message(text=value)),
-                    InputType.TEXT,
+                    recognize_telegram_message(telegram_message(text=value)),
+                    expected,
                 )
+
+    def test_non_url_and_unsupported_youtube_host_remain_bounded(self):
+        cases = (
+            ("hello", InputType.TEXT),
+            ("youtube.com/watch?v=example", InputType.TEXT),
+            ("https://music.youtube.com/watch?v=example", InputType.WEB_LINK),
+            ("https://youtube.com.example/watch?v=example", InputType.WEB_LINK),
+            ("https://example.com bad", InputType.TEXT),
+        )
+
+        for value, expected in cases:
+            with self.subTest(value=value, expected=expected):
+                self.assertEqual(
+                    recognize_telegram_message(telegram_message(text=value)),
+                    expected,
+                )
+
+    def test_pipeline_classifier_preserves_existing_dispatch_categories(self):
+        cases = (
+            (
+                telegram_message(document=SimpleNamespace(file_name="a.pdf")),
+                InputType.DOCUMENT,
+            ),
+            (
+                telegram_message(document=SimpleNamespace(file_name="a.docx")),
+                InputType.DOCUMENT,
+            ),
+            (
+                telegram_message(document=SimpleNamespace(file_name="a.ods")),
+                InputType.DOCUMENT,
+            ),
+            (telegram_message(text="https://example.com"), InputType.TEXT),
+            (telegram_message(text="https://youtu.be/example"), InputType.TEXT),
+        )
+
+        for message, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertEqual(classify_telegram_message(message), expected)
+
+    def test_classifier_uses_no_parser_normalizer_or_url_decomposition(self):
+        source = (REPOSITORY_ROOT / "core/app/input_classifier.py").read_text(
+            encoding="utf-8"
+        )
+
+        prohibited = (
+            "urllib.parse",
+            "urlparse",
+            "urlsplit",
+            "parse_url",
+            ".lower(",
+            ".casefold(",
+        )
+        for marker in prohibited:
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, source)
+
+    def test_downstream_dispatch_contract_remains_unchanged(self):
+        ingestion_source = (
+            REPOSITORY_ROOT / "core/ingestion/universal_ingestion.py"
+        ).read_text(encoding="utf-8")
+        storage_source = (
+            REPOSITORY_ROOT / "core/storage/telegram_storage.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("if input_type != InputType.TEXT:", ingestion_source)
+        self.assertIn(
+            "elif input_type == InputType.DOCUMENT and message.document:",
+            storage_source,
+        )
 
     def test_unsupported_message_is_unknown(self):
         self.assertEqual(
