@@ -43,11 +43,65 @@ Project Owner approval recorded on 2026-07-30.
    preparation under
    `docs/core-platform/CORE_PLATFORM_MILESTONE_OPENING.md`.
 
+5. **Stage 3.1.3 capability contract boundaries.** The following boundaries close only the capability-contract authority gaps identified for Stage 3, Main Step 3.1, Sub Step 3.1.3. They add no capability beyond the Universal Ingestion inputs named by the Blueprint and do not define implementation.
+
+### Web Link Validation
+
+- **Validator:** Input Classifier is the Web Link validator.
+- **Scope:** validation is limited to deciding whether a candidate value is within the Active Canonical Model `Web Link` recognition boundary.
+- **Input:** one candidate value presented for `Web Link` recognition.
+- **Output:** a validation result stating whether the candidate is within that recognition boundary; the result does not create a normalized or replacement value.
+- **Ownership:** Input Classifier owns the validation decision; Universal Ingestion owns only the ingestion-side use of that bounded result.
+- **Lifecycle boundary:** validation belongs to acceptance at `Receive` and grants no ownership of `Store Original`, `Extract Metadata`, `Create Manifest`, `Register`, `Process`, `Route`, or `Respond`.
+
+This contract defines no regex, algorithm, parser, normalization rule, redirect treatment, or implementation.
+
+### Mixed Telegram Input
+
+- **Communication boundary:** Telegram Adapter owns transport receipt and hands the received Telegram message across the existing communication boundary to Universal Ingestion.
+- **Ownership:** Telegram Adapter owns only transport communication; Universal Ingestion owns the ingestion contract at the receiving side of that boundary.
+- **Multiple-media contract:** when the received Telegram message exposes more than one media input, the handoff contract preserves the presence and distinct identity of every recognized media input. This contract does not collapse the authority boundary to a single-media assumption.
+- **Lifecycle boundary:** this contract is limited to `Receive`; ownership of later lifecycle steps remains governed separately.
+
+This contract defines no precedence, ordering, aggregation, fallback, selection, deduplication, or runtime implementation.
+
+### Audio Storage
+
+- **Persistence ownership:** Storage owns persistence of original `Audio`.
+- **Storage responsibility:** Storage is responsible only for preserving the original `Audio` through the persistence boundary.
+- **Handoff boundary:** Universal Ingestion owns the `Store Original` request and hands the original `Audio` to Storage; Storage returns only a bounded persistence result to Universal Ingestion.
+
+This contract defines no path, folder, filename, storage layout, storage mechanism, or storage implementation.
+
+### Video Storage
+
+- **Persistence ownership:** Storage owns persistence of original `Video`.
+- **Storage responsibility:** Storage is responsible only for preserving the original `Video` through the persistence boundary.
+- **Handoff boundary:** Universal Ingestion owns the `Store Original` request and hands the original `Video` to Storage; Storage returns only a bounded persistence result to Universal Ingestion.
+
+This contract defines no path, folder, filename, storage layout, storage mechanism, or storage implementation.
+
+## Stage 3.1.3 Authority Trace
+
+| Blocker | Authority owner | Authority basis | Boundary result |
+|---|---|---|---|
+| Web Link recognition identity | Active Canonical Model | Blueprint names `Web link`; Canonical Model governs vocabulary and recognition | Canonical identity is established without a validation algorithm. |
+| YouTube Link recognition identity and supported hosts | Active Canonical Model | Blueprint names `YouTube link`; Canonical Model governs vocabulary and recognition | Canonical identity and complete supported-host set are established without matching behavior. |
+| Audio recognition identity | Active Canonical Model | Blueprint names `Audio`; Canonical Model governs vocabulary and recognition | Canonical identity is established without format or processing detail. |
+| Video recognition identity | Active Canonical Model | Blueprint names `Video`; Canonical Model governs vocabulary and recognition | Canonical identity is established without format or processing detail. |
+| Web Link Validation | Input Classifier | This Active Core Platform Authority Decision | Validator, scope, input, output, ownership, and lifecycle boundary are established. |
+| Mixed Telegram Input | Telegram Adapter and Universal Ingestion at their communication boundary | Blueprint adapter restriction; Stage 3.1.2 ownership evidence; this Active decision | Communication ownership, multiple-media contract, and lifecycle boundary are established. |
+| Audio Storage | Storage, with Universal Ingestion owning the ingestion handoff | Blueprint `Store Original`; Stage 3.1.2 ownership evidence; this Active decision | Persistence ownership, responsibility, and handoff boundary are established. |
+| Video Storage | Storage, with Universal Ingestion owning the ingestion handoff | Blueprint `Store Original`; Stage 3.1.2 ownership evidence; this Active decision | Persistence ownership, responsibility, and handoff boundary are established. |
+
+Full Authority Trace confirms that these decisions do not change the Official Pipeline, dependency directions, layer set or ownership established by the Layer Architecture, Blueprint, Authority Hierarchy, Frozen Roadmap, or Execution Plan order. They create no runtime behavior, ADR, new authority document, parser, validation algorithm, normalization rule, storage layout, or implementation detail.
+
 ## Limits
 
 This authority is limited to activating the applicable Blueprint and Roadmap,
 approving GD-002 through GD-007, authorizing early architecture-contract
-deliverables, and opening the Core Platform milestone for freeze preparation.
+deliverables, opening the Core Platform milestone for freeze preparation, and
+establishing the Stage 3.1.3 capability-contract boundaries stated above.
 It does not authorize AI Pipeline, Brain, Specialist Router, Business
 Specialists, autonomous business logic, unrelated deployment or production
 scope, EF-07 execution, or Core Platform implementation.
