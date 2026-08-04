@@ -107,3 +107,62 @@ Specialists, autonomous business logic, unrelated deployment or production
 scope, EF-07 execution, or Core Platform implementation.
 
 **IMPLEMENTATION NOT YET AUTHORIZED**
+
+
+## Stage 3.1.4 Scoped Authority Extension
+
+| Field | Value |
+|---|---|
+| Status | **DRAFT** |
+| Authority class | Existing Core Platform Authority Decision |
+| Project Owner instruction | 2026-08-05 |
+| Accepted source baseline | 91797b6b97176f96fc60787926d801311e59b15f |
+| Scope | Stage 3.1.4 prerequisite authority only |
+| Implementation effect | None |
+
+This extension defines action ownership and minimum boundaries only. Accepted
+input and produced output below are non-canonical boundary dispositions, not
+runtime types, schemas, payloads, records, or objects. Success permits only the
+named next handoff. Failure means no downstream success is claimed and the
+lifecycle stops at the current boundary. No retry, exception, compensation,
+workflow, algorithm, API, transaction, or implementation is defined.
+
+| Action | Owner | Accepted input | Produced output | Handoff | Success/failure and stop |
+|---|---|---|---|---|---|
+| Receive | Universal Ingestion at receiving side; Telegram Adapter owns transport receipt | Telegram transport input | bounded acceptance disposition | Adapter to Universal Ingestion | success may proceed; failure stops before storage |
+| Store Original | Storage; Universal Ingestion owns request only | accepted original input where applicable | original-preservation disposition | Ingestion to Storage and bounded return | failure stops before Metadata |
+| Extract Metadata | Metadata Engine; Universal Ingestion owns request only | successful preservation disposition | metadata disposition | Ingestion to Metadata Engine and bounded return | failure stops before Manifest |
+| Create Manifest | Document Manifest boundary; Universal Ingestion owns request only | accepted upstream dispositions | completed Document Manifest boundary disposition | Ingestion to Document Manifest boundary | failure stops before Register |
+| Register | PostgreSQL Registry | completed Document Manifest disposition | bounded registration disposition | Stage 3.1.4 exposes handoff toward Registry | stop before Registry runtime, transaction, schema, migration, and Stage 5 behavior |
+| Process | AIOS Event Engine | bounded registered disposition | bounded event-delivery disposition toward AIOS Core | Registry boundary to Event Engine boundary to Core boundary | failure makes no Route-success claim; stop before Event Engine runtime and Stage 6 behavior |
+| Route | AIOS Core | bounded event-delivery disposition | bounded downstream disposition at AIOS Brain boundary | Event Engine boundary to AIOS Core to Brain boundary | failure makes no Respond-completed claim; clarification is later Intelligence; stop before Brain, Specialist Router, Specialists, and Stage 7+ downstream behavior |
+| Respond | Telegram Adapter, transport delivery only | bounded acknowledgement disposition | acknowledgement delivery disposition | Core Platform acknowledgement boundary to Adapter | delivery failure makes no delivered-acknowledgement claim; stop before completed business response |
+
+PostgreSQL Registry is the bounded owner of Register. Stage 3.1.4 produces only
+its bounded handoff and runs no Registry behavior.
+
+AIOS Event Engine is the bounded owner of Process. This explicit Project Owner
+decision preserves the accepted Registry, Event Engine, Core order and grants
+no Event Engine implementation authority.
+
+AIOS Core is the bounded owner of Route. Route is explicitly not equivalent to
+Specialist Router. Universal Ingestion has no routing authority. Clarification
+remains later Intelligence and is not produced here.
+
+Telegram Adapter owns acknowledgement delivery only. Acknowledgement confirms
+receipt or bounded handoff; delivery is the transport act; completed business
+response is downstream business or Intelligence output and is outside scope.
+
+This mapping preserves the Official Pipeline and Universal Ingestion lifecycle
+orders. Stage 3.1.4 stops before Registry runtime, Event Engine runtime, AIOS
+Core downstream implementation, Brain, Specialist Router, Specialists,
+completed-response generation, and all Stage 5+ implementation.
+
+No Canonical Model extension is required. No Response, Registry Entry, process
+result, routing decision, Asset, Event, Message, or Task object is created.
+
+### Extension Lifecycle
+
+| Date | State | Evidence |
+|---|---|---|
+| 2026-08-05 | Draft | Prepared from accepted baseline; no authority effect. |

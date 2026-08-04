@@ -213,3 +213,32 @@ The Project Owner instruction dated 2026-08-03 explicitly approved Phase 2 and r
 ## Publication and Activation
 
 The approved document and approval record entered accepted repository history in commit `4c7eb10`. Publication was explicitly recorded in commit `be2d1c8`. This document is now explicitly Active as current Layer Authority only for its declared scope.
+
+
+## Stage 3.1.4 Scoped Layer Extension
+
+| Field | Value |
+|---|---|
+| Status | **DRAFT** |
+| Authority class | Existing Layer Authority |
+| Accepted baseline | 91797b6b97176f96fc60787926d801311e59b15f |
+| Scope | Stage 3.1.4 ownership consequences only |
+| New layer/general dependency | None |
+
+| Action | Owner layer | Producer | Consumer | Allowed direction | Prohibited reverse dependency | Communication |
+|---|---|---|---|---|---|---|
+| Register | Core Layer placement of PostgreSQL Registry | Ingestion Layer at completed Manifest boundary | Registry boundary | Ingestion to Core, Register handoff only | Registry cannot depend on Ingestion to own Receive through Create Manifest | manifest disposition in; registration disposition out |
+| Process | Core Layer placement of AIOS Event Engine | Registry boundary | Event Engine boundary | Registry boundary to Event Engine boundary | Event Engine cannot depend on Registry to own registration/persistence | registered disposition in; event-delivery disposition out |
+| Route | Core Layer placement of AIOS Core | Event Engine boundary | AIOS Core ending at Brain boundary | Event Engine boundary to AIOS Core | Core cannot depend on Event Engine to own delivery; no Brain/Specialist dependency | event-delivery in; downstream boundary disposition out |
+| Respond | Adapter Layer, delivery only | Core Platform acknowledgement boundary | Telegram Adapter | Core Platform to Adapter, acknowledgement only | Adapter cannot own ingestion, Process, Route, Intelligence, specialist selection, or completed-response generation | acknowledgement in; delivery disposition out |
+
+These are narrow communication permissions, not packages, services, calls,
+workflow, runtime dependencies, or broader dependency authority. Brain and
+Specialist Layers are not producer or consumer. Route ends at the Brain
+boundary and is not Specialist Router.
+
+### Extension Lifecycle
+
+| Date | State | Evidence |
+|---|---|---|
+| 2026-08-05 | Draft | Prepared from accepted baseline; no authority effect. |
