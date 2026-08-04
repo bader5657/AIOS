@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Status | **APPROVED — PUBLICATION PENDING** |
+| Status | **ACTIVE** |
 | Verification authority | Project Owner |
 | Authority baseline | 852825d |
-| Result | **PASS — EFFECTIVE AFTER GOVERNANCE ACTIVATION** |
+| Result | **ACTIVE PASS** |
 
 | Contract | Evidence | Result |
 |---|---|---|
@@ -19,10 +19,9 @@
 | canonical need | no new object required | PASS |
 | Stage 3.1.2 blockers | eligible for evidence re-verification | PASS |
 | implementation boundary | exact targets and mandatory exclusions | PASS |
-| governance lifecycle | approved; publication and activation pending | PENDING |
+| governance lifecycle | Published in a6c01b2 and explicitly activated after publication | PASS |
 
-Final result becomes Active PASS only after this approved artifact is Published
-and explicitly activated. Until then implementation remains stopped.
+Final result: **ACTIVE PASS**. The approved artifact was Published in accepted main commit a6c01b2 and is explicitly activated after publication.
 
 ## Lifecycle
 
@@ -32,3 +31,6 @@ and explicitly activated. Until then implementation remains stopped.
 | 2026-08-05 | Proposed | Complete scoped artifact submitted for review. |
 | 2026-08-05 | Reviewed | Scope, targets, exclusions, authority, dependencies, procedure, and stop conditions reviewed PASS. |
 | 2026-08-05 | Approved | Project Owner instruction explicitly approves this exact scoped governance artifact; publication pending accepted commit. |
+
+| 2026-08-05 | Published | Approved artifact accepted into main history in commit a6c01b2. |
+| 2026-08-05 | Active | Explicitly activated by Project Owner instruction for Stage 3.1.4 only after publication. |

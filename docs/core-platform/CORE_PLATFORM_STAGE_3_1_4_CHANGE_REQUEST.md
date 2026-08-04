@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **APPROVED — PUBLICATION PENDING** |
+| Status | **ACTIVE** |
 | Classification | Scoped Core Platform implementation request |
 | Approval authority | Project Owner |
 | Target branch | main |
@@ -53,3 +53,6 @@ new dependency, scope expansion, or failed contract/test.
 | 2026-08-05 | Proposed | Complete scoped artifact submitted for review. |
 | 2026-08-05 | Reviewed | Scope, targets, exclusions, authority, dependencies, procedure, and stop conditions reviewed PASS. |
 | 2026-08-05 | Approved | Project Owner instruction explicitly approves this exact scoped governance artifact; publication pending accepted commit. |
+
+| 2026-08-05 | Published | Approved artifact accepted into main history in commit a6c01b2. |
+| 2026-08-05 | Active | Explicitly activated by Project Owner instruction for Stage 3.1.4 only after publication. |
