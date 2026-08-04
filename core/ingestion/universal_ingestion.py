@@ -21,6 +21,10 @@ class IngestionResult:
     manifest_path: str | None
     metadata: dict
     text: str
+    register_handoff_ready: bool
+    process_handoff_ready: bool
+    route_handoff_ready: bool
+    respond_acknowledgement_ready: bool
 
 
 async def ingest_telegram_message(
@@ -58,4 +62,8 @@ async def ingest_telegram_message(
         manifest_path=manifest_path,
         metadata=metadata,
         text=text,
+        register_handoff_ready=manifest_path is not None,
+        process_handoff_ready=False,
+        route_handoff_ready=False,
+        respond_acknowledgement_ready=True,
     )
