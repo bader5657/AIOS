@@ -6,15 +6,15 @@
 | Scope | Stage 3 → Main Step 3.2 → Sub Step 3.2.1 |
 | Record class | Project Owner Decision |
 | Decision status | **FINAL — APPROVED BY PROJECT OWNER INSTRUCTION** |
-| Publication status | **PENDING ACCEPTANCE INTO REPOSITORY HISTORY** |
-| Activation status | **NOT ACTIVE — PUBLICATION GATE NOT SATISFIED** |
+| Publication status | **PUBLISHED — `687f66d1b0f42d35f310c9de178221aafacf3a71`** |
+| Activation status | **ACTIVE — POST-PUBLICATION PROJECT OWNER ACTIVATION** |
 | Implementation authority | **NONE** |
 
 This record preserves the Project Owner decisions supplied for D01–D25. It
-does not implement them. Under the Published and Active governance lifecycle,
-creation of this working-tree record is not publication, and approval is not
-activation. Publication requires acceptance into repository history; activation
-may occur only after that publication gate is satisfied.
+does not implement them. The reviewed and approved record was Published in
+accepted commit `687f66d1b0f42d35f310c9de178221aafacf3a71`. The Project
+Owner instruction then explicitly directed post-publication activation, which
+is recorded by the separate Stage 3.2.1 Authority Activation Record.
 
 ## Decisions
 
@@ -300,15 +300,11 @@ may occur only after that publication gate is satisfied.
 
 ## Authority Activation
 
-The Project Owner decisions D01–D25 are final and approved by the instruction
-recorded in this document. They replace `UNRESOLVED`, `PROPOSAL ONLY`, and
-`PROJECT OWNER DECISION REQUIRED` at the **decision** level only.
-
-They are **not yet Published or Active authority**. Under the controlling
-governance lifecycle, publication requires acceptance of this approved record
-into repository history. Activation must be recorded after publication. This
-document must not claim those gates were satisfied merely because a working-tree
-file exists.
+The Project Owner decisions D01–D25 are final, approved, Published, and Active
+for the declared Stage 3.2.1 authority scope. They replace `UNRESOLVED`,
+`PROPOSAL ONLY`, and `PROJECT OWNER DECISION REQUIRED` for D01–D25. Publication
+is evidenced by commit `687f66d1b0f42d35f310c9de178221aafacf3a71`;
+activation is evidenced by the separate post-publication Activation Record.
 
 ## Authority Scope
 
@@ -320,15 +316,14 @@ Manifest schema, database, or runtime.
 ## Stop Condition
 
 This document records Project Owner decisions only. It grants no implementation
-approval. Publication and activation remain mandatory authority gates.
-Implementation additionally requires a Scoped Change Request, Working Procedure,
+approval. Implementation requires a Scoped Change Request, Working Procedure,
 exact implementation targets, Implementation Approval, Review, Acceptance, and
 Governance Closure under the official lifecycle.
 
 **PROJECT OWNER DECISIONS: FINAL — APPROVED**
 
-**PUBLICATION: PENDING ACCEPTANCE INTO REPOSITORY HISTORY**
+**PUBLICATION: PUBLISHED — `687f66d1b0f42d35f310c9de178221aafacf3a71`**
 
-**ACTIVATION: NOT ACTIVE**
+**ACTIVATION: ACTIVE**
 
 **IMPLEMENTATION AUTHORITY: NONE**

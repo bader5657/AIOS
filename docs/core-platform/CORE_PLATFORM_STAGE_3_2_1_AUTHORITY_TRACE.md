@@ -6,8 +6,8 @@
 | Scope | Stage 3 → Main Step 3.2 → Sub Step 3.2.1 governance only |
 | Project Owner decisions | D01–D25 final and approved |
 | Review | PASS |
-| Publication | Pending acceptance commit |
-| Activation | Pending post-publication record |
+| Publication | `687f66d1b0f42d35f310c9de178221aafacf3a71` |
+| Activation | Active by separate post-publication Activation Record |
 | Implementation authority | **NONE** |
 
 ## Authority Chain
@@ -46,8 +46,8 @@
 | Proposed | Stage 3.2.1 Authority & Governance Package submitted for decision; no authority effect | COMPLETE |
 | Reviewed | `CORE_PLATFORM_STAGE_3_2_1_AUTHORITY_REVIEW_RECORD.md` | PASS |
 | Approved | explicit Project Owner D01–D25 decision instruction and Decision Record | COMPLETE |
-| Published | commit accepting the reviewed records into repository history | PENDING |
-| Active | separate post-publication Activation Record | PENDING |
+| Published | `687f66d1b0f42d35f310c9de178221aafacf3a71` accepts the reviewed records into repository history | COMPLETE |
+| Active | `CORE_PLATFORM_STAGE_3_2_1_AUTHORITY_ACTIVATION_RECORD.md`, accepted after publication | COMPLETE |
 
 No unresolved proposal is converted by inference. D24 deliberately authorizes
 no implementation file. No source, runtime, test, configuration, deployment,
