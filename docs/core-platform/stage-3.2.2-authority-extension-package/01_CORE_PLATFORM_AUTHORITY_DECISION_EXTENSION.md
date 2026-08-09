@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PROPOSED** |
+| Lifecycle | **REVIEWED — PASS** |
 | Extension target | Existing Core Platform Authority Decision — Storage Path Contract only |
 | Baseline | `79448eab8b343ee09b141bc73faeba767e6b92e4` |
 | Subject | Preserve every original file before any processing begins |
@@ -57,14 +57,22 @@ representation, PostgreSQL schema, or a new canonical object.
 3. Each member is persisted exactly once to its explicit root. Internal
    iteration order is non-canonical and may be fixed by implementation, but it
    cannot change identity or disposition and must be deterministic and tested.
-4. Metadata and all later actions begin only after **all** members report
-   bounded persistence success.
+4. Metadata and all later actions are prohibited before **all** members report
+   bounded persistence success. The existing single-file flow may then continue
+   unchanged. For a request containing multiple file originals, Stage 3.2.2
+   ends at bounded aggregate storage readiness; it does not create or execute a
+   multi-member Metadata, Manifest, Registry, processing, or response contract.
 5. If any member fails, the request disposition is failure. Successfully
    persisted members remain retained; rollback, deletion, compensation, retry,
    rename, or transaction mechanics are not authorized. Partial persistence
    never authorizes downstream progress.
 6. Caption/text may coexist as received transport content but is not a file
    original and does not bypass the all-file-original barrier.
+
+The aggregate disposition is semantic boundary state only. It authorizes no
+new public result field, payload, canonical object, schema, manifest shape, or
+selection of one member as a representative `stored_path`. Future downstream
+use of multiple stored originals requires separate authority.
 
 ## 4. Preservation, Manifest, and PostgreSQL Boundaries
 

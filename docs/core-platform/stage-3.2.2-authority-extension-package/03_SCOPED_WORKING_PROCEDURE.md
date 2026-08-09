@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PROPOSED** |
+| Lifecycle | **REVIEWED — PASS** |
 | Runtime-data policy | Synthetic temporary paths only; production data NO TOUCH |
 
 1. Confirm this entire package is Approved, Published, and Active in accepted
@@ -13,7 +13,9 @@
 4. Preserve the Active Stage 3.2.1 storage implementation unchanged.
 5. Implement only deterministic enumeration of all recognized file originals,
    exactly-once Storage requests, the all-success barrier, bounded partial
-   failure, and downstream stop.
+   failure, and downstream stop. Preserve the existing single-file continuation;
+   mixed/multiple success stops at aggregate storage readiness with no new
+   output schema or downstream multi-member processing.
 6. Use mocks and synthetic temporary data; never access `/opt/aios/data`,
    production services, PostgreSQL, Event Engine, AIOS Core, Brain, Router, or
    Specialists.

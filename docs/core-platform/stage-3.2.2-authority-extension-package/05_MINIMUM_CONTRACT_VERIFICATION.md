@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PROPOSED EVIDENCE** |
+| Lifecycle | **REVIEWED — PASS** |
 | Verification effect | Governance evidence only; no tests executed or changed |
 
 | Contract requirement | Governance result |
@@ -33,7 +33,7 @@
 | VM-02 | Image, Voice, Audio, Video, PDF, DOC, DOCX, Spreadsheet positive path | Each recognized file original stored exactly once; no Metadata call before aggregate success |
 | VM-03 | Original filename and extension boundary | Exact received filename retained separately; stored basename remains UUID v4 plus accepted extension |
 | VM-04 | Mixed request with two or more file originals | Every distinct member stored exactly once; no precedence, collapse, or silent discard |
-| VM-05 | Aggregate success ordering | Call trace is all Storage completions before first Metadata, then Manifest; no downstream runtime |
+| VM-05 | Aggregate success ordering | Single-original trace remains Storage then Metadata then Manifest; mixed/multiple trace ends after all Storage completions with zero downstream calls |
 | VM-06 | First/middle/final member failure | Request failure; zero Metadata/Manifest/later calls; successful earlier originals retained; zero retry/rollback |
 | VM-07 | Collision/write/download failure | Bounded failure; existing target unchanged; no rename, overwrite, or retry |
 | VM-08 | Web and YouTube Link | Exact URL identity retained; no file-ordering reclassification, fetch, normalization, serialization, or remote persistence |
@@ -42,6 +42,7 @@
 | VM-11 | Runtime/dependency boundary | No Registry, Event Engine, AIOS Core, Brain, Router, Specialist, Intelligence, response, dependency, or schema growth |
 | VM-12 | Closed-world diff | Only two allowed source and three allowed test files changed |
 | VM-13 | Regression | Targeted, Core Platform, full repository, authority, minimum-contract, and diff checks PASS |
+| VM-14 | Output compatibility | No new public result field/schema and no representative stored-path selection; existing single-original result remains unchanged |
 
 ## Mandatory Commands
 

@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PROPOSED EVIDENCE** |
+| Lifecycle | **REVIEWED — PASS** |
 | Evidence baseline | `79448eab8b343ee09b141bc73faeba767e6b92e4` |
 | Evidence rule | Published and Active accepted-history authority only |
 
