@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **REVIEWED — PASS** |
+| Lifecycle | **APPROVED** |
 | Authority class | Scoped extension to existing Core Platform Authority Decision |
 | Accepted evidence baseline | `79448eab8b343ee09b141bc73faeba767e6b92e4` |
 | Assessment evidence | `fb23bb2` (evidence only; not authority) |
@@ -22,8 +22,8 @@ higher authority unchanged.
 |---|---|
 | Draft | `308a289` |
 | Proposed | `c0762d8` |
-| Reviewed | This accepted-history PASS transition |
-| Approved | Pending |
+| Reviewed | `5035d9e` — PASS |
+| Approved | This Project Owner approval transition |
 | Published | Pending |
 | Active | Pending |
 
