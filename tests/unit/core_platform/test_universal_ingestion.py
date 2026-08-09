@@ -131,7 +131,7 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
         create_manifest.assert_called_once_with(
             media_type="image",
             storage_path="/existing/path/image.jpg",
-            original_filename="telegram",
+            original_filename=None,
             telegram_user_id=7,
             telegram_chat_id=8,
             telegram_message_id=9,
@@ -139,6 +139,47 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.input_type, InputType.IMAGE)
         self.assertEqual(result.recognized_input_type, InputType.IMAGE)
         self.assertEqual(result.text, "caption")
+
+    async def test_original_filename_is_preserved_separately_for_manifest(self):
+        message = telegram_message(
+            document=SimpleNamespace(file_name="Exact Received Name.PDF")
+        )
+        create_manifest = Mock(return_value="/stored/manifest.json")
+        with (
+            patch.object(
+                universal_ingestion,
+                "recognize_telegram_message",
+                return_value=InputType.PDF,
+            ),
+            patch.object(
+                universal_ingestion,
+                "classify_telegram_message",
+                return_value=InputType.DOCUMENT,
+            ),
+            patch.object(
+                universal_ingestion,
+                "save_telegram_attachment",
+                AsyncMock(return_value="/stored/generated.pdf"),
+            ),
+            patch.object(
+                universal_ingestion,
+                "extract_basic_metadata",
+                Mock(return_value={}),
+            ),
+            patch.object(
+                universal_ingestion,
+                "create_document_manifest",
+                create_manifest,
+            ),
+        ):
+            await universal_ingestion.ingest_telegram_message(
+                message,
+                SimpleNamespace(),
+            )
+        self.assertEqual(
+            create_manifest.call_args.kwargs["original_filename"],
+            "Exact Received Name.PDF",
+        )
 
     def test_task_b_adds_no_prohibited_runtime_behavior(self):
         source = (

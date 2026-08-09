@@ -44,10 +44,18 @@ async def ingest_telegram_message(
         if stored_path:
             metadata = extract_basic_metadata(stored_path)
 
+            original_filename = None
+            if message.document:
+                original_filename = message.document.file_name
+            elif message.audio:
+                original_filename = message.audio.file_name
+            elif message.video:
+                original_filename = getattr(message.video, "file_name", None)
+
             manifest_path = create_document_manifest(
                 media_type=input_type.value,
                 storage_path=stored_path,
-                original_filename="telegram",
+                original_filename=original_filename,
                 telegram_user_id=message.from_user.id if message.from_user else 0,
                 telegram_chat_id=message.chat.id,
                 telegram_message_id=message.message_id,

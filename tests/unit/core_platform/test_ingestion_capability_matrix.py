@@ -169,6 +169,14 @@ class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("if input_type != InputType.TEXT:", ingestion_source)
         self.assertIn("media_type=input_type.value", ingestion_source)
 
+    def test_links_remain_exact_text_without_remote_content_handling(self):
+        source = (
+            REPOSITORY_ROOT / "core/ingestion/universal_ingestion.py"
+        ).read_text(encoding="utf-8")
+        for prohibited in ("requests", "urlopen", "download", "redirect"):
+            with self.subTest(prohibited=prohibited):
+                self.assertNotIn(prohibited, source.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
