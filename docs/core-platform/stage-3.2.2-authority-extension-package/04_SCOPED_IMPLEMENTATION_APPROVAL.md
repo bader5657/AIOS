@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **DRAFT** |
+| Lifecycle | **PROPOSED** |
 | Implementation authority | **NONE until package Approved, Published, and Active** |
 | Approved future scope | Only the closed-world targets in `02_SCOPED_CHANGE_REQUEST.md` |
 

@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **DRAFT EVIDENCE** |
+| Lifecycle | **PROPOSED EVIDENCE** |
 | Verification effect | Governance evidence only; no tests executed or changed |
 
 | Contract requirement | Governance result |
