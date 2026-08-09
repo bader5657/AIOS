@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **APPROVED** |
+| Lifecycle | **PUBLISHED — AWAITING ACTIVATION** |
 | Runtime-data policy | Synthetic temporary paths only; production data NO TOUCH |
 
 1. Confirm this entire package is Approved, Published, and Active in accepted

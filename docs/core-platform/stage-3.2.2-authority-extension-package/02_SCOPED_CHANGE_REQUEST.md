@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **APPROVED** |
+| Lifecycle | **PUBLISHED — AWAITING ACTIVATION** |
 | Baseline | `79448eab8b343ee09b141bc73faeba767e6b92e4` |
 | Requested future change | Bounded mixed/multiple-original storage barrier and verification only |
 
