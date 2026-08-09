@@ -2,13 +2,13 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PUBLISHED** |
+| Lifecycle | **ACTIVE** |
 | Authority class | Scoped extension to existing Core Platform Authority Decision |
 | Accepted evidence baseline | `79448eab8b343ee09b141bc73faeba767e6b92e4` |
 | Assessment evidence | `fb23bb2` (evidence only; not authority) |
 | Stage | Stage 3 → Main Step 3.2 → Sub Step 3.2.2 |
 | Runtime/source/test effect | **NONE** |
-| Implementation authority | **NONE until Approved, Published, and Active** |
+| Implementation authority | **ACTIVE for the exact closed-world scope only** |
 
 This is one indivisible governance-only package. Package activation applies to
 documents `01` through `10`; no individual document may be used independently
@@ -24,8 +24,8 @@ higher authority unchanged.
 | Proposed | `c0762d8` |
 | Reviewed | `5035d9e` — PASS |
 | Approved | `51cf5c4` |
-| Published | This accepted-history publication transition |
-| Active | Pending |
+| Published | `e612223` |
+| Active | This post-publication accepted-history transition |
 
 ## Package Contents
 

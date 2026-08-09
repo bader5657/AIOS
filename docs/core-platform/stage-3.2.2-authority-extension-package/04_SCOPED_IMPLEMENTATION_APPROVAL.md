@@ -2,8 +2,8 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PUBLISHED — AWAITING ACTIVATION** |
-| Implementation authority | **NONE until package Approved, Published, and Active** |
+| Lifecycle | **PUBLISHED AND ACTIVE** |
+| Implementation authority | **ACTIVE for the exact approved scope only** |
 | Approved future scope | Only the closed-world targets in `02_SCOPED_CHANGE_REQUEST.md` |
 
 ## Acceptance Contract

@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PUBLISHED — AWAITING ACTIVATION** |
+| Lifecycle | **PUBLISHED AND ACTIVE** |
 | Extension target | Existing Core Platform Authority Decision — Storage Path Contract only |
 | Baseline | `79448eab8b343ee09b141bc73faeba767e6b92e4` |
 | Subject | Preserve every original file before any processing begins |
