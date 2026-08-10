@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PROPOSED** |
+| Lifecycle | **PUBLISHED AND ACTIVE** |
 | Baseline | `0845dc4f836b3fafff5a9c66a346b5ca098863ab` |
 | Requested change | Revalidate and authorize standard-library `unittest` for VM-13 |
 

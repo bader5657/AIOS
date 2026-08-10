@@ -2,8 +2,8 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PROPOSED** |
-| Authority effect before activation | **NONE** |
+| Lifecycle | **PUBLISHED AND ACTIVE** |
+| Authority effect | **ACTIVE FOR VM-13 VERIFICATION ONLY** |
 | Scope | Verification/governance correction only |
 
 The requested approval authorizes the repository execution environment's

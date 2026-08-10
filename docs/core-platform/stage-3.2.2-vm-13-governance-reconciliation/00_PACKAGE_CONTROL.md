@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **PUBLISHED — NOT YET ACTIVE** |
+| Lifecycle | **ACTIVE** |
 | Accepted baseline | `0845dc4f836b3fafff5a9c66a346b5ca098863ab` |
 | Authority class | Scoped extension to existing Stage 3.2.2 verification/governance authority |
 | Scope | VM-13 verification mechanism only |
@@ -17,5 +17,5 @@ until separately Reviewed, Approved, Published, and Active in accepted history.
 Lifecycle: `Draft -> Proposed -> Reviewed -> Approved -> Published -> Active`.
 
 Draft evidence: `4f5d352`. Proposal evidence: `d964e7d`. Review PASS:
-`32364b1`. Project Owner Approval: `aa89568`. This accepted-history version
-publishes the indivisible package; activation remains mandatory and separate.
+`32364b1`. Project Owner Approval: `aa89568`. Publication: `879223b`.
+This post-publication accepted-history version activates the indivisible package.
