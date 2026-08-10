@@ -77,7 +77,11 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                     ),
                 ):
                     result = await universal_ingestion.ingest_telegram_message(
-                        telegram_message(text="candidate"),
+                        telegram_message(
+                            document=SimpleNamespace(file_name="candidate.bin")
+                        )
+                        if pipeline == InputType.DOCUMENT
+                        else telegram_message(text="candidate"),
                         SimpleNamespace(),
                     )
 

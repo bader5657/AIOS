@@ -4,7 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 save_attachment = AsyncMock(return_value=None)
@@ -28,8 +27,8 @@ with patch.dict(
     },
 ):
     from core.app.input_classifier import InputType
+    from core.ingestion import universal_ingestion
     from core.ingestion.universal_ingestion import ingest_telegram_message
-
 
 def telegram_message(**overrides):
     fields = {
@@ -46,7 +45,6 @@ def telegram_message(**overrides):
     }
     fields.update(overrides)
     return SimpleNamespace(**fields)
-
 
 class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
     async def test_complete_blueprint_input_and_compatibility_matrix(self):
@@ -147,6 +145,26 @@ class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(save_attachment.await_count, expected_dispatches)
 
+    def test_mixed_file_enumeration_preserves_every_canonical_identity(self):
+        message = telegram_message(
+            photo=[object()],
+            voice=object(),
+            document=SimpleNamespace(file_name="sheet.XLSX"),
+            video=object(),
+            audio=object(),
+        )
+
+        self.assertEqual(
+            universal_ingestion._file_original_types(message),
+            (
+                InputType.IMAGE,
+                InputType.VOICE,
+                InputType.SPREADSHEET,
+                InputType.VIDEO,
+                InputType.AUDIO,
+            ),
+        )
+
     async def test_unknown_recognition_preserves_unknown_pipeline_fallback(self):
         result = await ingest_telegram_message(
             telegram_message(),
@@ -166,7 +184,7 @@ class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
             ingestion_source,
         )
         self.assertIn("input_type = classify_telegram_message", ingestion_source)
-        self.assertIn("if input_type != InputType.TEXT:", ingestion_source)
+        self.assertIn("if len(file_original_types) == 1:", ingestion_source)
         self.assertIn("media_type=input_type.value", ingestion_source)
 
     def test_links_remain_exact_text_without_remote_content_handling(self):
@@ -176,7 +194,6 @@ class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
         for prohibited in ("requests", "urlopen", "download", "redirect"):
             with self.subTest(prohibited=prohibited):
                 self.assertNotIn(prohibited, source.lower())
-
 
 if __name__ == "__main__":
     unittest.main()

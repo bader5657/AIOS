@@ -4,7 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 with patch.dict(
@@ -28,7 +27,6 @@ with patch.dict(
     from core.app.input_classifier import InputType
     from core.ingestion import universal_ingestion
 
-
 def telegram_message(**overrides):
     fields = {
         "photo": None,
@@ -44,7 +42,6 @@ def telegram_message(**overrides):
     }
     fields.update(overrides)
     return SimpleNamespace(**fields)
-
 
 class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_manifest_exposes_only_register_handoff_and_acknowledgement(self):
@@ -142,6 +139,127 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.route_handoff_ready)
         self.assertTrue(result.respond_acknowledgement_ready)
 
+    async def test_aggregate_storage_readiness_distinguishes_all_success(self):
+        message = telegram_message(
+            photo=[object()], voice=object(), audio=object()
+        )
+        save_attachment = AsyncMock(
+            side_effect=["/stored/image", "/stored/voice", "/stored/audio"]
+        )
+        with patch.object(
+            universal_ingestion, "save_telegram_attachment", save_attachment
+        ):
+            ready = await universal_ingestion._store_file_originals(
+                message,
+                SimpleNamespace(),
+                (InputType.IMAGE, InputType.VOICE, InputType.AUDIO),
+            )
+
+        self.assertTrue(ready)
+        self.assertEqual(save_attachment.await_count, 3)
+
+    async def test_aggregate_storage_readiness_distinguishes_failure_positions(self):
+        message = telegram_message(
+            photo=[object()], voice=object(), audio=object()
+        )
+        original_types = (InputType.IMAGE, InputType.VOICE, InputType.AUDIO)
+        for failed_index in range(3):
+            with self.subTest(failed_index=failed_index):
+                paths = ["/stored/image", "/stored/voice", "/stored/audio"]
+                paths[failed_index] = None
+                save_attachment = AsyncMock(side_effect=paths)
+                with patch.object(
+                    universal_ingestion,
+                    "save_telegram_attachment",
+                    save_attachment,
+                ):
+                    ready = await universal_ingestion._store_file_originals(
+                        message, SimpleNamespace(), original_types
+                    )
+
+                self.assertFalse(ready)
+                self.assertEqual(save_attachment.await_count, 3)
+                self.assertEqual(
+                    [
+                        call.kwargs["input_type"]
+                        for call in save_attachment.await_args_list
+                    ],
+                    list(original_types),
+                )
+
+
+    async def test_multiple_originals_store_once_then_stop_at_aggregate_readiness(self):
+        calls = []
+        save_attachment = AsyncMock(
+            side_effect=lambda *_, **kwargs: calls.append(
+                ("store", kwargs["input_type"])
+            ) or "/stored/" + kwargs["input_type"].value
+        )
+        extract_metadata = Mock()
+        create_manifest = Mock()
+        message = telegram_message(
+            photo=[object()],
+            voice=object(),
+            document=SimpleNamespace(file_name="report.PDF"),
+            video=object(),
+            audio=object(),
+            caption="mixed",
+        )
+
+        with (
+            patch.object(universal_ingestion, "save_telegram_attachment", save_attachment),
+            patch.object(universal_ingestion, "extract_basic_metadata", extract_metadata),
+            patch.object(universal_ingestion, "create_document_manifest", create_manifest),
+        ):
+            result = await universal_ingestion.ingest_telegram_message(
+                message, SimpleNamespace()
+            )
+
+        self.assertEqual(
+            calls,
+            [("store", input_type) for input_type in (
+                InputType.IMAGE, InputType.VOICE, InputType.PDF,
+                InputType.VIDEO, InputType.AUDIO,
+            )],
+        )
+        extract_metadata.assert_not_called()
+        create_manifest.assert_not_called()
+        self.assertIsNone(result.stored_path)
+        self.assertIsNone(result.manifest_path)
+        self.assertFalse(result.register_handoff_ready)
+
+    async def test_member_failure_positions_attempt_each_original_once(self):
+        message = telegram_message(
+            photo=[object()],
+            voice=object(),
+            audio=object(),
+        )
+        for failed_index in range(3):
+            with self.subTest(failed_index=failed_index):
+                paths = ["/stored/image", "/stored/voice", "/stored/audio"]
+                paths[failed_index] = None
+                save_attachment = AsyncMock(side_effect=paths)
+                extract_metadata = Mock()
+                create_manifest = Mock()
+                with (
+                    patch.object(universal_ingestion, "save_telegram_attachment", save_attachment),
+                    patch.object(universal_ingestion, "extract_basic_metadata", extract_metadata),
+                    patch.object(universal_ingestion, "create_document_manifest", create_manifest),
+                ):
+                    result = await universal_ingestion.ingest_telegram_message(
+                        message, SimpleNamespace()
+                    )
+
+                self.assertEqual(save_attachment.await_count, 3)
+                self.assertEqual(
+                    [call.kwargs["input_type"] for call in save_attachment.await_args_list],
+                    [InputType.IMAGE, InputType.VOICE, InputType.AUDIO],
+                )
+                extract_metadata.assert_not_called()
+                create_manifest.assert_not_called()
+                self.assertIsNone(result.stored_path)
+                self.assertFalse(result.register_handoff_ready)
+
     def test_runtime_has_no_downstream_owner_or_response_implementation(self):
         source = (
             REPOSITORY_ROOT / "core/ingestion/universal_ingestion.py"
@@ -159,7 +277,6 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         for marker in prohibited:
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, source.lower())
-
 
 if __name__ == "__main__":
     unittest.main()
