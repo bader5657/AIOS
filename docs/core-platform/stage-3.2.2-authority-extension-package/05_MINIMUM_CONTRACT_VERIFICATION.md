@@ -2,8 +2,8 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **ACTIVE EVIDENCE — PASS** |
-| Verification effect | Governance evidence only; no tests executed or changed |
+| Lifecycle | **ACTIVE, AS CORRECTED BY THE VM-13 RECONCILIATION** |
+| Verification environment | Repository execution environment plus Python standard library only |
 
 | Contract requirement | Governance result |
 |---|---|
@@ -44,16 +44,42 @@
 | VM-13 | Regression | Targeted, Core Platform, full repository, authority, minimum-contract, and diff checks PASS |
 | VM-14 | Output compatibility | No new public result field/schema and no representative stored-path selection; existing single-original result remains unchanged |
 
+## Official Verification Mechanism
+
+The official interpreter is the repository execution environment's available
+`python3`. The official Stage 3.2.2 runner is Python standard-library
+`unittest`. No local developer installation is authority. Installing pytest or
+any other dependency is prohibited; a missing non-standard dependency cannot be
+repaired as part of verification.
+
+The repository layout requires separate discovery roots. `tests/unit/domain`
+is not an importable package from a higher discovery root, while
+`tests/unit/core_platform` is independently discoverable. Therefore the full
+regression command deliberately executes both roots and must not be shortened
+to a zero-test or partially discovered root command.
+
 ## Mandatory Commands
 
 ```text
-python -m py_compile core/storage/telegram_storage.py core/ingestion/universal_ingestion.py
-python -m pytest -q tests/unit/core_platform/test_ingestion_lifecycle_boundaries.py tests/unit/core_platform/test_ingestion_capability_matrix.py tests/unit/core_platform/test_universal_ingestion.py tests/unit/core_platform/test_storage_path_contract.py
-python -m pytest -q tests/unit/core_platform
-python -m pytest -q
+PYTHONDONTWRITEBYTECODE=1 python3 -c "from pathlib import Path; [compile(Path(p).read_text(encoding='utf-8'), p, 'exec') for p in ('core/storage/telegram_storage.py', 'core/ingestion/universal_ingestion.py')]"
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v tests/unit/core_platform/test_ingestion_lifecycle_boundaries.py tests/unit/core_platform/test_ingestion_capability_matrix.py tests/unit/core_platform/test_universal_ingestion.py tests/unit/core_platform/test_storage_path_contract.py
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/unit/core_platform -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/unit/core_platform -p 'test_*.py' -v && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/unit/domain -p 'test_*.py' -v
 git diff --check
 git diff --name-only
 ```
+
+The first command is the required no-bytecode syntax-compilation check. The
+second is targeted Stage 3.2.2 verification. The third is Core Platform
+regression. The fourth is full repository/domain regression: success requires
+both discoveries to execute tests and return zero. Any nonzero exit, import or
+discovery error, zero-test result for an expected suite, scope mismatch, or
+dependency request is a verification failure and requires STOP.
+
+Evidence must record the exact interpreter version, exact commands, discovered
+test counts, pass/fail/error/skip totals, exit status, changed-file list,
+`git diff --check`, authority baseline, and lifecycle commits. VM-01 through
+VM-12 and VM-14 remain unchanged by this correction.
 
 Authority verification must additionally prove package ancestry, Published and
 Active status, unchanged frozen/architecture files, exact target compliance,
