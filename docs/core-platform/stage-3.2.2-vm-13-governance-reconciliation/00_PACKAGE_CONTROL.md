@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **REVIEWED — PASS** |
+| Lifecycle | **APPROVED — NOT YET PUBLISHED OR ACTIVE** |
 | Accepted baseline | `0845dc4f836b3fafff5a9c66a346b5ca098863ab` |
 | Authority class | Scoped extension to existing Stage 3.2.2 verification/governance authority |
 | Scope | VM-13 verification mechanism only |
@@ -16,5 +16,6 @@ until separately Reviewed, Approved, Published, and Active in accepted history.
 
 Lifecycle: `Draft -> Proposed -> Reviewed -> Approved -> Published -> Active`.
 
-Draft evidence: `4f5d352`. Proposal evidence: `d964e7d`. This version
-records Review PASS without granting approval, publication, or activation.
+Draft evidence: `4f5d352`. Proposal evidence: `d964e7d`. Review PASS:
+`32364b1`. This version records Project Owner Approval; publication and
+activation remain mandatory and separate.
