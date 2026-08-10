@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **DRAFT** |
+| Lifecycle | **PROPOSED** |
 | Baseline | `0845dc4f836b3fafff5a9c66a346b5ca098863ab` |
 | Runtime-data policy | NO TOUCH; tests use existing mocks and synthetic data |
 

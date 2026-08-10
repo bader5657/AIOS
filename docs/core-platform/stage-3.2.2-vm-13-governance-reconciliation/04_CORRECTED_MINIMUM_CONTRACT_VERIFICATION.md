@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **DRAFT** |
+| Lifecycle | **PROPOSED** |
 | Official interpreter | Repository execution environment `python3` |
 | Official runner | Python standard-library `unittest` |
 | Third-party dependency | **PROHIBITED** |

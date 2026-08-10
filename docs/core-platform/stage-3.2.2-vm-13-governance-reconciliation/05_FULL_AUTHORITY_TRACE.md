@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **DRAFT EVIDENCE** |
+| Lifecycle | **PROPOSED EVIDENCE** |
 | Accepted baseline | `0845dc4f836b3fafff5a9c66a346b5ca098863ab` |
 | Rule | Accepted-history authority; no working-tree behavior used as authority |
 

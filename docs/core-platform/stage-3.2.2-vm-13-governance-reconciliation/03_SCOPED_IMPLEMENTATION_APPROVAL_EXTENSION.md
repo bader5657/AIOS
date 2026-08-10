@@ -2,7 +2,7 @@
 
 | Control | Value |
 |---|---|
-| Lifecycle | **DRAFT** |
+| Lifecycle | **PROPOSED** |
 | Authority effect before activation | **NONE** |
 | Scope | Verification/governance correction only |
 
