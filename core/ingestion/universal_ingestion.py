@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from telegram import Message
 from telegram.ext import ContextTypes
@@ -27,6 +28,47 @@ class IngestionResult:
     respond_acknowledgement_ready: bool
 
 
+def _file_original_types(message: Message) -> tuple[InputType, ...]:
+    """Enumerate file originals in deterministic Telegram transport order."""
+    originals = []
+    if message.photo:
+        originals.append(InputType.IMAGE)
+    if message.voice:
+        originals.append(InputType.VOICE)
+    if message.document:
+        filename = getattr(message.document, "file_name", None) or ""
+        extension = Path(filename).suffix.removeprefix(".").lower()
+        if extension == "pdf":
+            originals.append(InputType.PDF)
+        elif extension in ("doc", "docx"):
+            originals.append(InputType.DOC)
+        elif extension in ("xls", "xlsx", "csv", "ods"):
+            originals.append(InputType.SPREADSHEET)
+        else:
+            originals.append(InputType.DOCUMENT)
+    if message.video:
+        originals.append(InputType.VIDEO)
+    if message.audio:
+        originals.append(InputType.AUDIO)
+    return tuple(originals)
+
+async def _store_file_originals(
+    message: Message,
+    context: ContextTypes.DEFAULT_TYPE,
+    file_original_types: tuple[InputType, ...],
+) -> bool:
+    storage_results = []
+    for file_original_type in file_original_types:
+        storage_results.append(
+            await save_telegram_attachment(
+                message,
+                context,
+                input_type=file_original_type,
+            )
+        )
+    return all(stored_path is not None for stored_path in storage_results)
+
+
 async def ingest_telegram_message(
     message: Message,
     context: ContextTypes.DEFAULT_TYPE,
@@ -37,29 +79,42 @@ async def ingest_telegram_message(
     stored_path = None
     manifest_path = None
     metadata = {}
+    file_original_types = _file_original_types(message)
+    aggregate_storage_ready = True
 
     if input_type != InputType.TEXT:
-        stored_path = await save_telegram_attachment(message, context)
+        if len(file_original_types) == 1:
+            stored_path = await save_telegram_attachment(message, context)
 
-        if stored_path:
-            metadata = extract_basic_metadata(stored_path)
+            if stored_path:
+                metadata = extract_basic_metadata(stored_path)
 
-            original_filename = None
-            if message.document:
-                original_filename = message.document.file_name
-            elif message.audio:
-                original_filename = message.audio.file_name
-            elif message.video:
-                original_filename = getattr(message.video, "file_name", None)
+                original_filename = None
+                if message.document:
+                    original_filename = message.document.file_name
+                elif message.audio:
+                    original_filename = message.audio.file_name
+                elif message.video:
+                    original_filename = getattr(message.video, "file_name", None)
 
-            manifest_path = create_document_manifest(
-                media_type=input_type.value,
-                storage_path=stored_path,
-                original_filename=original_filename,
-                telegram_user_id=message.from_user.id if message.from_user else 0,
-                telegram_chat_id=message.chat.id,
-                telegram_message_id=message.message_id,
+                manifest_path = create_document_manifest(
+                    media_type=input_type.value,
+                    storage_path=stored_path,
+                    original_filename=original_filename,
+                    telegram_user_id=message.from_user.id if message.from_user else 0,
+                    telegram_chat_id=message.chat.id,
+                    telegram_message_id=message.message_id,
+                )
+
+        elif len(file_original_types) > 1:
+            aggregate_storage_ready = await _store_file_originals(
+                message,
+                context,
+                file_original_types,
             )
+
+            # Stage 3.2.2 stops at aggregate storage readiness without selecting a
+            # representative path or entering any downstream lifecycle boundary.
 
     text = message.text or message.caption or ""
 
@@ -70,7 +125,9 @@ async def ingest_telegram_message(
         manifest_path=manifest_path,
         metadata=metadata,
         text=text,
-        register_handoff_ready=manifest_path is not None,
+        register_handoff_ready=(
+            aggregate_storage_ready and manifest_path is not None
+        ),
         process_handoff_ready=False,
         route_handoff_ready=False,
         respond_acknowledgement_ready=True,

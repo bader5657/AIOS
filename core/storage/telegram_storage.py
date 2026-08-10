@@ -11,8 +11,10 @@ from core.storage.file_storage import save_file
 async def save_telegram_attachment(
     message: Message,
     context: ContextTypes.DEFAULT_TYPE,
+    *,
+    input_type: InputType | None = None,
 ) -> str | None:
-    input_type = recognize_telegram_message(message)
+    input_type = input_type or recognize_telegram_message(message)
 
     telegram_file = None
     original_filename = None
