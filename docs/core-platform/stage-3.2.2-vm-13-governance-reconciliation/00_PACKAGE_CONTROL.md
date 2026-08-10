@@ -7,6 +7,7 @@
 | Authority class | Scoped extension to existing Stage 3.2.2 verification/governance authority |
 | Scope | VM-13 verification mechanism only |
 | Runtime/source/test/dependency effect | **NONE** |
+| VM-13 | **CLOSED — ALL ACTIVE VERIFICATION PASS** |
 
 This package reuses the existing Change Request, Working Procedure,
 Implementation Approval, Minimum Contract Verification, Full Authority Trace,
@@ -19,3 +20,7 @@ Lifecycle: `Draft -> Proposed -> Reviewed -> Approved -> Published -> Active`.
 Draft evidence: `4f5d352`. Proposal evidence: `d964e7d`. Review PASS:
 `32364b1`. Project Owner Approval: `aa89568`. Publication: `879223b`.
 This post-publication accepted-history version activates the indivisible package.
+
+Post-activation verification at activation baseline `2fb7653` passed every
+mandatory command. Stage 3.2.2 verification authority is consistent and
+implementation may resume within its unchanged active scope.

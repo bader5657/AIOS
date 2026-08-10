@@ -24,3 +24,22 @@ Full regression uses two explicit roots because higher-root discovery would not
 reliably enter the non-package Domain directory. Both invocations must discover
 tests and exit zero. Evidence and failure behavior are normative as stated in
 the corrected `05_MINIMUM_CONTRACT_VERIFICATION.md`.
+
+## Post-Activation Execution Evidence
+
+| Evidence | Result |
+|---|---|
+| Activation baseline | `2fb7653` |
+| Interpreter | Python 3.12.3 via `python3` |
+| Syntax compilation | PASS — exit 0 |
+| Targeted Stage 3.2.2 | PASS — 22 run, 0 failures, 0 errors, 0 skipped |
+| Core Platform | PASS — 43 run, 0 failures, 0 errors, 0 skipped |
+| Full repository/domain | PASS — 43 Core Platform + 212 Domain; 255 total; 0 failures, 0 errors, 0 skipped |
+| `git diff --check` | PASS — exit 0, no output |
+| Working-tree changed-file scope | PASS — exact two approved source and three approved test files |
+| Governance lifecycle diff | PASS — corrected original `05` plus this package only |
+| Dependency installation | NONE |
+
+All commands were executed from repository root after activation. No test,
+source, dependency, runtime data, or environment configuration was changed by
+verification.
