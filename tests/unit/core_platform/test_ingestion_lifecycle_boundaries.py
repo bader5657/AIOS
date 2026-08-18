@@ -439,7 +439,6 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         ).read_text(encoding="utf-8")
 
         prohibited = (
-            "event_engine",
             "aios_core",
             "brain",
             "specialist",
@@ -449,6 +448,37 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         for marker in prohibited:
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, source.lower())
+
+
+    def test_stage_6_3_2_publisher_and_dependency_boundaries_are_static(self):
+        ingestion_source = (
+            REPOSITORY_ROOT / "core/ingestion/universal_ingestion.py"
+        ).read_text(encoding="utf-8")
+        registry_source = (
+            REPOSITORY_ROOT / "core/registry/postgres_registry.py"
+        ).read_text(encoding="utf-8")
+        engine_source = (
+            REPOSITORY_ROOT / "core/event/event_engine.py"
+        ).read_text(encoding="utf-8")
+        domain_sources = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (REPOSITORY_ROOT / "core/domain").rglob("*.py")
+        )
+
+        self.assertIn("EventEnvelope(", ingestion_source)
+        self.assertIn("await event_engine.process(envelope)", ingestion_source)
+        self.assertEqual(ingestion_source.count("EventEnvelope("), 1)
+        self.assertEqual(ingestion_source.count("event_engine.process("), 1)
+        self.assertNotIn("record_id,\n                    aggregate_id", ingestion_source)
+        self.assertNotIn("DomainEvent(", ingestion_source)
+        for marker in (
+            "create_task", "asyncio.gather", "retry", "broker", "kafka", "rabbitmq"
+        ):
+            self.assertNotIn(marker, ingestion_source.lower())
+        self.assertNotIn("core.event", registry_source)
+        self.assertNotIn("core.registry", engine_source)
+        self.assertNotIn("core.event", domain_sources)
+
 
 if __name__ == "__main__":
     unittest.main()

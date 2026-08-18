@@ -10,6 +10,9 @@ from core.app.input_classifier import (
     recognize_telegram_message,
 )
 from core.app.request_context import RequestContext
+from core.domain.domain_event import DomainEvent
+from core.domain.event_envelope import EventEnvelope
+from core.event import EventDeliveryFailureCode, EventEngine
 from core.pipeline.asset_pipeline import run_asset_pipeline
 from core.registry import (
     PostgresRegistry,
@@ -32,6 +35,9 @@ class IngestionResult:
     respond_acknowledgement_ready: bool
     registration_succeeded: bool = False
     registry_record_id: int | None = None
+    event_publication_attempted: bool = False
+    event_delivery_succeeded: bool = False
+    event_delivery_failure_code: EventDeliveryFailureCode | None = None
 
 
 def _file_original_types(message: Message) -> tuple[InputType, ...]:
@@ -64,6 +70,9 @@ async def ingest_telegram_message(
     context: ContextTypes.DEFAULT_TYPE,
     *,
     registry: PostgresRegistry | None = None,
+    domain_event: DomainEvent | None = None,
+    event_engine: EventEngine | None = None,
+    event_schema_version: int | None = None,
 ) -> IngestionResult:
     recognized_input_type = recognize_telegram_message(message)
     input_type = classify_telegram_message(message)
@@ -105,6 +114,9 @@ async def ingest_telegram_message(
 
     registration_succeeded = False
     registry_record_id = None
+    event_publication_attempted = False
+    event_delivery_succeeded = False
+    event_delivery_failure_code = None
     manifest_path = pipeline_result.manifest_path
     if (
         pipeline_result.success
@@ -139,6 +151,22 @@ async def ingest_telegram_message(
         else:
             registration_succeeded = True
             registry_record_id = persisted.record_id
+            if domain_event is not None:
+                if event_engine is None:
+                    raise ValueError(
+                        "event_engine is required when domain_event is supplied"
+                    )
+                envelope = EventEnvelope(
+                    event=domain_event,
+                    aggregate_id=None,
+                    correlation_id=None,
+                    causation_id=None,
+                    schema_version=event_schema_version,
+                )
+                event_publication_attempted = True
+                delivery_result = await event_engine.process(envelope)
+                event_delivery_succeeded = delivery_result.success
+                event_delivery_failure_code = delivery_result.failure_code
 
     return IngestionResult(
         input_type=input_type,
@@ -153,4 +181,7 @@ async def ingest_telegram_message(
         respond_acknowledgement_ready=True,
         registration_succeeded=registration_succeeded,
         registry_record_id=registry_record_id,
+        event_publication_attempted=event_publication_attempted,
+        event_delivery_succeeded=event_delivery_succeeded,
+        event_delivery_failure_code=event_delivery_failure_code,
     )
