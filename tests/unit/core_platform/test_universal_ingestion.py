@@ -48,6 +48,17 @@ def telegram_message(**overrides):
 
 
 class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.registry = SimpleNamespace(
+            register=AsyncMock(return_value=SimpleNamespace(record_id=101))
+        )
+        self.registry_factory = patch.object(
+            universal_ingestion.PostgresRegistry,
+            "from_environment",
+            return_value=self.registry,
+        )
+        self.registry_factory.start()
+        self.addCleanup(self.registry_factory.stop)
     async def test_canonical_recognition_is_exposed_with_legacy_pipeline_type(self):
         cases = (
             (InputType.PDF, InputType.DOCUMENT),
@@ -302,5 +313,183 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn(marker, source)
 
 
+    async def test_registry_mapping_and_success_for_all_non_file_inputs(self):
+        cases = (
+            (InputType.TEXT, "exact text", None),
+            (InputType.WEB_LINK, "https://example.test/Exact", "https://example.test/Exact"),
+            (InputType.YOUTUBE_LINK, "https://youtu.be/Exact", "https://youtu.be/Exact"),
+        )
+        for recognized, text, expected_source_url in cases:
+            with self.subTest(recognized=recognized):
+                metadata = {"media_type": recognized.value}
+                pipeline_result = asset_pipeline.AssetPipelineResult(
+                    success=True,
+                    metadata=metadata,
+                    manifest_path="/manifests/exact.json",
+                    register_handoff_ready=True,
+                )
+                registry = SimpleNamespace(
+                    register=AsyncMock(return_value=SimpleNamespace(record_id=202))
+                )
+                with (
+                    patch.object(
+                        universal_ingestion,
+                        "recognize_telegram_message",
+                        return_value=recognized,
+                    ),
+                    patch.object(
+                        universal_ingestion,
+                        "classify_telegram_message",
+                        return_value=InputType.TEXT,
+                    ),
+                    patch.object(
+                        universal_ingestion,
+                        "run_asset_pipeline",
+                        AsyncMock(return_value=pipeline_result),
+                    ),
+                ):
+                    result = await universal_ingestion.ingest_telegram_message(
+                        telegram_message(text=text),
+                        SimpleNamespace(),
+                        registry=registry,
+                    )
+
+                registry.register.assert_awaited_once()
+                persistence_input = registry.register.await_args.args[0]
+                self.assertEqual(
+                    persistence_input.identity_ref, "/manifests/exact.json"
+                )
+                self.assertEqual(
+                    persistence_input.manifest_ref, "/manifests/exact.json"
+                )
+                self.assertEqual(
+                    persistence_input.represented_media_type, recognized.value
+                )
+                self.assertIs(persistence_input.metadata, metadata)
+                self.assertEqual(persistence_input.relationships, [])
+                self.assertIsNone(persistence_input.registration_status)
+                self.assertIsNone(persistence_input.storage_path)
+                self.assertEqual(persistence_input.source_url, expected_source_url)
+                self.assertTrue(result.registration_succeeded)
+                self.assertEqual(result.registry_record_id, 202)
+
+    async def test_file_backed_registry_mapping_preserves_upstream_values(self):
+        metadata = {"media_type": "image", "file_size_bytes": 4}
+        pipeline_result = asset_pipeline.AssetPipelineResult(
+            success=True,
+            stored_path="/stored/exact.jpg",
+            metadata=metadata,
+            manifest_path="/manifests/exact.json",
+            register_handoff_ready=True,
+        )
+        registry = SimpleNamespace(
+            register=AsyncMock(return_value=SimpleNamespace(record_id=303))
+        )
+        with (
+            patch.object(
+                universal_ingestion,
+                "recognize_telegram_message",
+                return_value=InputType.IMAGE,
+            ),
+            patch.object(
+                universal_ingestion,
+                "classify_telegram_message",
+                return_value=InputType.IMAGE,
+            ),
+            patch.object(
+                universal_ingestion,
+                "run_asset_pipeline",
+                AsyncMock(return_value=pipeline_result),
+            ),
+        ):
+            result = await universal_ingestion.ingest_telegram_message(
+                telegram_message(photo=[object()]),
+                SimpleNamespace(),
+                registry=registry,
+            )
+
+        persistence_input = registry.register.await_args.args[0]
+        self.assertEqual(persistence_input.storage_path, "/stored/exact.jpg")
+        self.assertIsNone(persistence_input.source_url)
+        self.assertIs(persistence_input.metadata, metadata)
+        self.assertTrue(result.registration_succeeded)
+        self.assertEqual(result.registry_record_id, 303)
+
+    async def test_registry_failure_is_bounded_without_retry(self):
+        pipeline_result = asset_pipeline.AssetPipelineResult(
+            success=True,
+            stored_path="/stored/exact.jpg",
+            metadata={"media_type": "image", "file_size_bytes": 4},
+            manifest_path="/manifests/exact.json",
+            register_handoff_ready=True,
+        )
+        registry = SimpleNamespace(
+            register=AsyncMock(
+                side_effect=universal_ingestion.RegistryPersistenceError("failed")
+            )
+        )
+        with (
+            patch.object(
+                universal_ingestion,
+                "recognize_telegram_message",
+                return_value=InputType.IMAGE,
+            ),
+            patch.object(
+                universal_ingestion,
+                "classify_telegram_message",
+                return_value=InputType.IMAGE,
+            ),
+            patch.object(
+                universal_ingestion,
+                "run_asset_pipeline",
+                AsyncMock(return_value=pipeline_result),
+            ),
+        ):
+            result = await universal_ingestion.ingest_telegram_message(
+                telegram_message(photo=[object()]),
+                SimpleNamespace(),
+                registry=registry,
+            )
+
+        registry.register.assert_awaited_once()
+        self.assertFalse(result.registration_succeeded)
+        self.assertIsNone(result.registry_record_id)
+        self.assertEqual(result.stored_path, "/stored/exact.jpg")
+        self.assertEqual(result.manifest_path, "/manifests/exact.json")
+        self.assertIs(result.metadata, pipeline_result.metadata)
+
+    async def test_unexpected_registry_exception_is_not_swallowed(self):
+        pipeline_result = asset_pipeline.AssetPipelineResult(
+            success=True,
+            metadata={"media_type": "text"},
+            manifest_path="/manifests/exact.json",
+            register_handoff_ready=True,
+        )
+        registry = SimpleNamespace(register=AsyncMock(side_effect=RuntimeError("bug")))
+        with (
+            patch.object(
+                universal_ingestion,
+                "recognize_telegram_message",
+                return_value=InputType.TEXT,
+            ),
+            patch.object(
+                universal_ingestion,
+                "classify_telegram_message",
+                return_value=InputType.TEXT,
+            ),
+            patch.object(
+                universal_ingestion,
+                "run_asset_pipeline",
+                AsyncMock(return_value=pipeline_result),
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "bug"):
+                await universal_ingestion.ingest_telegram_message(
+                    telegram_message(text="exact"),
+                    SimpleNamespace(),
+                    registry=registry,
+                )
+
+        registry.register.assert_awaited_once()
 if __name__ == "__main__":
     unittest.main()

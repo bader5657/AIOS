@@ -45,6 +45,17 @@ def telegram_message(**overrides):
     return SimpleNamespace(**fields)
 
 class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.registry = SimpleNamespace(
+            register=AsyncMock(return_value=SimpleNamespace(record_id=101))
+        )
+        self.registry_factory = patch.object(
+            universal_ingestion.PostgresRegistry,
+            "from_environment",
+            return_value=self.registry,
+        )
+        self.registry_factory_mock = self.registry_factory.start()
+        self.addCleanup(self.registry_factory.stop)
     async def test_manifest_exposes_only_register_handoff_and_acknowledgement(self):
         calls = []
         save_attachment = AsyncMock(
@@ -133,6 +144,8 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 )
 
         create_manifest.assert_not_called()
+        self.registry_factory_mock.assert_not_called()
+        self.registry.register.assert_not_awaited()
 
     async def test_manifest_failure_propagates_and_cannot_reach_register_readiness(self):
         create_manifest = Mock(side_effect=OSError("manifest write failed"))
@@ -170,6 +183,8 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 )
 
         create_manifest.assert_called_once()
+        self.registry_factory_mock.assert_not_called()
+        self.registry.register.assert_not_awaited()
 
     async def test_failed_storage_stops_before_downstream_handoffs(self):
         extract_metadata = Mock()
@@ -209,6 +224,8 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
         extract_metadata.assert_not_called()
         create_manifest.assert_not_called()
+        self.registry_factory_mock.assert_not_called()
+        self.registry.register.assert_not_awaited()
         self.assertFalse(result.register_handoff_ready)
         self.assertFalse(result.process_handoff_ready)
         self.assertFalse(result.route_handoff_ready)
@@ -298,6 +315,8 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         )
         extract_metadata.assert_not_called()
         create_manifest.assert_not_called()
+        self.registry_factory_mock.assert_not_called()
+        self.registry.register.assert_not_awaited()
         self.assertIsNone(result.stored_path)
         self.assertIsNone(result.manifest_path)
         self.assertFalse(result.register_handoff_ready)
@@ -334,13 +353,92 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(result.stored_path)
                 self.assertFalse(result.register_handoff_ready)
 
+    async def test_registry_is_not_constructed_or_called_before_all_readiness_gates(self):
+        cases = (
+            asset_pipeline.AssetPipelineResult(
+                success=False,
+                manifest_path="/manifests/exact.json",
+                register_handoff_ready=True,
+            ),
+            asset_pipeline.AssetPipelineResult(
+                success=True,
+                manifest_path="/manifests/exact.json",
+                register_handoff_ready=False,
+            ),
+            asset_pipeline.AssetPipelineResult(
+                success=True,
+                manifest_path=None,
+                register_handoff_ready=True,
+            ),
+            asset_pipeline.AssetPipelineResult(
+                success=True,
+                manifest_path="",
+                register_handoff_ready=True,
+            ),
+        )
+        for pipeline_result in cases:
+            with self.subTest(pipeline_result=pipeline_result):
+                registry = SimpleNamespace(register=AsyncMock())
+                with (
+                    patch.object(
+                        universal_ingestion,
+                        "recognize_telegram_message",
+                        return_value=InputType.TEXT,
+                    ),
+                    patch.object(
+                        universal_ingestion,
+                        "classify_telegram_message",
+                        return_value=InputType.TEXT,
+                    ),
+                    patch.object(
+                        universal_ingestion,
+                        "run_asset_pipeline",
+                        AsyncMock(return_value=pipeline_result),
+                    ),
+                ):
+                    result = await universal_ingestion.ingest_telegram_message(
+                        telegram_message(text="exact"),
+                        SimpleNamespace(),
+                        registry=registry,
+                    )
+
+                registry.register.assert_not_awaited()
+                self.assertFalse(result.registration_succeeded)
+                self.assertIsNone(result.registry_record_id)
+
+        self.registry_factory_mock.assert_not_called()
+
+    def test_registry_caller_and_transaction_boundaries_are_static(self):
+        ingestion_source = (
+            REPOSITORY_ROOT / "core/ingestion/universal_ingestion.py"
+        ).read_text(encoding="utf-8")
+        pipeline_source = (
+            REPOSITORY_ROOT / "core/pipeline/asset_pipeline.py"
+        ).read_text(encoding="utf-8")
+        manifest_source = (
+            REPOSITORY_ROOT / "core/storage/document_manifest.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertEqual(ingestion_source.count(".register("), 1)
+        for source in (pipeline_source, manifest_source):
+            self.assertNotIn("core.registry", source)
+            self.assertNotIn(".register(", source)
+        for marker in (
+            "psycopg",
+            "transaction(",
+            ".commit(",
+            ".rollback(",
+            "retry",
+        ):
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, ingestion_source.lower())
+
     def test_runtime_has_no_downstream_owner_or_response_implementation(self):
         source = (
             REPOSITORY_ROOT / "core/ingestion/universal_ingestion.py"
         ).read_text(encoding="utf-8")
 
         prohibited = (
-            "core.registry",
             "event_engine",
             "aios_core",
             "brain",
