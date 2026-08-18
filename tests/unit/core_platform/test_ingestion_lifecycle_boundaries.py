@@ -50,7 +50,7 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
             side_effect=lambda *_: calls.append("store") or "/stored/image.jpg"
         )
         extract_metadata = Mock(
-            side_effect=lambda *_: calls.append("metadata")
+            side_effect=lambda **_: calls.append("metadata")
             or {"mime_type": "image/jpeg"}
         )
         create_manifest = Mock(
@@ -95,6 +95,43 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.process_handoff_ready)
         self.assertFalse(result.route_handoff_ready)
         self.assertTrue(result.respond_acknowledgement_ready)
+
+    async def test_metadata_failure_stops_before_manifest(self):
+        create_manifest = Mock()
+        with (
+            patch.object(
+                universal_ingestion,
+                "recognize_telegram_message",
+                return_value=InputType.IMAGE,
+            ),
+            patch.object(
+                universal_ingestion,
+                "classify_telegram_message",
+                return_value=InputType.IMAGE,
+            ),
+            patch.object(
+                universal_ingestion,
+                "save_telegram_attachment",
+                AsyncMock(return_value="/stored/image.jpg"),
+            ),
+            patch.object(
+                universal_ingestion,
+                "extract_basic_metadata",
+                Mock(side_effect=ValueError("invalid required metadata")),
+            ),
+            patch.object(
+                universal_ingestion,
+                "create_document_manifest",
+                create_manifest,
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "invalid required metadata"):
+                await universal_ingestion.ingest_telegram_message(
+                    telegram_message(photo=[object()]),
+                    SimpleNamespace(),
+                )
+
+        create_manifest.assert_not_called()
 
     async def test_failed_storage_stops_before_downstream_handoffs(self):
         extract_metadata = Mock()

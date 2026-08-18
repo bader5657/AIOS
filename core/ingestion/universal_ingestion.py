@@ -81,14 +81,13 @@ async def ingest_telegram_message(
     metadata = {}
     file_original_types = _file_original_types(message)
     aggregate_storage_ready = True
+    text = message.text or message.caption or ""
 
     if input_type != InputType.TEXT:
         if len(file_original_types) == 1:
             stored_path = await save_telegram_attachment(message, context)
 
             if stored_path:
-                metadata = extract_basic_metadata(stored_path)
-
                 original_filename = None
                 if message.document:
                     original_filename = message.document.file_name
@@ -96,6 +95,12 @@ async def ingest_telegram_message(
                     original_filename = message.audio.file_name
                 elif message.video:
                     original_filename = getattr(message.video, "file_name", None)
+
+                metadata = extract_basic_metadata(
+                    media_type=recognized_input_type.value,
+                    file_path=stored_path,
+                    original_filename=original_filename,
+                )
 
                 manifest_path = create_document_manifest(
                     media_type=input_type.value,
@@ -115,8 +120,22 @@ async def ingest_telegram_message(
 
             # Stage 3.2.2 stops at aggregate storage readiness without selecting a
             # representative path or entering any downstream lifecycle boundary.
-
-    text = message.text or message.caption or ""
+        else:
+            metadata = extract_basic_metadata(
+                media_type=recognized_input_type.value
+            )
+    elif recognized_input_type == InputType.TEXT:
+        metadata = extract_basic_metadata(
+            media_type=recognized_input_type.value,
+            text=text,
+        )
+    elif recognized_input_type in (InputType.WEB_LINK, InputType.YOUTUBE_LINK):
+        metadata = extract_basic_metadata(
+            media_type=recognized_input_type.value,
+            source_url=text,
+        )
+    else:
+        metadata = extract_basic_metadata(media_type=recognized_input_type.value)
 
     return IngestionResult(
         input_type=input_type,
