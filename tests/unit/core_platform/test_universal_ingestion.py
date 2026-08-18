@@ -131,7 +131,11 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
             )
 
         save_attachment.assert_awaited_once_with(message, unittest.mock.ANY)
-        extract_metadata.assert_called_once_with("/existing/path/image.jpg")
+        extract_metadata.assert_called_once_with(
+            media_type="image",
+            file_path="/existing/path/image.jpg",
+            original_filename=None,
+        )
         create_manifest.assert_called_once_with(
             media_type="image",
             storage_path="/existing/path/image.jpg",
@@ -143,6 +147,75 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.input_type, InputType.IMAGE)
         self.assertEqual(result.recognized_input_type, InputType.IMAGE)
         self.assertEqual(result.text, "caption")
+
+    async def test_text_and_links_extract_metadata_without_storage_or_manifest(self):
+        cases = (
+            (
+                InputType.TEXT,
+                telegram_message(text="exact text"),
+                {"media_type": "text", "text": "exact text"},
+            ),
+            (
+                InputType.WEB_LINK,
+                telegram_message(text="https://example.com/Exact"),
+                {
+                    "media_type": "web_link",
+                    "source_url": "https://example.com/Exact",
+                },
+            ),
+            (
+                InputType.YOUTUBE_LINK,
+                telegram_message(text="https://youtu.be/Exact"),
+                {
+                    "media_type": "youtube_link",
+                    "source_url": "https://youtu.be/Exact",
+                },
+            ),
+        )
+        for recognized, message, expected_call in cases:
+            with self.subTest(recognized=recognized):
+                extract_metadata = Mock(
+                    return_value={"media_type": recognized.value}
+                )
+                create_manifest = Mock()
+                save_attachment = AsyncMock()
+                with (
+                    patch.object(
+                        universal_ingestion,
+                        "recognize_telegram_message",
+                        return_value=recognized,
+                    ),
+                    patch.object(
+                        universal_ingestion,
+                        "classify_telegram_message",
+                        return_value=InputType.TEXT,
+                    ),
+                    patch.object(
+                        universal_ingestion,
+                        "extract_basic_metadata",
+                        extract_metadata,
+                    ),
+                    patch.object(
+                        universal_ingestion,
+                        "create_document_manifest",
+                        create_manifest,
+                    ),
+                    patch.object(
+                        universal_ingestion,
+                        "save_telegram_attachment",
+                        save_attachment,
+                    ),
+                ):
+                    result = await universal_ingestion.ingest_telegram_message(
+                        message,
+                        SimpleNamespace(),
+                    )
+
+                extract_metadata.assert_called_once_with(**expected_call)
+                save_attachment.assert_not_awaited()
+                create_manifest.assert_not_called()
+                self.assertEqual(result.metadata, {"media_type": recognized.value})
+                self.assertIsNone(result.manifest_path)
 
     async def test_original_filename_is_preserved_separately_for_manifest(self):
         message = telegram_message(

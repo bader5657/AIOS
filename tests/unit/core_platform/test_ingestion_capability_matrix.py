@@ -165,14 +165,17 @@ class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
-    async def test_unknown_recognition_preserves_unknown_pipeline_fallback(self):
-        result = await ingest_telegram_message(
-            telegram_message(),
-            SimpleNamespace(),
-        )
-
-        self.assertEqual(result.recognized_input_type, InputType.UNKNOWN)
-        self.assertEqual(result.input_type, InputType.UNKNOWN)
+    async def test_unknown_recognition_is_rejected_by_metadata_boundary(self):
+        with patch.object(
+            universal_ingestion,
+            "extract_basic_metadata",
+            side_effect=ValueError("unsupported metadata media_type"),
+        ):
+            with self.assertRaisesRegex(ValueError, "unsupported metadata"):
+                await ingest_telegram_message(
+                    telegram_message(),
+                    SimpleNamespace(),
+                )
 
     def test_task_c_changes_no_runtime_boundary(self):
         ingestion_source = (
