@@ -27,6 +27,7 @@ with patch.dict(
 ):
     from core.app.input_classifier import InputType
     from core.ingestion import universal_ingestion
+    from core.pipeline import asset_pipeline
 
 
 def telegram_message(**overrides):
@@ -71,7 +72,7 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                         return_value=pipeline,
                     ),
                     patch.object(
-                        universal_ingestion,
+                        asset_pipeline,
                         "save_telegram_attachment",
                         save_attachment,
                     ),
@@ -114,17 +115,17 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                 return_value=InputType.IMAGE,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "save_telegram_attachment",
                 save_attachment,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "extract_basic_metadata",
                 extract_metadata,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "create_document_manifest",
                 create_manifest,
             ),
@@ -200,17 +201,17 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                         return_value=InputType.TEXT,
                     ),
                     patch.object(
-                        universal_ingestion,
+                        asset_pipeline,
                         "extract_basic_metadata",
                         extract_metadata,
                     ),
                     patch.object(
-                        universal_ingestion,
+                        asset_pipeline,
                         "create_document_manifest",
                         create_manifest,
                     ),
                     patch.object(
-                        universal_ingestion,
+                        asset_pipeline,
                         "save_telegram_attachment",
                         save_attachment,
                     ),
@@ -257,17 +258,17 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                 return_value=InputType.DOCUMENT,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "save_telegram_attachment",
                 AsyncMock(return_value="/stored/generated.pdf"),
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "extract_basic_metadata",
                 extract_metadata,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "create_document_manifest",
                 create_manifest,
             ),
