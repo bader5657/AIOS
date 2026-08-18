@@ -188,7 +188,10 @@ class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("input_type = classify_telegram_message", ingestion_source)
         self.assertIn("if len(file_original_types) == 1:", ingestion_source)
-        self.assertIn("media_type=input_type.value", ingestion_source)
+        self.assertIn(
+            "represented_media_type=recognized_input_type.value",
+            ingestion_source,
+        )
 
     def test_links_remain_exact_text_without_remote_content_handling(self):
         source = (

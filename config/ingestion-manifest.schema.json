@@ -1,38 +1,139 @@
 {
-  "schema_version": "1.0",
-  "document_id": "DOC-YYYYMMDD-000001",
-  "original_filename": "",
-  "stored_filename": "",
-  "media_type": "",
-  "file_extension": "",
-  "file_size_bytes": 0,
-  "checksum_sha256": "",
-  "source": {
-    "channel": "telegram",
-    "telegram_user_id": "",
-    "telegram_chat_id": "",
-    "telegram_message_id": ""
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aios.local/schemas/ingestion-manifest.schema.json",
+  "title": "AIOS Document Manifest",
+  "type": "object",
+  "properties": {
+    "manifest_id": { "type": "string", "minLength": 1 },
+    "represented_media_type": {
+      "enum": ["text", "image", "voice", "audio", "video", "pdf", "doc", "spreadsheet", "web_link", "youtube_link"]
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "manifest_status": { "const": "created" },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "storage_path": { "type": "string", "minLength": 1 },
+    "file_size_bytes": { "type": "integer", "minimum": 0 },
+    "checksum_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source_url": { "type": "string", "minLength": 1 },
+    "telegram_user_id": { "type": "integer", "minimum": 0 },
+    "telegram_chat_id": { "type": "integer" },
+    "telegram_message_id": { "type": "integer", "minimum": 0 }
   },
-  "classification": {
-    "category": "",
-    "entity_type": "",
-    "entity_id": "",
-    "tags": []
-  },
-  "storage": {
-    "temporary_path": "",
-    "permanent_path": "",
-    "status": "received"
-  },
-  "processing": {
-    "reader": "",
-    "text_extracted": false,
-    "summary_created": false,
-    "memory_saved": false,
-    "requires_confirmation": true
-  },
-  "timestamps": {
-    "received_at": "",
-    "processed_at": ""
+  "required": ["manifest_id", "represented_media_type", "received_at", "manifest_status", "metadata"],
+  "allOf": [
+    {
+      "if": { "properties": { "represented_media_type": { "enum": ["image", "voice", "audio", "video", "pdf", "doc", "spreadsheet"] } }, "required": ["represented_media_type"] },
+      "then": { "required": ["storage_path", "file_size_bytes", "checksum_sha256"] }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "text" } }, "required": ["represented_media_type"] },
+      "then": {
+        "oneOf": [
+          { "not": { "anyOf": [{ "required": ["storage_path"] }, { "required": ["file_size_bytes"] }, { "required": ["checksum_sha256"] }] } },
+          { "required": ["storage_path", "file_size_bytes", "checksum_sha256"] }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "enum": ["web_link", "youtube_link"] } }, "required": ["represented_media_type"] },
+      "then": {
+        "required": ["source_url"],
+        "not": { "anyOf": [{ "required": ["storage_path"] }, { "required": ["file_size_bytes"] }, { "required": ["checksum_sha256"] }] }
+      }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "enum": ["text", "image", "voice", "audio", "video", "pdf", "doc", "spreadsheet"] } }, "required": ["represented_media_type"] },
+      "then": { "not": { "required": ["source_url"] } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "text" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/textMetadata" } } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "image" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/imageMetadata" } } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "voice" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/voiceMetadata" } } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "audio" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/audioMetadata" } } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "video" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/videoMetadata" } } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "pdf" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/pdfMetadata" } } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "doc" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/docMetadata" } } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "spreadsheet" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/spreadsheetMetadata" } } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "web_link" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/webLinkMetadata" } } }
+    },
+    {
+      "if": { "properties": { "represented_media_type": { "const": "youtube_link" } }, "required": ["represented_media_type"] },
+      "then": { "properties": { "metadata": { "$ref": "#/$defs/youtubeLinkMetadata" } } }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "metadata": {
+      "oneOf": [
+        { "$ref": "#/$defs/textMetadata" },
+        { "$ref": "#/$defs/imageMetadata" },
+        { "$ref": "#/$defs/voiceMetadata" },
+        { "$ref": "#/$defs/audioMetadata" },
+        { "$ref": "#/$defs/videoMetadata" },
+        { "$ref": "#/$defs/pdfMetadata" },
+        { "$ref": "#/$defs/docMetadata" },
+        { "$ref": "#/$defs/spreadsheetMetadata" },
+        { "$ref": "#/$defs/webLinkMetadata" },
+        { "$ref": "#/$defs/youtubeLinkMetadata" }
+      ]
+    },
+    "textMetadata": {
+      "type": "object",
+      "properties": { "media_type": { "const": "text" }, "character_count": { "type": "integer", "minimum": 0 } },
+      "required": ["media_type"],
+      "additionalProperties": false
+    },
+    "imageMetadata": {
+      "type": "object",
+      "properties": {
+        "media_type": { "const": "image" }, "file_size_bytes": { "type": "integer", "minimum": 0 },
+        "original_filename": { "type": "string", "minLength": 1 }, "mime_type": { "type": "string", "minLength": 1 },
+        "format": { "type": "string", "minLength": 1 }, "width_pixels": { "type": "integer", "minimum": 0 },
+        "height_pixels": { "type": "integer", "minimum": 0 }, "orientation": { "type": "string", "minLength": 1 },
+        "color_mode": { "type": "string", "minLength": 1 }
+      },
+      "required": ["media_type", "file_size_bytes"],
+      "additionalProperties": false
+    },
+    "voiceMetadata": { "$ref": "#/$defs/voiceMetadataObject" },
+    "voiceMetadataObject": {
+      "type": "object", "properties": { "media_type": { "const": "voice" }, "file_size_bytes": { "type": "integer", "minimum": 0 }, "original_filename": { "type": "string", "minLength": 1 }, "mime_type": { "type": "string", "minLength": 1 }, "format": { "type": "string", "minLength": 1 }, "duration_seconds": { "type": "number", "minimum": 0 }, "codec": { "type": "string", "minLength": 1 }, "sample_rate_hz": { "type": "integer", "minimum": 0 }, "channel_count": { "type": "integer", "minimum": 0 }, "bit_rate_bps": { "type": "integer", "minimum": 0 } }, "required": ["media_type", "file_size_bytes"], "additionalProperties": false
+    },
+    "audioMetadata": { "type": "object", "properties": { "media_type": { "const": "audio" }, "file_size_bytes": { "type": "integer", "minimum": 0 }, "original_filename": { "type": "string", "minLength": 1 }, "mime_type": { "type": "string", "minLength": 1 }, "format": { "type": "string", "minLength": 1 }, "duration_seconds": { "type": "number", "minimum": 0 }, "codec": { "type": "string", "minLength": 1 }, "sample_rate_hz": { "type": "integer", "minimum": 0 }, "channel_count": { "type": "integer", "minimum": 0 }, "bit_rate_bps": { "type": "integer", "minimum": 0 }, "title": { "type": "string", "minLength": 1 }, "artist": { "type": "string", "minLength": 1 } }, "required": ["media_type", "file_size_bytes"], "additionalProperties": false },
+    "videoMetadata": { "type": "object", "properties": { "media_type": { "const": "video" }, "file_size_bytes": { "type": "integer", "minimum": 0 }, "original_filename": { "type": "string", "minLength": 1 }, "mime_type": { "type": "string", "minLength": 1 }, "format": { "type": "string", "minLength": 1 }, "duration_seconds": { "type": "number", "minimum": 0 }, "width_pixels": { "type": "integer", "minimum": 0 }, "height_pixels": { "type": "integer", "minimum": 0 }, "video_codec": { "type": "string", "minLength": 1 }, "audio_codec": { "type": "string", "minLength": 1 }, "frame_rate_fps": { "type": "number", "minimum": 0 }, "bit_rate_bps": { "type": "integer", "minimum": 0 } }, "required": ["media_type", "file_size_bytes"], "additionalProperties": false },
+    "pdfMetadata": { "type": "object", "properties": { "media_type": { "const": "pdf" }, "file_size_bytes": { "type": "integer", "minimum": 0 }, "original_filename": { "type": "string", "minLength": 1 }, "mime_type": { "type": "string", "minLength": 1 }, "format": { "type": "string", "minLength": 1 }, "page_count": { "type": "integer", "minimum": 0 }, "title": { "type": "string", "minLength": 1 }, "author": { "type": "string", "minLength": 1 }, "created_at": { "type": "string", "minLength": 1 }, "modified_at": { "type": "string", "minLength": 1 } }, "required": ["media_type", "file_size_bytes"], "additionalProperties": false },
+    "docMetadata": { "type": "object", "properties": { "media_type": { "const": "doc" }, "file_size_bytes": { "type": "integer", "minimum": 0 }, "original_filename": { "type": "string", "minLength": 1 }, "mime_type": { "type": "string", "minLength": 1 }, "format": { "type": "string", "minLength": 1 }, "page_count": { "type": "integer", "minimum": 0 }, "word_count": { "type": "integer", "minimum": 0 }, "title": { "type": "string", "minLength": 1 }, "author": { "type": "string", "minLength": 1 }, "created_at": { "type": "string", "minLength": 1 }, "modified_at": { "type": "string", "minLength": 1 } }, "required": ["media_type", "file_size_bytes"], "additionalProperties": false },
+    "spreadsheetMetadata": { "type": "object", "properties": { "media_type": { "const": "spreadsheet" }, "file_size_bytes": { "type": "integer", "minimum": 0 }, "original_filename": { "type": "string", "minLength": 1 }, "mime_type": { "type": "string", "minLength": 1 }, "format": { "type": "string", "minLength": 1 }, "sheet_count": { "type": "integer", "minimum": 0 }, "sheet_names": { "type": "array", "items": { "type": "string", "minLength": 1 } }, "author": { "type": "string", "minLength": 1 }, "created_at": { "type": "string", "minLength": 1 }, "modified_at": { "type": "string", "minLength": 1 } }, "required": ["media_type", "file_size_bytes"], "additionalProperties": false },
+    "webLinkMetadata": { "type": "object", "properties": { "media_type": { "const": "web_link" }, "source_url": { "type": "string", "minLength": 1 } }, "required": ["media_type", "source_url"], "additionalProperties": false },
+    "youtubeLinkMetadata": { "type": "object", "properties": { "media_type": { "const": "youtube_link" }, "source_url": { "type": "string", "minLength": 1 } }, "required": ["media_type", "source_url"], "additionalProperties": false }
   }
 }
