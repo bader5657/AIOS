@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from telegram import Message
@@ -73,6 +74,7 @@ async def ingest_telegram_message(
     message: Message,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> IngestionResult:
+    received_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     recognized_input_type = recognize_telegram_message(message)
     input_type = classify_telegram_message(message)
 
@@ -103,11 +105,14 @@ async def ingest_telegram_message(
                 )
 
                 manifest_path = create_document_manifest(
-                    media_type=input_type.value,
+                    represented_media_type=recognized_input_type.value,
+                    received_at=received_at,
+                    metadata=metadata,
                     storage_path=stored_path,
-                    original_filename=original_filename,
-                    telegram_user_id=message.from_user.id if message.from_user else 0,
-                    telegram_chat_id=message.chat.id,
+                    telegram_user_id=(
+                        message.from_user.id if message.from_user else None
+                    ),
+                    telegram_chat_id=(message.chat.id if message.chat else None),
                     telegram_message_id=message.message_id,
                 )
 
@@ -129,10 +134,27 @@ async def ingest_telegram_message(
             media_type=recognized_input_type.value,
             text=text,
         )
+        manifest_path = create_document_manifest(
+            represented_media_type=recognized_input_type.value,
+            received_at=received_at,
+            metadata=metadata,
+            telegram_user_id=(message.from_user.id if message.from_user else None),
+            telegram_chat_id=(message.chat.id if message.chat else None),
+            telegram_message_id=message.message_id,
+        )
     elif recognized_input_type in (InputType.WEB_LINK, InputType.YOUTUBE_LINK):
         metadata = extract_basic_metadata(
             media_type=recognized_input_type.value,
             source_url=text,
+        )
+        manifest_path = create_document_manifest(
+            represented_media_type=recognized_input_type.value,
+            received_at=received_at,
+            metadata=metadata,
+            source_url=text,
+            telegram_user_id=(message.from_user.id if message.from_user else None),
+            telegram_chat_id=(message.chat.id if message.chat else None),
+            telegram_message_id=message.message_id,
         )
     else:
         metadata = extract_basic_metadata(media_type=recognized_input_type.value)

@@ -133,6 +133,43 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
         create_manifest.assert_not_called()
 
+    async def test_manifest_failure_propagates_and_cannot_reach_register_readiness(self):
+        create_manifest = Mock(side_effect=OSError("manifest write failed"))
+        with (
+            patch.object(
+                universal_ingestion,
+                "recognize_telegram_message",
+                return_value=InputType.IMAGE,
+            ),
+            patch.object(
+                universal_ingestion,
+                "classify_telegram_message",
+                return_value=InputType.IMAGE,
+            ),
+            patch.object(
+                universal_ingestion,
+                "save_telegram_attachment",
+                AsyncMock(return_value="/stored/image.jpg"),
+            ),
+            patch.object(
+                universal_ingestion,
+                "extract_basic_metadata",
+                Mock(return_value={"media_type": "image", "file_size_bytes": 1}),
+            ),
+            patch.object(
+                universal_ingestion,
+                "create_document_manifest",
+                create_manifest,
+            ),
+        ):
+            with self.assertRaisesRegex(OSError, "manifest write failed"):
+                await universal_ingestion.ingest_telegram_message(
+                    telegram_message(photo=[object()]),
+                    SimpleNamespace(),
+                )
+
+        create_manifest.assert_called_once()
+
     async def test_failed_storage_stops_before_downstream_handoffs(self):
         extract_metadata = Mock()
         create_manifest = Mock()

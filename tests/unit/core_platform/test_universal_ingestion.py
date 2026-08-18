@@ -137,9 +137,10 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
             original_filename=None,
         )
         create_manifest.assert_called_once_with(
-            media_type="image",
+            represented_media_type="image",
+            received_at=unittest.mock.ANY,
+            metadata={"mime_type": "image/jpeg"},
             storage_path="/existing/path/image.jpg",
-            original_filename=None,
             telegram_user_id=7,
             telegram_chat_id=8,
             telegram_message_id=9,
@@ -148,7 +149,7 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.recognized_input_type, InputType.IMAGE)
         self.assertEqual(result.text, "caption")
 
-    async def test_text_and_links_extract_metadata_without_storage_or_manifest(self):
+    async def test_text_and_links_create_manifest_without_storage(self):
         cases = (
             (
                 InputType.TEXT,
@@ -213,15 +214,29 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
 
                 extract_metadata.assert_called_once_with(**expected_call)
                 save_attachment.assert_not_awaited()
-                create_manifest.assert_not_called()
+                expected_manifest = {
+                    "represented_media_type": recognized.value,
+                    "received_at": unittest.mock.ANY,
+                    "metadata": {"media_type": recognized.value},
+                    "telegram_user_id": 7,
+                    "telegram_chat_id": 8,
+                    "telegram_message_id": 9,
+                }
+                if recognized in (InputType.WEB_LINK, InputType.YOUTUBE_LINK):
+                    expected_manifest["source_url"] = message.text
+                create_manifest.assert_called_once_with(**expected_manifest)
                 self.assertEqual(result.metadata, {"media_type": recognized.value})
-                self.assertIsNone(result.manifest_path)
+                self.assertIs(result.manifest_path, create_manifest.return_value)
+                self.assertTrue(result.register_handoff_ready)
 
-    async def test_original_filename_is_preserved_separately_for_manifest(self):
+    async def test_original_filename_remains_stage_3_3_metadata_input_only(self):
         message = telegram_message(
             document=SimpleNamespace(file_name="Exact Received Name.PDF")
         )
         create_manifest = Mock(return_value="/stored/manifest.json")
+        extract_metadata = Mock(
+            return_value={"media_type": "pdf", "file_size_bytes": 1}
+        )
         with (
             patch.object(
                 universal_ingestion,
@@ -241,7 +256,7 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 universal_ingestion,
                 "extract_basic_metadata",
-                Mock(return_value={}),
+                extract_metadata,
             ),
             patch.object(
                 universal_ingestion,
@@ -254,9 +269,10 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(),
             )
         self.assertEqual(
-            create_manifest.call_args.kwargs["original_filename"],
+            extract_metadata.call_args.kwargs["original_filename"],
             "Exact Received Name.PDF",
         )
+        self.assertNotIn("original_filename", create_manifest.call_args.kwargs)
 
     def test_task_b_adds_no_prohibited_runtime_behavior(self):
         source = (
