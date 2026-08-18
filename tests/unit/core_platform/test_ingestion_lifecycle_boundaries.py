@@ -26,6 +26,7 @@ with patch.dict(
 ):
     from core.app.input_classifier import InputType
     from core.ingestion import universal_ingestion
+    from core.pipeline import asset_pipeline
 
 def telegram_message(**overrides):
     fields = {
@@ -70,17 +71,17 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 return_value=InputType.IMAGE,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "save_telegram_attachment",
                 save_attachment,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "extract_basic_metadata",
                 extract_metadata,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "create_document_manifest",
                 create_manifest,
             ),
@@ -110,17 +111,17 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 return_value=InputType.IMAGE,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "save_telegram_attachment",
                 AsyncMock(return_value="/stored/image.jpg"),
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "extract_basic_metadata",
                 Mock(side_effect=ValueError("invalid required metadata")),
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "create_document_manifest",
                 create_manifest,
             ),
@@ -147,17 +148,17 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 return_value=InputType.IMAGE,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "save_telegram_attachment",
                 AsyncMock(return_value="/stored/image.jpg"),
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "extract_basic_metadata",
                 Mock(return_value={"media_type": "image", "file_size_bytes": 1}),
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "create_document_manifest",
                 create_manifest,
             ),
@@ -186,17 +187,17 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 return_value=InputType.IMAGE,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "save_telegram_attachment",
                 AsyncMock(return_value=None),
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "extract_basic_metadata",
                 extract_metadata,
             ),
             patch.object(
-                universal_ingestion,
+                asset_pipeline,
                 "create_document_manifest",
                 create_manifest,
             ),
@@ -221,12 +222,12 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
             side_effect=["/stored/image", "/stored/voice", "/stored/audio"]
         )
         with patch.object(
-            universal_ingestion, "save_telegram_attachment", save_attachment
+            asset_pipeline, "save_telegram_attachment", save_attachment
         ):
-            ready = await universal_ingestion._store_file_originals(
+            ready = await asset_pipeline._store_file_originals(
                 message,
                 SimpleNamespace(),
-                (InputType.IMAGE, InputType.VOICE, InputType.AUDIO),
+                ("image", "voice", "audio"),
             )
 
         self.assertTrue(ready)
@@ -236,18 +237,18 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         message = telegram_message(
             photo=[object()], voice=object(), audio=object()
         )
-        original_types = (InputType.IMAGE, InputType.VOICE, InputType.AUDIO)
+        original_types = ("image", "voice", "audio")
         for failed_index in range(3):
             with self.subTest(failed_index=failed_index):
                 paths = ["/stored/image", "/stored/voice", "/stored/audio"]
                 paths[failed_index] = None
                 save_attachment = AsyncMock(side_effect=paths)
                 with patch.object(
-                    universal_ingestion,
+                    asset_pipeline,
                     "save_telegram_attachment",
                     save_attachment,
                 ):
-                    ready = await universal_ingestion._store_file_originals(
+                    ready = await asset_pipeline._store_file_originals(
                         message, SimpleNamespace(), original_types
                     )
 
@@ -258,7 +259,7 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                         call.kwargs["media_type"]
                         for call in save_attachment.await_args_list
                     ],
-                    [input_type.value for input_type in original_types],
+                    list(original_types),
                 )
 
 
@@ -281,9 +282,9 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with (
-            patch.object(universal_ingestion, "save_telegram_attachment", save_attachment),
-            patch.object(universal_ingestion, "extract_basic_metadata", extract_metadata),
-            patch.object(universal_ingestion, "create_document_manifest", create_manifest),
+            patch.object(asset_pipeline, "save_telegram_attachment", save_attachment),
+            patch.object(asset_pipeline, "extract_basic_metadata", extract_metadata),
+            patch.object(asset_pipeline, "create_document_manifest", create_manifest),
         ):
             result = await universal_ingestion.ingest_telegram_message(
                 message, SimpleNamespace()
@@ -315,9 +316,9 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 extract_metadata = Mock()
                 create_manifest = Mock()
                 with (
-                    patch.object(universal_ingestion, "save_telegram_attachment", save_attachment),
-                    patch.object(universal_ingestion, "extract_basic_metadata", extract_metadata),
-                    patch.object(universal_ingestion, "create_document_manifest", create_manifest),
+                    patch.object(asset_pipeline, "save_telegram_attachment", save_attachment),
+                    patch.object(asset_pipeline, "extract_basic_metadata", extract_metadata),
+                    patch.object(asset_pipeline, "create_document_manifest", create_manifest),
                 ):
                     result = await universal_ingestion.ingest_telegram_message(
                         message, SimpleNamespace()

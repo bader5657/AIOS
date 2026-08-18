@@ -28,6 +28,7 @@ with patch.dict(
 ):
     from core.app.input_classifier import InputType
     from core.ingestion import universal_ingestion
+    from core.pipeline import asset_pipeline
     from core.ingestion.universal_ingestion import ingest_telegram_message
 
 def telegram_message(**overrides):
@@ -172,7 +173,7 @@ class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_unknown_recognition_is_rejected_by_metadata_boundary(self):
         with patch.object(
-            universal_ingestion,
+            asset_pipeline,
             "extract_basic_metadata",
             side_effect=ValueError("unsupported metadata media_type"),
         ):
@@ -192,11 +193,9 @@ class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
             ingestion_source,
         )
         self.assertIn("input_type = classify_telegram_message", ingestion_source)
-        self.assertIn("if len(file_original_types) == 1:", ingestion_source)
-        self.assertIn(
-            "represented_media_type=recognized_input_type.value",
-            ingestion_source,
-        )
+        self.assertIn("run_asset_pipeline(", ingestion_source)
+        self.assertIn("recognized_input_type=recognized_input_type.value", ingestion_source)
+        self.assertIn("file_original_type.value", ingestion_source)
 
     def test_links_remain_exact_text_without_remote_content_handling(self):
         source = (
