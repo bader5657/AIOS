@@ -11,6 +11,11 @@ from core.app.input_classifier import (
 )
 from core.app.request_context import RequestContext
 from core.pipeline.asset_pipeline import run_asset_pipeline
+from core.registry import (
+    PostgresRegistry,
+    RegistryPersistenceError,
+    RegistryPersistenceInput,
+)
 
 
 @dataclass(slots=True)
@@ -25,6 +30,8 @@ class IngestionResult:
     process_handoff_ready: bool
     route_handoff_ready: bool
     respond_acknowledgement_ready: bool
+    registration_succeeded: bool = False
+    registry_record_id: int | None = None
 
 
 def _file_original_types(message: Message) -> tuple[InputType, ...]:
@@ -55,6 +62,8 @@ def _file_original_types(message: Message) -> tuple[InputType, ...]:
 async def ingest_telegram_message(
     message: Message,
     context: ContextTypes.DEFAULT_TYPE,
+    *,
+    registry: PostgresRegistry | None = None,
 ) -> IngestionResult:
     recognized_input_type = recognize_telegram_message(message)
     input_type = classify_telegram_message(message)
@@ -94,6 +103,43 @@ async def ingest_telegram_message(
         text=text,
     )
 
+    registration_succeeded = False
+    registry_record_id = None
+    manifest_path = pipeline_result.manifest_path
+    if (
+        pipeline_result.success
+        and pipeline_result.register_handoff_ready
+        and isinstance(manifest_path, str)
+        and manifest_path
+    ):
+        persistence_input = RegistryPersistenceInput(
+            identity_ref=manifest_path,
+            represented_media_type=recognized_input_type.value,
+            metadata=pipeline_result.metadata,
+            relationships=[],
+            manifest_ref=manifest_path,
+            registration_status=None,
+            storage_path=pipeline_result.stored_path,
+            source_url=(
+                text
+                if recognized_input_type
+                in (InputType.WEB_LINK, InputType.YOUTUBE_LINK)
+                else None
+            ),
+        )
+        registry_client = (
+            registry
+            if registry is not None
+            else PostgresRegistry.from_environment()
+        )
+        try:
+            persisted = await registry_client.register(persistence_input)
+        except RegistryPersistenceError:
+            pass
+        else:
+            registration_succeeded = True
+            registry_record_id = persisted.record_id
+
     return IngestionResult(
         input_type=input_type,
         recognized_input_type=recognized_input_type,
@@ -105,4 +151,6 @@ async def ingest_telegram_message(
         process_handoff_ready=False,
         route_handoff_ready=False,
         respond_acknowledgement_ready=True,
+        registration_succeeded=registration_succeeded,
+        registry_record_id=registry_record_id,
     )
