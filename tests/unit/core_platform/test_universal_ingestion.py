@@ -90,7 +90,11 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                 if pipeline == InputType.TEXT:
                     save_attachment.assert_not_awaited()
                 else:
-                    save_attachment.assert_awaited_once()
+                    save_attachment.assert_awaited_once_with(
+                        unittest.mock.ANY,
+                        unittest.mock.ANY,
+                        media_type=recognized.value,
+                    )
 
     async def test_existing_storage_metadata_and_manifest_flow_is_unchanged(self):
         save_attachment = AsyncMock(return_value="/existing/path/image.jpg")
@@ -130,7 +134,11 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(),
             )
 
-        save_attachment.assert_awaited_once_with(message, unittest.mock.ANY)
+        save_attachment.assert_awaited_once_with(
+            message,
+            unittest.mock.ANY,
+            media_type="image",
+        )
         extract_metadata.assert_called_once_with(
             media_type="image",
             file_path="/existing/path/image.jpg",

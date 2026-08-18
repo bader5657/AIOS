@@ -47,7 +47,7 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_manifest_exposes_only_register_handoff_and_acknowledgement(self):
         calls = []
         save_attachment = AsyncMock(
-            side_effect=lambda *_: calls.append("store") or "/stored/image.jpg"
+            side_effect=lambda *_, **__: calls.append("store") or "/stored/image.jpg"
         )
         extract_metadata = Mock(
             side_effect=lambda **_: calls.append("metadata")
@@ -255,10 +255,10 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(save_attachment.await_count, 3)
                 self.assertEqual(
                     [
-                        call.kwargs["input_type"]
+                        call.kwargs["media_type"]
                         for call in save_attachment.await_args_list
                     ],
-                    list(original_types),
+                    [input_type.value for input_type in original_types],
                 )
 
 
@@ -266,8 +266,8 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
         calls = []
         save_attachment = AsyncMock(
             side_effect=lambda *_, **kwargs: calls.append(
-                ("store", kwargs["input_type"])
-            ) or "/stored/" + kwargs["input_type"].value
+                ("store", kwargs["media_type"])
+            ) or "/stored/" + kwargs["media_type"]
         )
         extract_metadata = Mock()
         create_manifest = Mock()
@@ -291,9 +291,8 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             calls,
-            [("store", input_type) for input_type in (
-                InputType.IMAGE, InputType.VOICE, InputType.PDF,
-                InputType.VIDEO, InputType.AUDIO,
+            [("store", media_type) for media_type in (
+                "image", "voice", "pdf", "video", "audio",
             )],
         )
         extract_metadata.assert_not_called()
@@ -326,8 +325,8 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
                 self.assertEqual(save_attachment.await_count, 3)
                 self.assertEqual(
-                    [call.kwargs["input_type"] for call in save_attachment.await_args_list],
-                    [InputType.IMAGE, InputType.VOICE, InputType.AUDIO],
+                    [call.kwargs["media_type"] for call in save_attachment.await_args_list],
+                    ["image", "voice", "audio"],
                 )
                 extract_metadata.assert_not_called()
                 create_manifest.assert_not_called()
