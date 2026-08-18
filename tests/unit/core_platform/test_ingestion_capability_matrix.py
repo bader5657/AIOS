@@ -144,6 +144,11 @@ class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
                     else previous_dispatches + 1
                 )
                 self.assertEqual(save_attachment.await_count, expected_dispatches)
+                if pipeline != InputType.TEXT:
+                    self.assertEqual(
+                        save_attachment.await_args.kwargs["media_type"],
+                        recognized.value,
+                    )
 
     def test_mixed_file_enumeration_preserves_every_canonical_identity(self):
         message = telegram_message(

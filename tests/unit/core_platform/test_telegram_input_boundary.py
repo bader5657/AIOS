@@ -3,14 +3,23 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
-with patch.dict(sys.modules, {"telegram": SimpleNamespace(Message=object)}):
+with patch.dict(
+    sys.modules,
+    {
+        "telegram": SimpleNamespace(Message=object),
+        "telegram.ext": SimpleNamespace(
+            ContextTypes=SimpleNamespace(DEFAULT_TYPE=object)
+        ),
+    },
+):
     from core.app.input_classifier import (
         InputType,
         classify_telegram_message,
         recognize_telegram_message,
     )
+    from core.storage import telegram_storage
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -157,7 +166,7 @@ class TestTelegramInputClassifier(unittest.TestCase):
 
         self.assertIn("if input_type != InputType.TEXT:", ingestion_source)
         self.assertIn(
-            "elif input_type == InputType.DOCUMENT and message.document:",
+            'elif media_type == "document" and message.document:',
             storage_source,
         )
 
@@ -206,6 +215,101 @@ class TestTelegramAdapterDependencyBoundary(unittest.TestCase):
                 referenced_attributes
             )
         )
+
+
+class TestTelegramStorageDependencyBoundary(unittest.IsolatedAsyncioTestCase):
+    def test_storage_has_no_app_classification_dependency(self):
+        source_path = REPOSITORY_ROOT / "core/storage/telegram_storage.py"
+        source = source_path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        imported_modules = {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module is not None
+        }
+        referenced_names = {
+            node.id for node in ast.walk(tree) if isinstance(node, ast.Name)
+        }
+
+        self.assertNotIn("core.app.input_classifier", imported_modules)
+        self.assertNotIn("InputType", referenced_names)
+        self.assertNotIn("recognize_telegram_message", referenced_names)
+        self.assertNotIn("InputType", source)
+        self.assertNotIn("recognize_telegram_message", source)
+
+    def test_storage_package_has_no_disguised_app_dependency(self):
+        for source_path in (REPOSITORY_ROOT / "core/storage").glob("*.py"):
+            with self.subTest(source_path=source_path):
+                tree = ast.parse(source_path.read_text(encoding="utf-8"))
+                imported_modules = {
+                    node.module
+                    for node in ast.walk(tree)
+                    if isinstance(node, ast.ImportFrom)
+                    and node.module is not None
+                }
+                imported_modules.update(
+                    alias.name
+                    for node in ast.walk(tree)
+                    if isinstance(node, ast.Import)
+                    for alias in node.names
+                )
+                self.assertFalse(
+                    any(
+                        module == "core.app" or module.startswith("core.app.")
+                        for module in imported_modules
+                    )
+                )
+
+    async def test_neutral_media_value_preserves_attachment_and_storage_behavior(self):
+        cases = (
+            ("image", telegram_message(photo=[SimpleNamespace(file_id="image")]), "image", ".jpg", None),
+            ("voice", telegram_message(voice=SimpleNamespace(file_id="voice")), "voice", ".ogg", None),
+            ("document", telegram_message(document=SimpleNamespace(file_id="document", file_name="notes.txt")), "document", ".txt", "notes.txt"),
+            ("pdf", telegram_message(document=SimpleNamespace(file_id="pdf", file_name="report.PDF")), "pdf", ".PDF", "report.PDF"),
+            ("doc", telegram_message(document=SimpleNamespace(file_id="doc", file_name="letter.docx")), "doc", ".docx", "letter.docx"),
+            ("spreadsheet", telegram_message(document=SimpleNamespace(file_id="sheet", file_name="ledger.xlsx")), "sheet", ".xlsx", "ledger.xlsx"),
+            ("video", telegram_message(video=SimpleNamespace(file_id="video", file_name=None)), "video", ".mp4", None),
+            ("audio", telegram_message(audio=SimpleNamespace(file_id="audio", file_name=None)), "audio", ".mp3", None),
+        )
+
+        for media_type, message, file_id, suffix, original_filename in cases:
+            with self.subTest(media_type=media_type):
+                telegram_file = SimpleNamespace(download_to_drive=AsyncMock())
+                bot = SimpleNamespace(get_file=AsyncMock(return_value=telegram_file))
+                temporary_file = Mock()
+                temporary_file.__enter__ = Mock(
+                    return_value=SimpleNamespace(name="/tmp/aios-stage-3-5-1")
+                )
+                temporary_file.__exit__ = Mock(return_value=False)
+                with (
+                    patch.object(
+                        telegram_storage,
+                        "NamedTemporaryFile",
+                        return_value=temporary_file,
+                    ) as named_temporary_file,
+                    patch.object(
+                        telegram_storage,
+                        "save_file",
+                        return_value=f"/stored/{media_type}",
+                    ) as save_file,
+                ):
+                    result = await telegram_storage.save_telegram_attachment(
+                        message,
+                        SimpleNamespace(bot=bot),
+                        media_type=media_type,
+                    )
+
+                bot.get_file.assert_awaited_once_with(file_id)
+                named_temporary_file.assert_called_once_with(
+                    suffix=suffix,
+                    delete=False,
+                )
+                save_file.assert_called_once_with(
+                    "/tmp/aios-stage-3-5-1",
+                    storage_class=media_type,
+                    original_filename=original_filename,
+                )
+                self.assertEqual(result, f"/stored/{media_type}")
 
 
 if __name__ == "__main__":

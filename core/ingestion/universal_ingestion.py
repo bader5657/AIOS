@@ -64,7 +64,7 @@ async def _store_file_originals(
             await save_telegram_attachment(
                 message,
                 context,
-                input_type=file_original_type,
+                media_type=file_original_type.value,
             )
         )
     return all(stored_path is not None for stored_path in storage_results)
@@ -87,7 +87,11 @@ async def ingest_telegram_message(
 
     if input_type != InputType.TEXT:
         if len(file_original_types) == 1:
-            stored_path = await save_telegram_attachment(message, context)
+            stored_path = await save_telegram_attachment(
+                message,
+                context,
+                media_type=recognized_input_type.value,
+            )
 
             if stored_path:
                 original_filename = None
