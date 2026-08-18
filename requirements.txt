@@ -7,4 +7,5 @@ idna==3.18
 pillow==12.3.0
 python-dotenv==1.2.2
 python-telegram-bot==22.8
+psycopg[binary]==3.3.4
 typing_extensions==4.16.0
