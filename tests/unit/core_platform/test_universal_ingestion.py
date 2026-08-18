@@ -1,5 +1,6 @@
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -26,6 +27,9 @@ with patch.dict(
     },
 ):
     from core.app.input_classifier import InputType
+    from core.domain.domain_event import DomainEvent
+    from core.domain.exceptions import DomainValidationError
+    from core.event import EventDeliveryFailureCode, EventDeliveryResult
     from core.ingestion import universal_ingestion
     from core.pipeline import asset_pipeline
 
@@ -491,5 +495,151 @@ class UniversalIngestionRecognitionTests(unittest.IsolatedAsyncioTestCase):
                 )
 
         registry.register.assert_awaited_once()
+
+class SuppliedDomainEvent(DomainEvent):
+    def __init__(self, event_id, occurred_at, event_name):
+        super().__init__(event_id, occurred_at, event_name)
+
+
+class RegistryEventIntegrationUnitTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.pipeline_result = asset_pipeline.AssetPipelineResult(
+            success=True,
+            stored_path="/stored/original.bin",
+            metadata={"media_type": "document"},
+            manifest_path="/manifests/exact.json",
+            register_handoff_ready=True,
+        )
+        self.registry = SimpleNamespace(
+            register=AsyncMock(return_value=SimpleNamespace(record_id=404))
+        )
+        self.event = SuppliedDomainEvent(
+            "domain-event-1",
+            datetime(2026, 8, 19, 4, 5, tzinfo=timezone.utc),
+            "document.registered",
+        )
+        self.pipeline_patch = patch.object(
+            universal_ingestion,
+            "run_asset_pipeline",
+            AsyncMock(return_value=self.pipeline_result),
+        )
+        self.recognition_patch = patch.object(
+            universal_ingestion, "recognize_telegram_message",
+            return_value=InputType.DOCUMENT,
+        )
+        self.classification_patch = patch.object(
+            universal_ingestion, "classify_telegram_message",
+            return_value=InputType.DOCUMENT,
+        )
+        for active_patch in (
+            self.pipeline_patch, self.recognition_patch, self.classification_patch
+        ):
+            active_patch.start()
+            self.addCleanup(active_patch.stop)
+
+    async def ingest(self, **kwargs):
+        return await universal_ingestion.ingest_telegram_message(
+            telegram_message(document=SimpleNamespace(file_name="exact.bin")),
+            SimpleNamespace(),
+            registry=self.registry,
+            **kwargs,
+        )
+
+    async def test_registry_failure_constructs_no_envelope_and_makes_no_event_call(self):
+        self.registry.register = AsyncMock(
+            side_effect=universal_ingestion.RegistryPersistenceError("failed")
+        )
+        engine = SimpleNamespace(process=AsyncMock())
+        with patch.object(
+            universal_ingestion, "EventEnvelope", wraps=universal_ingestion.EventEnvelope
+        ) as envelope_type:
+            result = await self.ingest(
+                domain_event=self.event, event_engine=engine, event_schema_version=7
+            )
+
+        self.registry.register.assert_awaited_once()
+        envelope_type.assert_not_called()
+        engine.process.assert_not_awaited()
+        self.assertFalse(result.registration_succeeded)
+        self.assertFalse(result.event_publication_attempted)
+
+    async def test_registry_success_without_domain_event_does_not_publish(self):
+        engine = SimpleNamespace(process=AsyncMock())
+        result = await self.ingest(event_engine=engine, event_schema_version=7)
+
+        self.assertTrue(result.registration_succeeded)
+        self.assertFalse(result.event_publication_attempted)
+        self.assertFalse(result.event_delivery_succeeded)
+        self.assertIsNone(result.event_delivery_failure_code)
+        engine.process.assert_not_awaited()
+
+    async def test_exact_envelope_mapping_uses_one_unchanged_supplied_event(self):
+        original_state = (self.event.id, self.event.event_name, self.event.occurred_at)
+        engine = SimpleNamespace(
+            process=AsyncMock(return_value=EventDeliveryResult(True, 1, None, None))
+        )
+        result = await self.ingest(
+            domain_event=self.event, event_engine=engine, event_schema_version=7
+        )
+
+        engine.process.assert_awaited_once()
+        envelope = engine.process.await_args.args[0]
+        self.assertIs(envelope.event, self.event)
+        self.assertEqual(envelope.event_id, self.event.id)
+        self.assertEqual(envelope.event_name, self.event.event_name)
+        self.assertEqual(envelope.occurred_at, self.event.occurred_at)
+        self.assertIsNone(envelope.aggregate_id)
+        self.assertIsNone(envelope.correlation_id)
+        self.assertIsNone(envelope.causation_id)
+        self.assertEqual(envelope.schema_version, 7)
+        self.assertNotEqual(envelope.event_id, result.registry_record_id)
+        self.assertEqual(
+            (self.event.id, self.event.event_name, self.event.occurred_at), original_state
+        )
+        self.assertTrue(result.event_publication_attempted)
+        self.assertTrue(result.event_delivery_succeeded)
+        self.assertIsNone(result.event_delivery_failure_code)
+
+    async def test_all_bounded_delivery_results_map_once_without_retry(self):
+        cases = (
+            (True, None),
+            (False, EventDeliveryFailureCode.NO_HANDLER),
+            (False, EventDeliveryFailureCode.HANDLER_FAILURE),
+            (False, EventDeliveryFailureCode.INVALID_ENVELOPE),
+        )
+        for succeeded, failure_code in cases:
+            with self.subTest(failure_code=failure_code):
+                engine = SimpleNamespace(
+                    process=AsyncMock(
+                        return_value=EventDeliveryResult(
+                            succeeded, int(succeeded), failure_code,
+                            None if succeeded else "bounded",
+                        )
+                    )
+                )
+                result = await self.ingest(
+                    domain_event=self.event,
+                    event_engine=engine,
+                    event_schema_version=3,
+                )
+
+                self.assertTrue(result.registration_succeeded)
+                self.assertEqual(result.registry_record_id, 404)
+                self.assertTrue(result.event_publication_attempted)
+                self.assertIs(result.event_delivery_succeeded, succeeded)
+                self.assertIs(result.event_delivery_failure_code, failure_code)
+                engine.process.assert_awaited_once()
+                self.assertEqual(len(engine.process.await_args.args), 1)
+
+    async def test_publication_contract_requires_explicit_engine_and_schema(self):
+        with self.assertRaisesRegex(ValueError, "event_engine is required"):
+            await self.ingest(domain_event=self.event, event_schema_version=1)
+        with self.assertRaisesRegex(DomainValidationError, "schema_version"):
+            await self.ingest(
+                domain_event=self.event,
+                event_engine=SimpleNamespace(process=AsyncMock()),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
