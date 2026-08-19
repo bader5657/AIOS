@@ -185,9 +185,10 @@ class TestTelegramInputClassifier(unittest.TestCase):
 
 
 class TestTelegramAdapterDependencyBoundary(unittest.TestCase):
-    def test_adapter_delegates_without_importing_classifier_or_storage(self):
+    def test_adapter_delegates_with_universal_ingestion_as_context_owner(self):
         source_path = REPOSITORY_ROOT / "core/adapters/telegram/main.py"
-        tree = ast.parse(source_path.read_text(encoding="utf-8"))
+        source = source_path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
         imported_modules = {
             node.module
             for node in ast.walk(tree)
@@ -195,11 +196,53 @@ class TestTelegramAdapterDependencyBoundary(unittest.TestCase):
         }
 
         self.assertIn("core.ingestion.universal_ingestion", imported_modules)
-        self.assertIn("core.app.request_context", imported_modules)
+        self.assertNotIn("core.app.request_context", imported_modules)
         self.assertNotIn("core.app.input_classifier", imported_modules)
         self.assertFalse(
             any(module.startswith("core.storage") for module in imported_modules)
         )
+        self.assertTrue(
+            {
+                "core.registry",
+                "core.event",
+                "core.aios_core",
+            }.isdisjoint(imported_modules)
+        )
+        self.assertNotIn("RequestContext", source)
+        self.assertNotIn("from_telegram", source)
+
+        ingestion_path = (
+            REPOSITORY_ROOT / "core/ingestion/universal_ingestion.py"
+        )
+        ingestion_source = ingestion_path.read_text(encoding="utf-8")
+        ingestion_tree = ast.parse(ingestion_source)
+        ingestion_imports = {
+            node.module
+            for node in ast.walk(ingestion_tree)
+            if isinstance(node, ast.ImportFrom) and node.module is not None
+        }
+        context_constructions = [
+            node
+            for node in ast.walk(ingestion_tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "from_telegram"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "RequestContext"
+        ]
+
+        self.assertIn("core.app.request_context", ingestion_imports)
+        self.assertEqual(len(context_constructions), 1)
+        self.assertIn('if text == "status":', source)
+        self.assertIn('CommandHandler("start", start)', source)
+
+        for package in ("domain", "registry", "event", "aios_core"):
+            for candidate in (REPOSITORY_ROOT / "core" / package).rglob("*.py"):
+                self.assertNotIn(
+                    "core.adapters.telegram",
+                    candidate.read_text(encoding="utf-8"),
+                    str(candidate),
+                )
 
     def test_adapter_contains_no_input_type_decision_tree(self):
         source_path = REPOSITORY_ROOT / "core/adapters/telegram/main.py"
