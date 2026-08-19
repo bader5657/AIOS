@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import psycopg
 from psycopg import conninfo, sql
 
+from core.aios_core import AIOSCore
 from core.app.input_classifier import InputType
 from core.domain.domain_event import DomainEvent
 from core.event import EventDeliveryFailureCode, EventEngine
@@ -239,6 +240,7 @@ class DocumentManifestRegistryEventEngineIntegrationTests(
                 domain_event=self.event,
                 event_engine=engine,
                 event_schema_version=13,
+                aios_core=AIOSCore(),
             )
 
         envelope_type.assert_called_once()
@@ -380,10 +382,16 @@ class DocumentManifestRegistryEventEngineIntegrationTests(
         process = AsyncMock(wraps=engine.process)
         engine.process = process
         first, _ = await self.ingest_document(
-            domain_event=self.event, event_engine=engine, event_schema_version=5
+            domain_event=self.event,
+            event_engine=engine,
+            event_schema_version=5,
+            aios_core=AIOSCore(),
         )
         second, _ = await self.ingest_document(
-            domain_event=self.event, event_engine=engine, event_schema_version=5
+            domain_event=self.event,
+            event_engine=engine,
+            event_schema_version=5,
+            aios_core=AIOSCore(),
         )
 
         self.assertNotEqual(first.registry_record_id, second.registry_record_id)
@@ -391,7 +399,7 @@ class DocumentManifestRegistryEventEngineIntegrationTests(
         self.assertEqual(process.await_count, 2)
         self.assertEqual(len(handled), 2)
 
-    def test_static_endpoint_excludes_retry_dedup_cross_transaction_and_aios_core(self):
+    def test_static_endpoint_excludes_retry_dedup_and_cross_transaction(self):
         ingestion_source = inspect.getsource(universal_ingestion)
         registry_source = inspect.getsource(
             __import__("core.registry.postgres_registry", fromlist=["unused"])
@@ -401,6 +409,7 @@ class DocumentManifestRegistryEventEngineIntegrationTests(
         )
         self.assertEqual(ingestion_source.count("registry_client.register("), 1)
         self.assertEqual(ingestion_source.count("event_engine.process("), 1)
+        self.assertEqual(ingestion_source.count("aios_core.route("), 1)
         self.assertLess(
             ingestion_source.index("registry_client.register("),
             ingestion_source.index("event_engine.process("),
@@ -414,9 +423,6 @@ class DocumentManifestRegistryEventEngineIntegrationTests(
             "idempotency",
             "dedup",
             "processed_event",
-            "aios_core",
-            "AIOSCore",
-            ".route(",
         ):
             with self.subTest(prohibited=prohibited):
                 self.assertNotIn(prohibited, ingestion_source)

@@ -433,17 +433,22 @@ class IngestionLifecycleBoundaryTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, ingestion_source.lower())
 
-    def test_runtime_has_no_downstream_owner_or_response_implementation(self):
+    def test_runtime_has_only_approved_core_boundary_integration(self):
         source = (
             REPOSITORY_ROOT / "core/ingestion/universal_ingestion.py"
         ).read_text(encoding="utf-8")
 
+        self.assertIn("await aios_core.route(envelope)", source)
+        self.assertIn("CoreRouteTarget.AIOS_BRAIN_BOUNDARY", source)
         prohibited = (
-            "aios_core",
-            "brain",
+            "from core.brain",
+            "import brain",
             "specialist",
             "class response",
             "route_to",
+            "create_task",
+            "gather(",
+            "retry",
         )
         for marker in prohibited:
             with self.subTest(marker=marker):

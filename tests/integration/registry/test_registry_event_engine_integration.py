@@ -37,6 +37,7 @@ with patch.dict(
         ),
     },
 ):
+    from core.aios_core import AIOSCore
     from core.app.input_classifier import InputType
     from core.domain.domain_event import DomainEvent
     from core.event import EventDeliveryFailureCode, EventEngine
@@ -161,10 +162,12 @@ class RegistryEventEngineIntegrationTests(unittest.IsolatedAsyncioTestCase):
         engine.register(self.event.event_name, handler)
         process = AsyncMock(wraps=engine.process)
         engine.process = process
+        core = SimpleNamespace(route=AsyncMock(wraps=AIOSCore().route))
         result = await self.ingest(
             domain_event=self.event,
             event_engine=engine,
             event_schema_version=11,
+            aios_core=core,
         )
 
         persisted = await self.registry.read(result.registry_record_id)
@@ -173,6 +176,8 @@ class RegistryEventEngineIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(handled), 1)
         self.assertEqual(handled[0][1], 1)
         envelope = handled[0][0]
+        core.route.assert_awaited_once_with(envelope)
+        self.assertIs(process.await_args.args[0], core.route.await_args.args[0])
         self.assertIs(envelope.event, self.event)
         self.assertEqual(envelope.event_id, self.event.id)
         self.assertEqual(envelope.event_name, self.event.event_name)
@@ -186,17 +191,23 @@ class RegistryEventEngineIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.event_publication_attempted)
         self.assertTrue(result.event_delivery_succeeded)
         self.assertIsNone(result.event_delivery_failure_code)
+        self.assertTrue(result.route_handoff_ready)
 
     async def test_no_domain_event_commits_without_invoking_engine(self):
         engine = SimpleNamespace(process=AsyncMock())
-        result = await self.ingest(event_engine=engine, event_schema_version=2)
+        core = SimpleNamespace(route=AsyncMock())
+        result = await self.ingest(
+            event_engine=engine, event_schema_version=2, aios_core=core
+        )
 
         self.assertIsNotNone(await self.registry.read(result.registry_record_id))
         engine.process.assert_not_awaited()
+        core.route.assert_not_awaited()
         self.assertTrue(result.registration_succeeded)
         self.assertFalse(result.event_publication_attempted)
         self.assertFalse(result.event_delivery_succeeded)
         self.assertIsNone(result.event_delivery_failure_code)
+        self.assertFalse(result.route_handoff_ready)
 
     async def test_handler_failure_preserves_committed_row_and_upstream_artifacts(self):
         engine = EventEngine()
@@ -210,10 +221,12 @@ class RegistryEventEngineIntegrationTests(unittest.IsolatedAsyncioTestCase):
         engine.register(self.event.event_name, failing_handler)
         process = AsyncMock(wraps=engine.process)
         engine.process = process
+        core = SimpleNamespace(route=AsyncMock())
         result = await self.ingest(
             domain_event=self.event,
             event_engine=engine,
             event_schema_version=5,
+            aios_core=core,
         )
 
         persisted = await self.registry.read(result.registry_record_id)
@@ -225,29 +238,35 @@ class RegistryEventEngineIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(handler_calls, 1)
         process.assert_awaited_once()
+        core.route.assert_not_awaited()
         self.assertTrue(result.registration_succeeded)
         self.assertFalse(result.event_delivery_succeeded)
         self.assertIs(
             result.event_delivery_failure_code,
             EventDeliveryFailureCode.HANDLER_FAILURE,
         )
+        self.assertFalse(result.route_handoff_ready)
 
     async def test_registry_failure_makes_zero_event_engine_calls(self):
         registry = SimpleNamespace(
             register=AsyncMock(side_effect=RegistryPersistenceError("failed"))
         )
         engine = SimpleNamespace(process=AsyncMock())
+        core = SimpleNamespace(route=AsyncMock())
         result = await self.ingest(
             registry=registry,
             domain_event=self.event,
             event_engine=engine,
             event_schema_version=1,
+            aios_core=core,
         )
 
         registry.register.assert_awaited_once()
         engine.process.assert_not_awaited()
+        core.route.assert_not_awaited()
         self.assertFalse(result.registration_succeeded)
         self.assertFalse(result.event_publication_attempted)
+        self.assertFalse(result.route_handoff_ready)
 
 
 if __name__ == "__main__":
