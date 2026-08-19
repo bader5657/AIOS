@@ -10,6 +10,7 @@ from core.app.input_classifier import (
     recognize_telegram_message,
 )
 from core.app.request_context import RequestContext
+from core.aios_core import AIOSCore, CoreRouteTarget
 from core.domain.domain_event import DomainEvent
 from core.domain.event_envelope import EventEnvelope
 from core.event import EventDeliveryFailureCode, EventEngine
@@ -73,6 +74,7 @@ async def ingest_telegram_message(
     domain_event: DomainEvent | None = None,
     event_engine: EventEngine | None = None,
     event_schema_version: int | None = None,
+    aios_core: AIOSCore | None = None,
 ) -> IngestionResult:
     recognized_input_type = recognize_telegram_message(message)
     input_type = classify_telegram_message(message)
@@ -117,6 +119,7 @@ async def ingest_telegram_message(
     event_publication_attempted = False
     event_delivery_succeeded = False
     event_delivery_failure_code = None
+    route_handoff_ready = False
     manifest_path = pipeline_result.manifest_path
     if (
         pipeline_result.success
@@ -167,6 +170,17 @@ async def ingest_telegram_message(
                 delivery_result = await event_engine.process(envelope)
                 event_delivery_succeeded = delivery_result.success
                 event_delivery_failure_code = delivery_result.failure_code
+                if delivery_result.success:
+                    if aios_core is None:
+                        raise ValueError(
+                            "aios_core is required after successful event delivery"
+                        )
+                    core_route_result = await aios_core.route(envelope)
+                    route_handoff_ready = (
+                        core_route_result.success
+                        and core_route_result.route_target
+                        is CoreRouteTarget.AIOS_BRAIN_BOUNDARY
+                    )
 
     return IngestionResult(
         input_type=input_type,
@@ -177,7 +191,7 @@ async def ingest_telegram_message(
         text=text,
         register_handoff_ready=pipeline_result.register_handoff_ready,
         process_handoff_ready=False,
-        route_handoff_ready=False,
+        route_handoff_ready=route_handoff_ready,
         respond_acknowledgement_ready=True,
         registration_succeeded=registration_succeeded,
         registry_record_id=registry_record_id,

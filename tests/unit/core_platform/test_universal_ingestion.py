@@ -518,6 +518,16 @@ class RegistryEventIntegrationUnitTests(unittest.IsolatedAsyncioTestCase):
             datetime(2026, 8, 19, 4, 5, tzinfo=timezone.utc),
             "document.registered",
         )
+        self.core = SimpleNamespace(
+            route=AsyncMock(
+                return_value=SimpleNamespace(
+                    success=True,
+                    route_target=(
+                        universal_ingestion.CoreRouteTarget.AIOS_BRAIN_BOUNDARY
+                    ),
+                )
+            )
+        )
         self.pipeline_patch = patch.object(
             universal_ingestion,
             "run_asset_pipeline",
@@ -538,6 +548,7 @@ class RegistryEventIntegrationUnitTests(unittest.IsolatedAsyncioTestCase):
             self.addCleanup(active_patch.stop)
 
     async def ingest(self, **kwargs):
+        kwargs.setdefault("aios_core", self.core)
         return await universal_ingestion.ingest_telegram_message(
             telegram_message(document=SimpleNamespace(file_name="exact.bin")),
             SimpleNamespace(),
@@ -571,6 +582,8 @@ class RegistryEventIntegrationUnitTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.event_publication_attempted)
         self.assertFalse(result.event_delivery_succeeded)
         self.assertIsNone(result.event_delivery_failure_code)
+        self.assertFalse(result.route_handoff_ready)
+        self.core.route.assert_not_awaited()
         engine.process.assert_not_awaited()
 
     async def test_exact_envelope_mapping_uses_one_unchanged_supplied_event(self):
@@ -599,6 +612,8 @@ class RegistryEventIntegrationUnitTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.event_publication_attempted)
         self.assertTrue(result.event_delivery_succeeded)
         self.assertIsNone(result.event_delivery_failure_code)
+        self.assertTrue(result.route_handoff_ready)
+        self.core.route.assert_awaited_once_with(envelope)
 
     async def test_all_bounded_delivery_results_map_once_without_retry(self):
         cases = (
@@ -630,6 +645,10 @@ class RegistryEventIntegrationUnitTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIs(result.event_delivery_failure_code, failure_code)
                 engine.process.assert_awaited_once()
                 self.assertEqual(len(engine.process.await_args.args), 1)
+                if succeeded:
+                    self.assertTrue(result.route_handoff_ready)
+                else:
+                    self.assertFalse(result.route_handoff_ready)
 
     async def test_publication_contract_requires_explicit_engine_and_schema(self):
         with self.assertRaisesRegex(ValueError, "event_engine is required"):
