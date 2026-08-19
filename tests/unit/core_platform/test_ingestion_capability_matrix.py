@@ -1,35 +1,17 @@
-import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
+from core.app.input_classifier import InputType
+from core.ingestion import universal_ingestion
+from core.ingestion.universal_ingestion import ingest_telegram_message
+from core.pipeline import asset_pipeline
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 save_attachment = AsyncMock(return_value=None)
 
-with patch.dict(
-    sys.modules,
-    {
-        "telegram": SimpleNamespace(Message=object),
-        "telegram.ext": SimpleNamespace(
-            ContextTypes=SimpleNamespace(DEFAULT_TYPE=object)
-        ),
-        "core.storage.document_manifest": SimpleNamespace(
-            create_document_manifest=Mock()
-        ),
-        "core.storage.metadata_engine": SimpleNamespace(
-            extract_basic_metadata=Mock()
-        ),
-        "core.storage.telegram_storage": SimpleNamespace(
-            save_telegram_attachment=save_attachment
-        ),
-    },
-):
-    from core.app.input_classifier import InputType
-    from core.ingestion import universal_ingestion
-    from core.pipeline import asset_pipeline
-    from core.ingestion.universal_ingestion import ingest_telegram_message
 
 def telegram_message(**overrides):
     fields = {
@@ -48,6 +30,29 @@ def telegram_message(**overrides):
     return SimpleNamespace(**fields)
 
 class IngestionCapabilityMatrixTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        save_attachment.reset_mock()
+        patches = (
+            patch.object(
+                asset_pipeline,
+                "save_telegram_attachment",
+                save_attachment,
+            ),
+            patch.object(
+                asset_pipeline,
+                "extract_basic_metadata",
+                Mock(return_value={}),
+            ),
+            patch.object(
+                asset_pipeline,
+                "create_document_manifest",
+                Mock(return_value=None),
+            ),
+        )
+        for active_patch in patches:
+            active_patch.start()
+            self.addCleanup(active_patch.stop)
+
     async def test_complete_blueprint_input_and_compatibility_matrix(self):
         cases = (
             (
