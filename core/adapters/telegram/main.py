@@ -1,4 +1,3 @@
-import json
 import os
 
 from dotenv import load_dotenv
@@ -11,16 +10,12 @@ from telegram.ext import (
     filters,
 )
 
-from core.app.request_context import RequestContext
 from core.ingestion.universal_ingestion import ingest_telegram_message
 from core.mission.status import mission_status
 
 load_dotenv("/opt/aios/runtime/config/runtime.env")
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-
-if not TOKEN:
-    raise RuntimeError("TELEGRAM_BOT_TOKEN belum diisi di runtime.env")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -51,26 +46,13 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ingestion = await ingest_telegram_message(update.message, context)
 
-    request_context = RequestContext.from_telegram(
-        user_id=update.effective_user.id,
-        chat_id=update.effective_chat.id,
-        message_id=update.message.message_id,
-        username=update.effective_user.username or "",
-        text=ingestion.text,
-    )
-
-    output = request_context.to_dict()
-    output["input_type"] = ingestion.input_type.value
-    output["stored_path"] = ingestion.stored_path
-    output["manifest_path"] = ingestion.manifest_path
-    output["metadata"] = ingestion.metadata
-
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+    if not ingestion.register_handoff_ready:
+        return
 
     response = (
         "🤖 AIOS menerima input.\n\n"
         f"Jenis : {ingestion.input_type.value}\n"
-        f"Request : {request_context.message_id}"
+        f"Request : {update.message.message_id}"
     )
 
     if ingestion.stored_path:
@@ -96,6 +78,9 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
+    if not TOKEN:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN belum diisi di runtime.env")
+
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
