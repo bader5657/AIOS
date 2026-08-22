@@ -12,7 +12,7 @@
 | `COVERED_WITH_LIMITATION` | `37` |
 | `GAP` | `0` |
 | `AMBIGUOUS_AUTHORITY` | `0` |
-| `POSSIBLE_EXCLUSION` candidates | `9` (outside the 102 Included Scope rows; not dispositioned here) |
+| `POSSIBLE_EXCLUSION` candidates | `9` (outside the 108 Included Scope rows; not dispositioned here) |
 | Implementation-without-requirement-trace findings | `2` |
 | Result | `TRACEABILITY_COMPLETE = YES` |
 
