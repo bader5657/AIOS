@@ -11,6 +11,7 @@ User=aiosadmin
 Group=aiosadmin
 WorkingDirectory=/opt/aios-src
 EnvironmentFile=/opt/aios/runtime/config/runtime.env
+Environment=PYTHONPYCACHEPREFIX=/opt/aios/runtime/cache/pycache
 ExecStartPre=/opt/aios/runtime/venv/bin/python -c "import os,sys; sys.exit(0 if os.environ.get('TELEGRAM_BOT_TOKEN') and os.environ.get('AIOS_REGISTRY_DATABASE_URL') else 1)"
 ExecStart=/opt/aios/runtime/venv/bin/python -m core.adapters.telegram.main
 Restart=on-failure
@@ -19,6 +20,7 @@ TimeoutStopSec=30s
 KillMode=control-group
 NoNewPrivileges=true
 PrivateTmp=true
+ReadOnlyPaths=/opt/aios-src
 UMask=0027
 
 [Install]

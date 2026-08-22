@@ -3,10 +3,8 @@ import re
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
 SERVICE_PATH = ROOT / "deploy/systemd/aios.service"
-
 
 class AIOSSystemdServiceTests(unittest.TestCase):
     @classmethod
@@ -49,9 +47,9 @@ class AIOSSystemdServiceTests(unittest.TestCase):
             set(service),
             {
                 "Type", "User", "Group", "WorkingDirectory",
-                "EnvironmentFile", "ExecStartPre", "ExecStart", "Restart",
-                "RestartSec", "TimeoutStopSec", "KillMode",
-                "NoNewPrivileges", "PrivateTmp", "UMask",
+                "EnvironmentFile", "Environment", "ExecStartPre", "ExecStart",
+                "Restart", "RestartSec", "TimeoutStopSec", "KillMode",
+                "NoNewPrivileges", "PrivateTmp", "ReadOnlyPaths", "UMask",
             },
         )
         self.assertEqual(service["Type"], "simple")
@@ -64,12 +62,51 @@ class AIOSSystemdServiceTests(unittest.TestCase):
         )
         self.assertFalse(service["EnvironmentFile"].startswith("-"))
         self.assertEqual(
+            self.source.count(
+                "EnvironmentFile=/opt/aios/runtime/config/runtime.env"
+            ),
+            1,
+        )
+        self.assertEqual(
             service["ExecStart"],
             "/opt/aios/runtime/venv/bin/python "
             "-m core.adapters.telegram.main",
         )
         exec_starts = re.findall(r"(?m)^ExecStart=", self.source)
         self.assertEqual(len(exec_starts), 1)
+
+    def test_source_runtime_separation_policy(self):
+        service = self.unit["Service"]
+        cache_environment = (
+            "PYTHONPYCACHEPREFIX=/opt/aios/runtime/cache/pycache"
+        )
+        self.assertEqual(service["Environment"], cache_environment)
+        self.assertEqual(
+            self.source.count(f"Environment={cache_environment}"),
+            1,
+        )
+        self.assertEqual(service["ReadOnlyPaths"], "/opt/aios-src")
+        self.assertEqual(self.source.count("ReadOnlyPaths=/opt/aios-src"), 1)
+        self.assertNotIn("Environment", self.unit["Unit"])
+        self.assertNotIn("Environment", self.unit["Install"])
+        self.assertNotIn("ReadOnlyPaths", self.unit["Unit"])
+        self.assertNotIn("ReadOnlyPaths", self.unit["Install"])
+        self.assertNotIn("PYTHONDONTWRITEBYTECODE", self.source)
+        self.assertNotIn("ReadWritePaths", service)
+        self.assertIsNone(
+            re.search(
+                r"(?m)^ReadWritePaths=.*(?:^|\s)/opt/aios-src(?:\s|$)",
+                self.source,
+            )
+        )
+        pycache_lines = [
+            line for line in self.source.splitlines()
+            if "PYTHONPYCACHEPREFIX" in line
+        ]
+        self.assertEqual(
+            pycache_lines,
+            [f"Environment={cache_environment}"],
+        )
 
     def test_interpreter_only_environment_preflight(self):
         service = self.unit["Service"]
@@ -141,7 +178,6 @@ class AIOSSystemdServiceTests(unittest.TestCase):
                 self.source,
             )
         )
-
 
 if __name__ == "__main__":
     unittest.main()
