@@ -35,6 +35,6 @@ deletion, service/systemd mutation, poller changes, package installation,
 virtualenv creation, migrations, and Stage 9.2.3 execution. Stage 9.2.3 retains
 formal `/opt/aios-src` versus `/opt/aios` layout governance.
 
-Proposed approval state, not yet active:
+Active approval state:
 
-`STAGE 9.2.2 SOURCE CONTAMINATION DISPOSITION APPROVAL REQUIRED`
+`STAGE 9.2.2 SOURCE CONTAMINATION DISPOSITION APPROVED — CONTROLLED EXECUTION AUTHORIZED`
