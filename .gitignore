@@ -1,13 +1,32 @@
 .env
 *.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
 
 docker/postgres/data/
 docker/postgres/backups/
+*.dump
+*.backup
+*.pgdump
+*.sql.gz
 
 logs/
 backup/
+backups/
+rollback/
+rollbacks/
 
 *.log
+AIOS.zip
+*.tar.gz
+*.tgz
+*.7z
+*.tmp
+*.part
+*.download
 
 .vscode/
 .idea/
