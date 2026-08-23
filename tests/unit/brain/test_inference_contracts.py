@@ -423,11 +423,50 @@ def test_contract_imports_are_provider_neutral_stdlib_only() -> None:
 
 
 def test_core_has_no_reverse_brain_dependency() -> None:
+    mapper_path = ROOT / "core/core_to_brain_mapper.py"
+    allowed_mapper_import = {
+        ("BRAIN_INPUT_SCHEMA_VERSION", None),
+        ("BrainInput", None),
+        ("BrainIntent", None),
+    }
     offenders: list[str] = []
     for path in (ROOT / "core").rglob("*.py"):
         if path == CONTRACT_PATH or path.parent == CONTRACT_PATH.parent:
             continue
         source = path.read_text(encoding="utf-8")
-        if "core.brain" in source or "from .brain" in source or "from core import brain" in source:
+        if path == mapper_path:
+            tree = ast.parse(source, filename=str(path))
+            brain_imports = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom)
+                and node.module is not None
+                and (
+                    node.module == "core.brain"
+                    or node.module.startswith("core.brain.")
+                )
+            ]
+            assert len(brain_imports) == 1
+            assert brain_imports[0].module == "core.brain.input_contracts"
+            assert {
+                (alias.name, alias.asname) for alias in brain_imports[0].names
+            } == allowed_mapper_import
+            assert not any(
+                isinstance(node, ast.Import)
+                and any(
+                    alias.name == "core.brain"
+                    or alias.name.startswith("core.brain.")
+                    for alias in node.names
+                )
+                for node in ast.walk(tree)
+            )
+            assert "from .brain" not in source
+            assert "from core import brain" not in source
+            continue
+        if (
+            "core.brain" in source
+            or "from .brain" in source
+            or "from core import brain" in source
+        ):
             offenders.append(str(path.relative_to(ROOT)))
     assert offenders == []
