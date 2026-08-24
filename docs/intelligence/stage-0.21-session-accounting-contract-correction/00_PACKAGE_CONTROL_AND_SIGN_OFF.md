@@ -26,4 +26,3 @@ and `/api/chat` calls and zero retry or fallback.
 Semantic, safety, provider, request-count, and runtime impact are all `NONE`.
 No inference, session creation, production-code change, runtime mutation,
 real-data use, or production activation is authorized by this package.
-

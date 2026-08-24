@@ -78,4 +78,3 @@ Raw independent counters are authoritative. If they disagree, the session is
 `FAILED_CLOSED`. If raw counters agree but a derived presentation field is
 wrong, governance records an accounting defect without manufacturing extra
 execution. Inference must not be rerun solely to repair presentation evidence.
-
