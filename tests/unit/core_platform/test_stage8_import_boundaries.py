@@ -184,6 +184,9 @@ class Stage8ImportBoundaryTests(unittest.TestCase):
             ("core.ingestion.universal_ingestion", "core.domain.event_envelope"),
             ("core.ingestion.universal_ingestion", "core.event"),
             ("core.ingestion.universal_ingestion", "core.aios_core"),
+            ("core.ingestion.universal_ingestion", "core.core_to_brain_mapper"),
+            ("core.ingestion.universal_ingestion", "core.brain.input_contracts"),
+            ("core.ingestion.universal_ingestion", "core.brain.inference_contracts"),
             ("core.pipeline.asset_pipeline", "core.app.request_context"),
             ("core.pipeline.asset_pipeline", "core.storage.telegram_storage"),
             ("core.pipeline.asset_pipeline", "core.storage.metadata_engine"),
@@ -280,6 +283,18 @@ class Stage8ImportBoundaryTests(unittest.TestCase):
             "core.app.request_context", "core.ingestion", "core.pipeline",
             "core.storage", "core.registry", "core.event", "core.aios_core",
         )
+        allowed_level_a_brain_edges = {
+            (
+                "core.ingestion.universal_ingestion",
+                "core.brain.input_contracts",
+                ("BrainInput",),
+            ),
+            (
+                "core.ingestion.universal_ingestion",
+                "core.brain.inference_contracts",
+                ("InferenceResult",),
+            ),
+        }
         violations = [
             edge
             for edge in IMPORTS
@@ -288,6 +303,8 @@ class Stage8ImportBoundaryTests(unittest.TestCase):
                 _under(edge.target, target)
                 for target in self.LATER_PHASE_PREFIXES + self.BUSINESS_PREFIXES
             )
+            and (edge.source, edge.target, edge.imported_names)
+            not in allowed_level_a_brain_edges
         ]
         self.assertFalse(violations, _format_edges(violations))
 

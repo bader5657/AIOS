@@ -1,5 +1,10 @@
+from __future__ import annotations
+
+import uuid
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Protocol
 
 from telegram import Message
 from telegram.ext import ContextTypes
@@ -11,6 +16,7 @@ from core.app.input_classifier import (
 )
 from core.app.request_context import RequestContext
 from core.aios_core import AIOSCore, CoreRouteTarget
+from core.core_to_brain_mapper import CoreToBrainMapper
 from core.domain.domain_event import DomainEvent
 from core.domain.event_envelope import EventEnvelope
 from core.event import EventDeliveryFailureCode, EventEngine
@@ -20,6 +26,19 @@ from core.registry import (
     RegistryPersistenceError,
     RegistryPersistenceInput,
 )
+
+
+if TYPE_CHECKING:
+    from ..brain.inference_contracts import (
+        InferenceResult,
+    )
+    from ..brain.input_contracts import (
+        BrainInput,
+    )
+
+
+class BrainBoundary(Protocol):
+    async def __call__(self, brain_input: BrainInput) -> InferenceResult: ...
 
 
 @dataclass(slots=True)
@@ -39,6 +58,7 @@ class IngestionResult:
     event_publication_attempted: bool = False
     event_delivery_succeeded: bool = False
     event_delivery_failure_code: EventDeliveryFailureCode | None = None
+    brain_result: InferenceResult | None = None
 
 
 def _file_original_types(message: Message) -> tuple[InputType, ...]:
@@ -75,7 +95,33 @@ async def ingest_telegram_message(
     event_engine: EventEngine | None = None,
     event_schema_version: int | None = None,
     aios_core: AIOSCore | None = None,
+    brain_semantic_data: Mapping[str, object] | None = None,
+    brain_input_reference: str | None = None,
+    brain_context_references: tuple[str, ...] = (),
+    core_to_brain_mapper: CoreToBrainMapper | None = None,
+    brain_boundary: BrainBoundary | None = None,
+    correlation_id_factory: Callable[[], uuid.UUID] = uuid.uuid4,
 ) -> IngestionResult:
+    correlation_id = None
+    if brain_semantic_data is not None:
+        if core_to_brain_mapper is None:
+            raise ValueError(
+                "core_to_brain_mapper is required when brain_semantic_data is supplied"
+            )
+        if brain_boundary is None:
+            raise ValueError(
+                "brain_boundary is required when brain_semantic_data is supplied"
+            )
+        if not callable(correlation_id_factory):
+            raise TypeError("correlation_id_factory must be callable")
+        generated_correlation_id = correlation_id_factory()
+        if (
+            type(generated_correlation_id) is not uuid.UUID
+            or generated_correlation_id.version != 4
+        ):
+            raise ValueError("correlation_id_factory must return a UUIDv4")
+        correlation_id = f"corr-{generated_correlation_id.hex}"
+
     recognized_input_type = recognize_telegram_message(message)
     input_type = classify_telegram_message(message)
     if input_type != InputType.TEXT:
@@ -120,6 +166,7 @@ async def ingest_telegram_message(
     event_delivery_succeeded = False
     event_delivery_failure_code = None
     route_handoff_ready = False
+    brain_result = None
     manifest_path = pipeline_result.manifest_path
     if (
         pipeline_result.success
@@ -162,7 +209,7 @@ async def ingest_telegram_message(
                 envelope = EventEnvelope(
                     event=domain_event,
                     aggregate_id=None,
-                    correlation_id=None,
+                    correlation_id=correlation_id,
                     causation_id=None,
                     schema_version=event_schema_version,
                 )
@@ -181,6 +228,15 @@ async def ingest_telegram_message(
                         and core_route_result.route_target
                         is CoreRouteTarget.AIOS_BRAIN_BOUNDARY
                     )
+                    if route_handoff_ready and brain_semantic_data is not None:
+                        brain_input = core_to_brain_mapper.map(
+                            route_result=core_route_result,
+                            correlation_id=correlation_id,
+                            data=brain_semantic_data,
+                            input_reference=brain_input_reference,
+                            context_references=brain_context_references,
+                        )
+                        brain_result = await brain_boundary(brain_input)
 
     return IngestionResult(
         input_type=input_type,
@@ -198,4 +254,5 @@ async def ingest_telegram_message(
         event_publication_attempted=event_publication_attempted,
         event_delivery_succeeded=event_delivery_succeeded,
         event_delivery_failure_code=event_delivery_failure_code,
+        brain_result=brain_result,
     )
