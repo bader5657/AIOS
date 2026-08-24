@@ -377,7 +377,10 @@ class Stage8ImportBoundaryTests(unittest.TestCase):
             "dotenv": {"core/adapters/telegram/main.py"},
             "PIL": {"core/storage/metadata_engine.py"},
             "psycopg": {"core/registry/postgres_registry.py"},
-            "httpx": {"core/brain/providers/ollama.py"},
+            "httpx": {
+                "core/brain/providers/ollama.py",
+                "core/brain/staging_composition.py",
+            },
         }
         violations = []
         for edge in IMPORTS:
