@@ -1,5 +1,7 @@
+import asyncio
 import sys
 import unittest
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,6 +29,8 @@ with patch.dict(
     },
 ):
     from core.app.input_classifier import InputType
+    from core.aios_core import CoreRouteFailureCode, CoreRouteResult, CoreRouteTarget
+    from core.brain.inference_contracts import FailureCode, InferenceResult
     from core.domain.domain_event import DomainEvent
     from core.domain.exceptions import DomainValidationError
     from core.event import EventDeliveryFailureCode, EventDeliveryResult
@@ -658,6 +662,305 @@ class RegistryEventIntegrationUnitTests(unittest.IsolatedAsyncioTestCase):
                 domain_event=self.event,
                 event_engine=SimpleNamespace(process=AsyncMock()),
             )
+
+
+
+
+class CorrectedLevelABrainWiringTests(unittest.IsolatedAsyncioTestCase):
+    CORRELATION_UUID = uuid.UUID("01234567-89ab-4def-8123-456789abcdef")
+    CORRELATION_ID = "corr-0123456789ab4def8123456789abcdef"
+
+    def setUp(self):
+        self.pipeline_result = asset_pipeline.AssetPipelineResult(
+            success=True,
+            stored_path="/stored/original.bin",
+            metadata={"media_type": "document"},
+            manifest_path="/manifests/exact.json",
+            register_handoff_ready=True,
+        )
+        self.registry = SimpleNamespace(
+            register=AsyncMock(return_value=SimpleNamespace(record_id=505))
+        )
+        self.event = SuppliedDomainEvent(
+            "stage-0.16-event",
+            datetime(2026, 8, 24, 5, 0, tzinfo=timezone.utc),
+            "document.registered",
+        )
+        self.route_result = CoreRouteResult(
+            True, CoreRouteTarget.AIOS_BRAIN_BOUNDARY, None, None
+        )
+        self.core = SimpleNamespace(
+            route=AsyncMock(return_value=self.route_result)
+        )
+        self.engine = SimpleNamespace(
+            process=AsyncMock(return_value=EventDeliveryResult(True, 1, None, None))
+        )
+        self.mapper = SimpleNamespace(map=Mock(return_value=object()))
+        self.brain_boundary = AsyncMock(return_value=object())
+        self.correlation_factory = Mock(return_value=self.CORRELATION_UUID)
+        patches = (
+            patch.object(
+                universal_ingestion,
+                "run_asset_pipeline",
+                AsyncMock(return_value=self.pipeline_result),
+            ),
+            patch.object(
+                universal_ingestion,
+                "recognize_telegram_message",
+                return_value=InputType.DOCUMENT,
+            ),
+            patch.object(
+                universal_ingestion,
+                "classify_telegram_message",
+                return_value=InputType.DOCUMENT,
+            ),
+        )
+        for active_patch in patches:
+            active_patch.start()
+            self.addCleanup(active_patch.stop)
+
+    async def ingest(self, **overrides):
+        values = {
+            "registry": self.registry,
+            "domain_event": self.event,
+            "event_engine": self.engine,
+            "event_schema_version": 1,
+            "aios_core": self.core,
+        }
+        values.update(overrides)
+        return await universal_ingestion.ingest_telegram_message(
+            telegram_message(document=SimpleNamespace(file_name="exact.bin")),
+            SimpleNamespace(),
+            **values,
+        )
+
+    async def test_default_inactive_flow_has_no_level_a_activity(self):
+        result = await self.ingest(
+            core_to_brain_mapper=self.mapper,
+            brain_boundary=self.brain_boundary,
+            correlation_id_factory=self.correlation_factory,
+        )
+
+        self.assertTrue(result.route_handoff_ready)
+        self.assertIsNone(result.brain_result)
+        self.correlation_factory.assert_not_called()
+        self.mapper.map.assert_not_called()
+        self.brain_boundary.assert_not_awaited()
+        envelope = self.engine.process.await_args.args[0]
+        self.assertIsNone(envelope.correlation_id)
+        self.core.route.assert_awaited_once_with(envelope)
+
+    async def test_explicit_non_brain_attempt_retains_one_correlation_only(self):
+        request_id_factory = Mock(return_value=self.CORRELATION_UUID)
+        actual_mapper = universal_ingestion.CoreToBrainMapper(request_id_factory)
+        non_brain_result = CoreRouteResult(
+            False, None, CoreRouteFailureCode.INVALID_INPUT, "not eligible"
+        )
+        self.core.route.return_value = non_brain_result
+        envelope_type = Mock(wraps=universal_ingestion.EventEnvelope)
+
+        with patch.object(universal_ingestion, "EventEnvelope", envelope_type):
+            result = await self.ingest(
+                brain_semantic_data={"synthetic": True},
+                core_to_brain_mapper=actual_mapper,
+                brain_boundary=self.brain_boundary,
+                correlation_id_factory=self.correlation_factory,
+            )
+
+        self.correlation_factory.assert_called_once_with()
+        self.assertEqual(envelope_type.call_count, 1)
+        self.assertEqual(
+            envelope_type.call_args.kwargs["correlation_id"], self.CORRELATION_ID
+        )
+        envelope = self.engine.process.await_args.args[0]
+        self.assertEqual(envelope.correlation_id, self.CORRELATION_ID)
+        self.core.route.assert_awaited_once_with(envelope)
+        request_id_factory.assert_not_called()
+        self.brain_boundary.assert_not_awaited()
+        self.assertFalse(result.route_handoff_ready)
+        self.assertIsNone(result.brain_result)
+
+    async def test_eligible_attempt_passes_exact_objects_and_provenance_once(self):
+        semantic_data = {"synthetic": {"value": 1}}
+        brain_input = object()
+        expected_result = object()
+        self.mapper.map.return_value = brain_input
+        self.brain_boundary.return_value = expected_result
+        envelope_type = Mock(wraps=universal_ingestion.EventEnvelope)
+
+        with patch.object(universal_ingestion, "EventEnvelope", envelope_type):
+            result = await self.ingest(
+                brain_semantic_data=semantic_data,
+                brain_input_reference="opaque-input",
+                brain_context_references=("opaque-context-1", "opaque-context-2"),
+                core_to_brain_mapper=self.mapper,
+                brain_boundary=self.brain_boundary,
+                correlation_id_factory=self.correlation_factory,
+            )
+
+        self.correlation_factory.assert_called_once_with()
+        self.assertEqual(envelope_type.call_count, 1)
+        envelope = self.engine.process.await_args.args[0]
+        self.assertEqual(envelope.correlation_id, self.CORRELATION_ID)
+        self.core.route.assert_awaited_once_with(envelope)
+        self.mapper.map.assert_called_once_with(
+            route_result=self.route_result,
+            correlation_id=self.CORRELATION_ID,
+            data=semantic_data,
+            input_reference="opaque-input",
+            context_references=("opaque-context-1", "opaque-context-2"),
+        )
+        self.assertIs(self.mapper.map.call_args.kwargs["route_result"], self.route_result)
+        self.assertIs(self.mapper.map.call_args.kwargs["data"], semantic_data)
+        self.brain_boundary.assert_awaited_once_with(brain_input)
+        self.assertIs(result.brain_result, expected_result)
+
+    async def test_success_and_failed_inference_result_identity_is_preserved(self):
+        results = (
+            InferenceResult(
+                schema_version=1,
+                correlation_id=self.CORRELATION_ID,
+                request_id="brain-request-success",
+                success=True,
+                failure_code=None,
+                structured_output={"answer": "synthetic"},
+                provider_id="fake-provider",
+                model_id="fake-model",
+                duration_ms=1,
+            ),
+            InferenceResult(
+                schema_version=1,
+                correlation_id=self.CORRELATION_ID,
+                request_id="brain-request-failure",
+                success=False,
+                failure_code=FailureCode.RUNTIME_UNAVAILABLE,
+                structured_output=None,
+                provider_id=None,
+                model_id=None,
+                duration_ms=0,
+            ),
+        )
+        for expected in results:
+            with self.subTest(success=expected.success):
+                self.brain_boundary.reset_mock()
+                self.mapper.map.reset_mock()
+                self.correlation_factory.reset_mock()
+                self.brain_boundary.return_value = expected
+                result = await self.ingest(
+                    brain_semantic_data={"synthetic": True},
+                    core_to_brain_mapper=self.mapper,
+                    brain_boundary=self.brain_boundary,
+                    correlation_id_factory=self.correlation_factory,
+                )
+                self.assertIs(result.brain_result, expected)
+                self.mapper.map.assert_called_once()
+                self.brain_boundary.assert_awaited_once()
+                self.correlation_factory.assert_called_once()
+
+    async def test_explicit_attempt_requires_mapper_and_boundary(self):
+        with self.assertRaisesRegex(ValueError, "core_to_brain_mapper"):
+            await self.ingest(
+                brain_semantic_data={"synthetic": True},
+                brain_boundary=self.brain_boundary,
+                correlation_id_factory=self.correlation_factory,
+            )
+        self.correlation_factory.assert_not_called()
+
+        with self.assertRaisesRegex(ValueError, "brain_boundary"):
+            await self.ingest(
+                brain_semantic_data={"synthetic": True},
+                core_to_brain_mapper=self.mapper,
+                correlation_id_factory=self.correlation_factory,
+            )
+        self.correlation_factory.assert_not_called()
+
+    async def test_correlation_factory_contract_is_bounded(self):
+        cases = (
+            (None, TypeError, "callable"),
+            (lambda: "not-a-uuid", ValueError, "UUIDv4"),
+            (lambda: uuid.UUID("01234567-89ab-1def-8123-456789abcdef"), ValueError, "UUIDv4"),
+        )
+        for factory, exception, message in cases:
+            with self.subTest(factory=factory):
+                with self.assertRaisesRegex(exception, message):
+                    await self.ingest(
+                        brain_semantic_data={"synthetic": True},
+                        core_to_brain_mapper=self.mapper,
+                        brain_boundary=self.brain_boundary,
+                        correlation_id_factory=factory,
+                    )
+                self.mapper.map.assert_not_called()
+                self.brain_boundary.assert_not_awaited()
+
+    async def test_mapper_failures_propagate_without_retry_or_fallback(self):
+        failures = (
+            TypeError("mapper type"),
+            ValueError("mapper value"),
+            RuntimeError("mapper unexpected"),
+            asyncio.CancelledError(),
+        )
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__):
+                self.mapper.map.reset_mock()
+                self.brain_boundary.reset_mock()
+                self.correlation_factory.reset_mock()
+                self.mapper.map.side_effect = failure
+                with self.assertRaises(type(failure)):
+                    await self.ingest(
+                        brain_semantic_data={"synthetic": True},
+                        core_to_brain_mapper=self.mapper,
+                        brain_boundary=self.brain_boundary,
+                        correlation_id_factory=self.correlation_factory,
+                    )
+                self.mapper.map.assert_called_once()
+                self.brain_boundary.assert_not_awaited()
+                self.correlation_factory.assert_called_once()
+        self.mapper.map.side_effect = None
+
+    async def test_brain_failures_propagate_without_retry_or_fallback(self):
+        failures = (
+            TypeError("brain type"),
+            ValueError("brain value"),
+            RuntimeError("brain unexpected"),
+            asyncio.CancelledError(),
+        )
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__):
+                self.mapper.map.reset_mock()
+                self.brain_boundary.reset_mock()
+                self.correlation_factory.reset_mock()
+                self.brain_boundary.side_effect = failure
+                with self.assertRaises(type(failure)):
+                    await self.ingest(
+                        brain_semantic_data={"synthetic": True},
+                        core_to_brain_mapper=self.mapper,
+                        brain_boundary=self.brain_boundary,
+                        correlation_id_factory=self.correlation_factory,
+                    )
+                self.mapper.map.assert_called_once()
+                self.brain_boundary.assert_awaited_once()
+                self.correlation_factory.assert_called_once()
+        self.brain_boundary.side_effect = None
+
+    def test_level_a_source_has_no_activation_or_side_effect_mechanisms(self):
+        source = (
+            REPOSITORY_ROOT / "core/ingestion/universal_ingestion.py"
+        ).read_text(encoding="utf-8")
+        prohibited = (
+            "BrainSemanticReceiver",
+            "BrainInferenceInvoker",
+            "OllamaInferenceProvider",
+            "InferenceProvider",
+            "httpx",
+            "asyncio.run",
+            "create_task",
+            "run_in_executor",
+            "to_thread",
+            "structured_output.send",
+        )
+        for marker in prohibited:
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, source)
 
 
 if __name__ == "__main__":

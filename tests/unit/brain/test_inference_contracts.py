@@ -424,6 +424,7 @@ def test_contract_imports_are_provider_neutral_stdlib_only() -> None:
 
 def test_core_has_no_reverse_brain_dependency() -> None:
     mapper_path = ROOT / "core/core_to_brain_mapper.py"
+    ingestion_path = ROOT / "core/ingestion/universal_ingestion.py"
     allowed_mapper_import = {
         ("BRAIN_INPUT_SCHEMA_VERSION", None),
         ("BrainInput", None),
@@ -462,6 +463,46 @@ def test_core_has_no_reverse_brain_dependency() -> None:
             )
             assert "from .brain" not in source
             assert "from core import brain" not in source
+            continue
+        if path == ingestion_path:
+            tree = ast.parse(source, filename=str(path))
+            type_checking_blocks = [
+                node
+                for node in tree.body
+                if isinstance(node, ast.If)
+                and isinstance(node.test, ast.Name)
+                and node.test.id == "TYPE_CHECKING"
+            ]
+            assert len(type_checking_blocks) == 1
+            brain_imports = [
+                node
+                for node in type_checking_blocks[0].body
+                if isinstance(node, ast.ImportFrom)
+            ]
+            assert {
+                (node.level, node.module, tuple(alias.name for alias in node.names))
+                for node in brain_imports
+            } == {
+                (2, "brain.input_contracts", ("BrainInput",)),
+                (2, "brain.inference_contracts", ("InferenceResult",)),
+            }
+            all_brain_imports = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom)
+                and node.module is not None
+                and (
+                    (node.level == 0 and (
+                        node.module == "core.brain"
+                        or node.module.startswith("core.brain.")
+                    ))
+                    or (node.level == 2 and (
+                        node.module == "brain"
+                        or node.module.startswith("brain.")
+                    ))
+                )
+            ]
+            assert all_brain_imports == brain_imports
             continue
         if (
             "core.brain" in source
