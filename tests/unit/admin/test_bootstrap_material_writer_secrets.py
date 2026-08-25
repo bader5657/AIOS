@@ -7,6 +7,7 @@ import logging
 import os
 import stat
 import subprocess
+import signal
 import sys
 from pathlib import Path
 
@@ -170,9 +171,9 @@ def test_atomic_write_failure_cleans_temp_and_preserves_target(fixture_policy, m
 
 
 def test_lock_contention_fails_closed(fixture_policy):
-    with helper.ExclusiveLock(fixture_policy.lock_file):
+    with helper.ExclusiveLock(fixture_policy):
         with pytest.raises(helper.BootstrapError, match="bootstrap lock unavailable"):
-            with helper.ExclusiveLock(fixture_policy.lock_file):
+            with helper.ExclusiveLock(fixture_policy):
                 pass
 
 
@@ -233,7 +234,7 @@ class RecordingRunner:
 
 
 def test_logging_preflight_safe_then_no_collision():
-    runner = RecordingRunner([helper.ProcessResult(0, b"none|-1|off|\n"), helper.ProcessResult(0, b"")])
+    runner = RecordingRunner([helper.ProcessResult(0, b"none|-1|off|panic|-1|0|0||||\n"), helper.ProcessResult(0, b"")])
     helper.Postgres(runner).preflight()
     assert runner.calls[0][0] == helper.ADMIN_ARGV
     assert b"log_statement" in runner.calls[0][1]
@@ -249,7 +250,7 @@ def test_unsafe_logging_posture_blocks_before_collision(posture):
 
 
 def test_role_collision_blocks():
-    runner = RecordingRunner([helper.ProcessResult(0, b"none|-1|off|\n"), helper.ProcessResult(0, b"existing\n")])
+    runner = RecordingRunner([helper.ProcessResult(0, b"none|-1|off|panic|-1|0|0||||\n"), helper.ProcessResult(0, b"existing\n")])
     with pytest.raises(helper.BootstrapError, match="database identity collision"):
         helper.Postgres(runner).preflight()
 
@@ -261,9 +262,9 @@ def test_sql_is_fixed_transaction_and_exact_contract():
     for identity in helper.ROLES:
         assert identity in sql
     for key_fragment in (
-        "GRANT SELECT ON TABLE material_receipts, material_receipt_items, material_stock TO aios_material_receipt_candidate_writer",
-        "GRANT UPDATE (status, updated_at) ON material_receipts TO aios_material_inventory_posting_writer",
-        "GRANT UPDATE (stock_qty, updated_at) ON material_stock TO aios_material_inventory_posting_writer",
+        "GRANT SELECT ON TABLE public.material_receipts, public.material_receipt_items, public.material_stock TO aios_material_receipt_candidate_writer",
+        "GRANT UPDATE (status, updated_at) ON public.material_receipts TO aios_material_inventory_posting_writer",
+        "GRANT UPDATE (stock_qty, updated_at) ON public.material_stock TO aios_material_inventory_posting_writer",
         "has_database_privilege", "has_schema_privilege", "has_table_privilege", "has_column_privilege",
         "pg_roles", "pg_auth_members", "pg_class", "aclexplode",
     ):
@@ -303,10 +304,11 @@ def test_auth_password_uses_inherited_private_pipe_not_argv(monkeypatch):
 
 
 class FakePostgres:
-    def __init__(self, *, provision_failure=False, auth=False):
+    def __init__(self, *, provision_failure=False, auth=False, outcome=helper.LifecycleState.DB_ROLLED_BACK):
         self.events = []
         self.provision_failure = provision_failure
         self.auth = auth
+        self.outcome = outcome
 
     def preflight(self):
         self.events.append("preflight")
@@ -315,6 +317,11 @@ class FakePostgres:
         self.events.append("provision")
         if self.provision_failure:
             raise helper.BootstrapError("database provisioning failed")
+        return True
+
+    def reconcile(self):
+        self.events.append("reconcile")
+        return self.outcome
 
     def authenticate(self, *_):
         self.events.append("authenticate")
@@ -335,10 +342,10 @@ def deterministic_generator():
 def test_db_transaction_failure_restores_original_and_cleans(fixture_policy):
     original = fixture_policy.env_file.read_bytes()
     postgres = FakePostgres(provision_failure=True)
-    with pytest.raises(helper.BootstrapError, match="database provisioning failed"):
+    with pytest.raises(helper.BootstrapError, match="database provisioning rolled back"):
         helper.bootstrap(fixture_policy, postgres, deterministic_generator())
     assert fixture_policy.env_file.read_bytes() == original
-    assert postgres.events == ["preflight", "provision"]
+    assert postgres.events == ["preflight", "provision", "reconcile"]
     assert not list(fixture_policy.env_file.parent.glob(".runtime.env.bootstrap.*"))
 
 
@@ -348,7 +355,7 @@ def test_post_commit_auth_failure_disables_then_restores_and_verifies(fixture_po
     with pytest.raises(helper.BootstrapError, match="identities disabled"):
         helper.bootstrap(fixture_policy, postgres, deterministic_generator())
     assert fixture_policy.env_file.read_bytes() == original
-    assert postgres.events == ["preflight", "provision", "authenticate", "compensate", "verify_disabled"]
+    assert postgres.events == ["preflight", "provision", "authenticate", "compensate"]
     assert not list(fixture_policy.env_file.parent.glob(".runtime.env.bootstrap.*"))
 
 
@@ -410,3 +417,205 @@ def test_subprocess_runner_does_not_use_shell(monkeypatch):
     helper.subprocess_runner(("fixed",), b"sql", None, ())
     assert "shell" not in captured
     assert captured["input"] == b"sql"
+
+def test_untrusted_ancestor_causes_zero_filesystem_mutation(fixture_policy):
+    os.chmod(fixture_policy.rules[2].path, 0o770)
+    before = set(fixture_policy.rules[2].path.iterdir())
+    with pytest.raises(helper.BootstrapError):
+        helper.bootstrap(fixture_policy, FakePostgres(), deterministic_generator())
+    assert set(fixture_policy.rules[2].path.iterdir()) == before
+    assert not fixture_policy.lock_file.exists()
+
+
+@pytest.mark.parametrize("kind", ["symlink", "wrong_mode", "hardlink"])
+def test_untrusted_preexisting_lock_rejected(fixture_policy, kind):
+    lock = fixture_policy.lock_file
+    if kind == "symlink":
+        lock.symlink_to(fixture_policy.env_file)
+    else:
+        lock.write_bytes(b"")
+        os.chmod(lock, 0o600 if kind == "hardlink" else 0o640)
+        if kind == "hardlink":
+            os.link(lock, lock.with_name("lock.link"))
+    before = fixture_policy.env_file.read_bytes()
+    with pytest.raises(helper.BootstrapError):
+        with helper.ExclusiveLock(fixture_policy):
+            pass
+    assert fixture_policy.env_file.read_bytes() == before
+
+
+def test_retained_lock_is_valid_and_reusable(fixture_policy):
+    with helper.ExclusiveLock(fixture_policy):
+        metadata = os.lstat(fixture_policy.lock_file)
+        assert stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
+        assert metadata.st_uid == fixture_policy.uid and metadata.st_gid == fixture_policy.gid
+        assert stat.S_IMODE(metadata.st_mode) == 0o600
+    with helper.ExclusiveLock(fixture_policy):
+        pass
+
+@pytest.mark.parametrize("operation", ["fchown", "fchmod", "fsync", "replace", "parent_fsync"])
+def test_atomic_metadata_or_replace_failure_cleans(operation, fixture_policy, monkeypatch):
+    original = fixture_policy.env_file.read_bytes()
+    if operation == "parent_fsync":
+        monkeypatch.setattr(helper, "_fsync_directory", lambda *_: (_ for _ in ()).throw(OSError("simulated")))
+    else:
+        monkeypatch.setattr(helper.os, operation, lambda *_: (_ for _ in ()).throw(OSError("simulated")))
+    with pytest.raises(helper.BootstrapError):
+        helper.atomic_write(fixture_policy.env_file, b"replacement\n", fixture_policy.uid, fixture_policy.gid)
+    assert not list(fixture_policy.env_file.parent.glob(".runtime.env.bootstrap.*"))
+    if operation != "parent_fsync":
+        assert fixture_policy.env_file.read_bytes() == original
+
+
+def test_atomic_metadata_mismatch_rejected_before_rename(fixture_policy, monkeypatch):
+    original = fixture_policy.env_file.read_bytes()
+    real_fstat = helper.os.fstat
+    calls = 0
+    def mismatching(fd):
+        nonlocal calls
+        calls += 1
+        value = real_fstat(fd)
+        if calls == 2:
+            values = list(value)
+            values[4] = value.st_uid + 1
+            return os.stat_result(values)
+        return value
+    monkeypatch.setattr(helper.os, "fstat", mismatching)
+    with pytest.raises(helper.BootstrapError, match="temporary file invariant failed"):
+        helper.atomic_write(fixture_policy.env_file, b"new\n", fixture_policy.uid, fixture_policy.gid)
+    assert fixture_policy.env_file.read_bytes() == original
+
+
+def test_atomic_fsync_occurs_before_and_after_metadata(fixture_policy, monkeypatch):
+    real_fsync = helper.os.fsync
+    calls = []
+    def observing(fd):
+        calls.append(fd)
+        return real_fsync(fd)
+    monkeypatch.setattr(helper.os, "fsync", observing)
+    helper.atomic_write(fixture_policy.env_file, b"durable\n", fixture_policy.uid, fixture_policy.gid)
+    assert len(calls) >= 3
+
+@pytest.mark.parametrize("unsafe", [
+    b"all|-1|off|panic|-1|0|0||||\n",
+    b"none|0|off|panic|-1|0|0||||\n",
+    b"none|-1|on|panic|-1|0|0||||\n",
+    b"none|-1|off|error|-1|0|0||||\n",
+    b"none|-1|off|panic|0|0|0||||\n",
+    b"none|-1|off|panic|-1|1|0||||\n",
+    b"none|-1|off|panic|-1|0|1||||\n",
+    b"none|-1|off|panic|-1|0|0|pg_stat_statements|||\n",
+    b"none|-1|off|panic|-1|0|0||auto_explain||\n",
+    b"none|-1|off|panic|-1|0|0||||pgaudit\n",
+])
+def test_every_known_unsafe_logging_state_blocks(unsafe):
+    runner = RecordingRunner([helper.ProcessResult(0, unsafe)])
+    with pytest.raises(helper.BootstrapError, match="unsafe PostgreSQL logging posture"):
+        helper.Postgres(runner).preflight()
+    assert len(runner.calls) == 1
+
+
+def test_all_governed_relations_are_schema_qualified():
+    sql = helper.provisioning_sql(secret(b"a"), secret(b"b")).decode()
+    for table in helper.GOVERNED_TABLES:
+        assert f"public.{table}" in sql
+    assert "SET LOCAL search_path = pg_catalog" in sql
+    for line in sql.splitlines():
+        if line.startswith("GRANT") and " ON " in line:
+            assert "public." in line or "DATABASE" in line or "SCHEMA" in line
+
+
+def test_validator_has_independent_role_matrices_and_denials():
+    sql = helper.validation_sql()
+    assert f"('{helper.CANDIDATE_LOGIN}','candidate')" in sql
+    assert f"('{helper.POSTING_LOGIN}','posting')" in sql
+    assert "actual IS DISTINCT FROM expected" in sql
+    assert "runtime direct ACL validation failed" in sql
+    assert "table ACL assertion failed" in sql
+    assert "column ACL assertion failed" in sql
+    assert "unrelated relation privilege validation failed" in sql
+    assert "m.admin_option" in sql and "NOT rolinherit" in sql
+
+def test_compensation_is_transactional_and_verifies_exact_two():
+    runner = RecordingRunner([helper.ProcessResult(0, b""), helper.ProcessResult(0, b"2|t\n")])
+    helper.Postgres(runner).compensate()
+    sql = runner.calls[0][1]
+    assert sql.startswith(b"BEGIN;") and sql.endswith(b"COMMIT;\n")
+    assert sql.count(b"ALTER ROLE") == 2
+    assert b"count(*)" in sql and b"rolcanlogin" in sql
+
+
+@pytest.mark.parametrize("verification", [b"0|\n", b"1|t\n", b"2|f\n", b"3|t\n"])
+def test_compensation_failure_or_wrong_cardinality_escalates(verification):
+    runner = RecordingRunner([helper.ProcessResult(1, b""), helper.ProcessResult(0, verification)])
+    with pytest.raises(helper.BootstrapError, match="high-severity"):
+        helper.Postgres(runner).compensate()
+
+
+def test_reconcile_distinguishes_absent_committed_and_partial():
+    absent = RecordingRunner([helper.ProcessResult(0, b"")])
+    assert helper.Postgres(absent).reconcile() is helper.LifecycleState.DB_ROLLED_BACK
+    all_roles = ("\n".join(helper.ROLES) + "\n").encode()
+    committed = RecordingRunner([helper.ProcessResult(0, all_roles), helper.ProcessResult(0, b"")])
+    assert helper.Postgres(committed).reconcile() is helper.LifecycleState.DB_COMMITTED
+    partial = RecordingRunner([helper.ProcessResult(0, (helper.CANDIDATE_ROLE + "\n").encode())])
+    with pytest.raises(helper.BootstrapError, match="partial or unexpected"):
+        helper.Postgres(partial).reconcile()
+
+
+def test_lost_commit_response_reconciles_committed_then_authenticates(fixture_policy):
+    postgres = FakePostgres(provision_failure=True, auth=True, outcome=helper.LifecycleState.DB_COMMITTED)
+    helper.bootstrap(fixture_policy, postgres, deterministic_generator())
+    assert postgres.events == ["preflight", "provision", "reconcile", "authenticate"]
+
+
+def test_ambiguous_partial_state_preserves_staged_environment(fixture_policy):
+    class Partial(FakePostgres):
+        def reconcile(self):
+            self.events.append("reconcile")
+            raise helper.BootstrapError("database outcome is partial or unexpected")
+    postgres = Partial(provision_failure=True)
+    with pytest.raises(helper.BootstrapError, match="outcome remains unknown"):
+        helper.bootstrap(fixture_policy, postgres, deterministic_generator())
+    assert helper.CANDIDATE_KEY.encode() in fixture_policy.env_file.read_bytes()
+
+
+def test_signal_guard_restores_handlers():
+    before = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
+    with pytest.raises(helper.BootstrapError, match="interrupted"):
+        with helper.SignalGuard() as guard:
+            guard._interrupt(signal.SIGTERM, None)
+            guard.check()
+    assert {sig: signal.getsignal(sig) for sig in before} == before
+
+def test_partial_compensation_failure_preserves_staged_keys(fixture_policy):
+    class CompensationFails(FakePostgres):
+        def compensate(self):
+            self.events.append("compensate")
+            raise helper.BootstrapError("high-severity NOLOGIN compensation failure")
+    postgres = CompensationFails(auth=False)
+    with pytest.raises(helper.BootstrapError, match="high-severity"):
+        helper.bootstrap(fixture_policy, postgres, deterministic_generator())
+    assert helper.CANDIDATE_KEY.encode() in fixture_policy.env_file.read_bytes()
+    assert helper.POSTING_KEY.encode() in fixture_policy.env_file.read_bytes()
+
+
+def test_failed_new_lock_initialization_removes_only_new_inode(fixture_policy, monkeypatch):
+    monkeypatch.setattr(helper.os, "fchown", lambda *_: (_ for _ in ()).throw(OSError("simulated")))
+    with pytest.raises(helper.BootstrapError, match="lock unavailable"):
+        with helper.ExclusiveLock(fixture_policy):
+            pass
+    assert not fixture_policy.lock_file.exists()
+
+
+@pytest.mark.parametrize("outcome", [helper.LifecycleState.DB_ROLLED_BACK, helper.LifecycleState.DB_COMMITTED])
+def test_lost_client_response_uses_authoritative_outcome(fixture_policy, outcome):
+    postgres = FakePostgres(provision_failure=True, auth=True, outcome=outcome)
+    if outcome is helper.LifecycleState.DB_ROLLED_BACK:
+        with pytest.raises(helper.BootstrapError, match="rolled back"):
+            helper.bootstrap(fixture_policy, postgres, deterministic_generator())
+        assert fixture_policy.env_file.read_bytes() == b"UNCHANGED=yes\n"
+    else:
+        helper.bootstrap(fixture_policy, postgres, deterministic_generator())
+        assert helper.CANDIDATE_KEY.encode() in fixture_policy.env_file.read_bytes()
+    assert "reconcile" in postgres.events
