@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import importlib.util
 import io
 import logging
@@ -234,7 +235,7 @@ class RecordingRunner:
 
 
 def test_logging_preflight_safe_then_no_collision():
-    runner = RecordingRunner([helper.ProcessResult(0, b"none|-1|off|panic|-1|0|0||||\n"), helper.ProcessResult(0, b"")])
+    runner = RecordingRunner([helper.ProcessResult(0, b"none|-1|off|panic|-1|0|0||||\n"), helper.ProcessResult(0, b""), helper.ProcessResult(0, b"4|0\n0\n")])
     helper.Postgres(runner).preflight()
     assert runner.calls[0][0] == helper.ADMIN_ARGV
     assert b"log_statement" in runner.calls[0][1]
@@ -293,6 +294,11 @@ def test_auth_password_uses_inherited_private_pipe_not_argv(monkeypatch):
         observed.update(argv=argv, stdin=stdin, env=env, pass_fds=pass_fds)
         passfile = env["PGPASSFILE"]
         fd = int(passfile.rsplit("/", 1)[1])
+        metadata = os.fstat(fd)
+        observed["descriptor_regular"] = stat.S_ISREG(metadata.st_mode)
+        observed["descriptor_mode"] = stat.S_IMODE(metadata.st_mode)
+        observed["descriptor_links"] = metadata.st_nlink
+        observed["seals"] = fcntl.fcntl(fd, fcntl.F_GET_SEALS)
         observed["pipe"] = os.read(fd, 4096)
         return helper.ProcessResult(0, b"")
 
@@ -301,6 +307,11 @@ def test_auth_password_uses_inherited_private_pipe_not_argv(monkeypatch):
     assert value._value not in observed["stdin"]
     assert value._value in observed["pipe"]
     assert observed["pass_fds"]
+    assert observed["descriptor_regular"] and observed["descriptor_mode"] == 0o600
+    assert observed["descriptor_links"] == 0
+    assert observed["seals"] & fcntl.F_SEAL_WRITE
+    with pytest.raises(OSError):
+        os.fstat(observed["pass_fds"][0])
 
 
 class FakePostgres:
@@ -345,7 +356,7 @@ def test_db_transaction_failure_restores_original_and_cleans(fixture_policy):
     with pytest.raises(helper.BootstrapError, match="database provisioning rolled back"):
         helper.bootstrap(fixture_policy, postgres, deterministic_generator())
     assert fixture_policy.env_file.read_bytes() == original
-    assert postgres.events == ["preflight", "provision", "reconcile"]
+    assert postgres.events == ["preflight", "preflight", "provision", "reconcile"]
     assert not list(fixture_policy.env_file.parent.glob(".runtime.env.bootstrap.*"))
 
 
@@ -355,7 +366,7 @@ def test_post_commit_auth_failure_disables_then_restores_and_verifies(fixture_po
     with pytest.raises(helper.BootstrapError, match="identities disabled"):
         helper.bootstrap(fixture_policy, postgres, deterministic_generator())
     assert fixture_policy.env_file.read_bytes() == original
-    assert postgres.events == ["preflight", "provision", "authenticate", "compensate"]
+    assert postgres.events == ["preflight", "preflight", "provision", "authenticate", "compensate"]
     assert not list(fixture_policy.env_file.parent.glob(".runtime.env.bootstrap.*"))
 
 
@@ -364,7 +375,7 @@ def test_success_keeps_replacement_and_cleans(fixture_policy):
     helper.bootstrap(fixture_policy, postgres, deterministic_generator())
     content = fixture_policy.env_file.read_bytes()
     assert helper.CANDIDATE_KEY.encode() in content and helper.POSTING_KEY.encode() in content
-    assert postgres.events == ["preflight", "provision", "authenticate"]
+    assert postgres.events == ["preflight", "preflight", "provision", "authenticate"]
     assert not list(fixture_policy.env_file.parent.glob(".runtime.env.bootstrap.*"))
 
 
@@ -566,7 +577,7 @@ def test_reconcile_distinguishes_absent_committed_and_partial():
 def test_lost_commit_response_reconciles_committed_then_authenticates(fixture_policy):
     postgres = FakePostgres(provision_failure=True, auth=True, outcome=helper.LifecycleState.DB_COMMITTED)
     helper.bootstrap(fixture_policy, postgres, deterministic_generator())
-    assert postgres.events == ["preflight", "provision", "reconcile", "authenticate"]
+    assert postgres.events == ["preflight", "preflight", "provision", "reconcile", "authenticate"]
 
 
 def test_ambiguous_partial_state_preserves_staged_environment(fixture_policy):
@@ -619,3 +630,114 @@ def test_lost_client_response_uses_authoritative_outcome(fixture_policy, outcome
         helper.bootstrap(fixture_policy, postgres, deterministic_generator())
         assert helper.CANDIDATE_KEY.encode() in fixture_policy.env_file.read_bytes()
     assert "reconcile" in postgres.events
+
+
+def test_runtime_env_hardlink_rejected_before_every_side_effect(fixture_policy, monkeypatch):
+    linked = fixture_policy.env_file.with_name("runtime.env.link")
+    os.link(fixture_policy.env_file, linked)
+    before = {entry.name: (entry.stat().st_ino, entry.read_bytes()) for entry in fixture_policy.env_file.parent.iterdir()}
+    calls = {"generator": 0, "db": 0, "write": 0}
+
+    class NoDatabase:
+        def preflight(self):
+            calls["db"] += 1
+
+    def no_generator():
+        calls["generator"] += 1
+        return secret(b"x")
+
+    def no_write(*_args, **_kwargs):
+        calls["write"] += 1
+
+    monkeypatch.setattr(helper, "atomic_write", no_write)
+    with pytest.raises(helper.BootstrapError, match="filesystem invariant failed"):
+        helper.bootstrap(fixture_policy, NoDatabase(), no_generator)
+    after = {entry.name: (entry.stat().st_ino, entry.read_bytes()) for entry in fixture_policy.env_file.parent.iterdir()}
+    assert before == after
+    assert calls == {"generator": 0, "db": 0, "write": 0}
+    assert not fixture_policy.lock_file.exists()
+
+
+def test_public_acl_preflight_requires_four_tables_and_zero_acl_rows():
+    safe = RecordingRunner([
+        helper.ProcessResult(0, b"none|-1|off|panic|-1|0|0||||\n"),
+        helper.ProcessResult(0, b""),
+        helper.ProcessResult(0, b"4|0\n0\n"),
+    ])
+    helper.Postgres(safe).preflight()
+    for output in (b"4|1\n0\n", b"4|0\n1\n", b"3|0\n0\n"):
+        runner = RecordingRunner([
+            helper.ProcessResult(0, b"none|-1|off|panic|-1|0|0||||\n"),
+            helper.ProcessResult(0, b""),
+            helper.ProcessResult(0, output),
+        ])
+        with pytest.raises(helper.BootstrapError, match="unsafe PUBLIC governed ACL posture"):
+            helper.Postgres(runner).preflight()
+
+
+def test_authentication_probe_is_frozen_to_unix_socket():
+    value = secret(b"u")
+    runner = RecordingRunner()
+    assert helper.Postgres(runner)._probe(helper.CANDIDATE_LOGIN, value)
+    argv = runner.calls[0][0]
+    assert argv[argv.index("-h") + 1] == "/var/run/postgresql"
+    assert argv[argv.index("-p") + 1] == "5432"
+    assert argv[argv.index("-d") + 1] == "aios"
+    assert "localhost" not in argv and "127.0.0.1" not in argv
+    assert value._value not in b" ".join(part.encode() for part in argv)
+
+
+@pytest.mark.parametrize("identity", helper.ROLES)
+def test_each_collision_precedes_secret_generation_and_mutation(identity, fixture_policy, monkeypatch):
+    calls = {"generator": 0, "write": 0}
+    runner = RecordingRunner([
+        helper.ProcessResult(0, b"none|-1|off|panic|-1|0|0||||\n"),
+        helper.ProcessResult(0, (identity + "\n").encode("ascii")),
+    ])
+
+    def generator():
+        calls["generator"] += 1
+        return secret(b"c")
+
+    monkeypatch.setattr(helper, "atomic_write", lambda *_args, **_kwargs: calls.__setitem__("write", calls["write"] + 1))
+    with pytest.raises(helper.BootstrapError, match="database identity collision"):
+        helper.bootstrap(fixture_policy, helper.Postgres(runner), generator)
+    assert calls == {"generator": 0, "write": 0}
+    assert len(runner.calls) == 2
+    assert identity.encode("ascii") in runner.calls[1][1]
+    assert not fixture_policy.lock_file.exists()
+
+
+
+def test_lifecycle_order_is_exercised_by_orchestrator(fixture_policy, monkeypatch):
+    events = []
+    real_validate = helper.validate_filesystem
+    real_atomic = helper.atomic_write
+
+    def validate(policy):
+        events.append("filesystem")
+        return real_validate(policy)
+
+    def generate():
+        events.append("secret")
+        return secret(b"a" if events.count("secret") == 1 else b"b")
+
+    def atomic(*args, **kwargs):
+        events.append("env")
+        return real_atomic(*args, **kwargs)
+
+    class Ordered(FakePostgres):
+        def preflight(self):
+            events.append("preflight")
+        def provision(self, *_args):
+            events.append("provision")
+            return True
+        def authenticate(self, *_args):
+            events.append("authenticate")
+            return True
+
+    monkeypatch.setattr(helper, "validate_filesystem", validate)
+    monkeypatch.setattr(helper, "atomic_write", atomic)
+    helper.bootstrap(fixture_policy, Ordered(), generate)
+    assert events[:7] == ["filesystem", "preflight", "filesystem", "preflight", "secret", "secret", "env"]
+    assert events.index("env") < events.index("provision") < events.index("authenticate")

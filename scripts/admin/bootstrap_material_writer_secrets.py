@@ -34,10 +34,12 @@ LOCK_FILE = CONFIG / ".runtime.env.writer-bootstrap.lock"
 DOLLAR = chr(36)
 DATABASE = "aios"
 SCHEMA = "public"
+PG_SOCKET = "/var/run/postgresql"
+PG_PORT = "5432"
 ADMIN_ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
 ADMIN_ARGV = (
     "/usr/bin/sudo", "-n", "-u", "postgres", "/usr/bin/psql", "-X", "-A", "-t", "-q",
-    "-v", "ON_ERROR_STOP=1", "-h", "/var/run/postgresql", "-p", "5432", "-d", DATABASE,
+    "-v", "ON_ERROR_STOP=1", "-h", PG_SOCKET, "-p", PG_PORT, "-d", DATABASE,
 )
 
 CANDIDATE_KEY = "AIOS_MATERIAL_RECEIPT_CANDIDATE_DB_PASSWORD"
@@ -136,6 +138,7 @@ def validate_filesystem(policy: FilesystemPolicy) -> tuple[os.stat_result, ...]:
             or metadata.st_uid != policy.uid
             or metadata.st_gid != policy.gid
             or stat.S_IMODE(metadata.st_mode) != rule.mode
+            or (rule.regular and metadata.st_nlink != 1)
         ):
             raise BootstrapError("filesystem invariant failed")
         observed.append(metadata)
@@ -382,6 +385,24 @@ def collision_preflight_sql() -> bytes:
     return ("SELECT rolname FROM pg_roles WHERE rolname IN (" + frozen + ");\n").encode("ascii")
 
 
+def public_acl_preflight_sql() -> bytes:
+    """Return exact governed-relation existence and PUBLIC ACL posture."""
+    frozen = ", ".join(repr(table) for table in GOVERNED_TABLES)
+    return f"""\
+SELECT count(DISTINCT c.oid), count(a.*) FILTER (WHERE a.grantee = 0)
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN LATERAL aclexplode(c.relacl) a ON true
+WHERE n.nspname = '{SCHEMA}' AND c.relname IN ({frozen}) AND c.relkind IN ('r','p');
+SELECT count(*)
+FROM pg_attribute at
+JOIN pg_class c ON c.oid = at.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+CROSS JOIN LATERAL aclexplode(at.attacl) a
+WHERE n.nspname = '{SCHEMA}' AND c.relname IN ({frozen}) AND a.grantee = 0;
+""".encode("ascii")
+
+
 def provisioning_sql(candidate: Secret, posting: Secret) -> bytes:
     """Return the frozen transaction; secrets are safe alphabet-only literals."""
     for secret in (candidate, posting):
@@ -526,6 +547,9 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_class c, (VALUES ('{CANDIDATE_ROLE}'),('{CANDIDATE_LOGIN}'),('{POSTING_ROLE}'),('{POSTING_LOGIN}')) r(role_name), (VALUES ('SELECT'),('INSERT'),('UPDATE'),('DELETE'),('TRUNCATE'),('REFERENCES'),('TRIGGER')) p(action) WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','p','v','m','f') AND c.relname NOT IN ('material_receipts','material_receipt_items','inventory_movements','material_stock') AND has_table_privilege(r.role_name,c.oid,p.action)) THEN RAISE EXCEPTION 'unrelated relation privilege validation failed'; END IF;
   IF EXISTS (SELECT 1 FROM pg_shdepend d JOIN pg_roles r ON r.oid=d.refobjid WHERE d.refclassid='pg_authid'::regclass AND d.deptype='o' AND r.rolname IN ('{CANDIDATE_ROLE}','{CANDIDATE_LOGIN}','{POSTING_ROLE}','{POSTING_LOGIN}')) THEN RAISE EXCEPTION 'complete ownership validation failed'; END IF;
   IF EXISTS (SELECT 1 FROM pg_database d CROSS JOIN LATERAL aclexplode(d.datacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE r.rolname IN ('{CANDIDATE_LOGIN}','{POSTING_LOGIN}')) OR EXISTS (SELECT 1 FROM pg_namespace n CROSS JOIN LATERAL aclexplode(n.nspacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE r.rolname IN ('{CANDIDATE_LOGIN}','{POSTING_LOGIN}')) OR EXISTS (SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE r.rolname IN ('{CANDIDATE_LOGIN}','{POSTING_LOGIN}')) OR EXISTS (SELECT 1 FROM pg_attribute at CROSS JOIN LATERAL aclexplode(at.attacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE r.rolname IN ('{CANDIDATE_LOGIN}','{POSTING_LOGIN}')) THEN RAISE EXCEPTION 'runtime direct ACL validation failed'; END IF;
+  IF EXISTS (SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.relnamespace='public'::regnamespace AND c.relname IN ('material_receipts','material_receipt_items','inventory_movements','material_stock') AND a.grantee=0)
+     OR EXISTS (SELECT 1 FROM pg_attribute at JOIN pg_class c ON c.oid=at.attrelid CROSS JOIN LATERAL aclexplode(at.attacl) a WHERE c.relnamespace='public'::regnamespace AND c.relname IN ('material_receipts','material_receipt_items','inventory_movements','material_stock') AND a.grantee=0)
+  THEN RAISE EXCEPTION 'PUBLIC governed ACL validation failed'; END IF;
   IF (SELECT count(*) FROM pg_database d CROSS JOIN LATERAL aclexplode(d.datacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE d.datname='{DATABASE}' AND r.rolname IN ('{CANDIDATE_ROLE}','{POSTING_ROLE}') AND a.privilege_type='CONNECT' AND NOT a.is_grantable) <> 2 OR (SELECT count(*) FROM pg_namespace n CROSS JOIN LATERAL aclexplode(n.nspacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE n.nspname='public' AND r.rolname IN ('{CANDIDATE_ROLE}','{POSTING_ROLE}') AND a.privilege_type='USAGE' AND NOT a.is_grantable) <> 2 OR EXISTS (SELECT 1 FROM pg_database d CROSS JOIN LATERAL aclexplode(d.datacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE r.rolname IN ('{CANDIDATE_ROLE}','{POSTING_ROLE}') AND NOT (d.datname='{DATABASE}' AND a.privilege_type='CONNECT' AND NOT a.is_grantable)) OR EXISTS (SELECT 1 FROM pg_namespace n CROSS JOIN LATERAL aclexplode(n.nspacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE r.rolname IN ('{CANDIDATE_ROLE}','{POSTING_ROLE}') AND NOT (n.nspname='public' AND a.privilege_type='USAGE' AND NOT a.is_grantable)) THEN RAISE EXCEPTION 'database/schema direct ACL validation failed'; END IF;
   IF (SELECT count(*) FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE c.relnamespace='public'::regnamespace AND r.rolname IN ('{CANDIDATE_ROLE}','{POSTING_ROLE}')) <> 7 OR EXISTS (SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE c.relnamespace='public'::regnamespace AND r.rolname IN ('{CANDIDATE_ROLE}','{POSTING_ROLE}') AND NOT (a.privilege_type='SELECT' AND NOT a.is_grantable AND ((r.rolname='{CANDIDATE_ROLE}' AND c.relname IN ('material_receipts','material_receipt_items','material_stock')) OR (r.rolname='{POSTING_ROLE}' AND c.relname IN ('material_receipts','material_receipt_items','inventory_movements','material_stock'))))) THEN RAISE EXCEPTION 'table ACL assertion failed'; END IF;
   IF (SELECT count(*) FROM pg_attribute at JOIN pg_class c ON c.oid=at.attrelid CROSS JOIN LATERAL aclexplode(at.attacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE c.relnamespace='public'::regnamespace AND r.rolname IN ('{CANDIDATE_ROLE}','{POSTING_ROLE}')) <> 59
@@ -558,21 +582,28 @@ def subprocess_runner(argv: Sequence[str], stdin: bytes, env: Mapping[str, str] 
 
 
 def private_pgpass_probe(runner: Runner, argv: Sequence[str], host: str, port: str, database: str, login: str, password: Secret, sql: bytes) -> bool:
-    """Deliver one testable pgpass record through a single inherited read descriptor."""
-    read_fd, write_fd = os.pipe()
+    """Deliver one pgpass record through a sealed anonymous regular memfd."""
     try:
-        os.set_inheritable(read_fd, True)
+        fd = os.memfd_create("aios-writer-pgpass", os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
+    except (AttributeError, OSError) as exc:
+        raise BootstrapError("private PostgreSQL credential descriptor unavailable") from exc
+    try:
+        os.fchmod(fd, 0o600)
         line = host.encode("ascii") + b":" + port.encode("ascii") + b":" + database.encode("ascii") + b":" + login.encode("ascii") + b":" + password._value + bytes((10,))
-        os.write(write_fd, line)
-        os.close(write_fd)
-        write_fd = -1
+        written = os.write(fd, line)
+        if written != len(line):
+            raise BootstrapError("private PostgreSQL credential delivery failed")
+        os.lseek(fd, 0, os.SEEK_SET)
+        fcntl.fcntl(fd, fcntl.F_ADD_SEALS, fcntl.F_SEAL_SEAL | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_GROW | fcntl.F_SEAL_WRITE)
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o600 or metadata.st_nlink != 0:
+            raise BootstrapError("private PostgreSQL credential descriptor invariant failed")
         env = dict(ADMIN_ENV)
-        env["PGPASSFILE"] = f"/proc/self/fd/{read_fd}"
-        return runner(argv, sql, env, (read_fd,)).returncode == 0
+        env["PGPASSFILE"] = f"/proc/self/fd/{fd}"
+        return runner(argv, sql, env, (fd,)).returncode == 0
     finally:
-        if write_fd >= 0:
-            os.close(write_fd)
-        os.close(read_fd)
+        os.close(fd)
+
 
 
 class Postgres:
@@ -595,6 +626,9 @@ class Postgres:
         collision = self._admin(collision_preflight_sql())
         if collision.returncode != 0 or collision.stdout.strip():
             raise BootstrapError("database identity collision")
+        public_acl = self._admin(public_acl_preflight_sql())
+        if public_acl.returncode != 0 or public_acl.stdout.splitlines() != [b"4|0", b"0"]:
+            raise BootstrapError("unsafe PUBLIC governed ACL posture")
 
     def provision(self, candidate: Secret, posting: Secret) -> bool:
         return self._admin(provisioning_sql(candidate, posting)).returncode == 0
@@ -614,9 +648,9 @@ class Postgres:
         return LifecycleState.DB_COMMITTED
 
     def _probe(self, login: str, password: Secret) -> bool:
-        argv = ("/usr/bin/psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", "localhost", "-p", "5432", "-U", login, "-d", DATABASE)
+        argv = ("/usr/bin/psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", PG_SOCKET, "-p", PG_PORT, "-U", login, "-d", DATABASE)
         sql = b"SELECT 1; SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\n"
-        return private_pgpass_probe(self.runner, argv, "localhost", "5432", DATABASE, login, password, sql)
+        return private_pgpass_probe(self.runner, argv, "localhost", PG_PORT, DATABASE, login, password, sql)
 
     def authenticate(self, candidate: Secret, posting: Secret) -> bool:
         return self._probe(CANDIDATE_LOGIN, candidate) and self._probe(POSTING_LOGIN, posting)
@@ -691,15 +725,17 @@ def restore_environment(policy: FilesystemPolicy, original: bytes, metadata: os.
 def bootstrap(policy: FilesystemPolicy, postgres: Postgres, generator: Callable[[], Secret] = generate_secret) -> None:
     """Run the fixed lifecycle with authoritative DB-outcome reconciliation."""
     validate_filesystem(policy)  # read-only: no lock/temp mutation precedes trust
+    postgres.preflight()  # read-only logging, collision, schema and PUBLIC ACLs
     with SignalGuard() as signals, ExclusiveLock(policy):
         observed = validate_filesystem(policy)
+        signals.check()
+        # Repeat under lock so a completed peer cannot invalidate preflight.
+        postgres.preflight()
         signals.check()
         original_meta = observed[-1]
         original = read_validated_environment(policy.env_file, original_meta)
         candidate, posting = generate_secret_pair(generator)
         replacement = replace_governed_assignments(original, {CANDIDATE_KEY: candidate, POSTING_KEY: posting})
-        postgres.preflight()
-        signals.check()
         try:
             atomic_write(policy.env_file, replacement, policy.uid, policy.gid)
         except BootstrapError as exc:

@@ -34,13 +34,16 @@ def test_real_libpq_accepts_private_pgpass_descriptor():
         return helper.ProcessResult(completed.returncode, completed.stdout)
 
     argv = (executable, "-X", "-A", "-t", "-q", "-v", "ON_ERROR_STOP=1", "-h", host, "-p", port, "-U", login, "-d", database)
-    succeeded = helper.private_pgpass_probe(real_runner, argv, host, port, database, login, password, b"SELECT 1;\n")
+    pgpass_host = "localhost" if host.startswith("/") else host
+    succeeded = helper.private_pgpass_probe(real_runner, argv, pgpass_host, port, database, login, password, b"SELECT 1;\n")
     assert succeeded
     joined_argv = b" ".join(part.encode("utf-8") for part in observed["argv"])
     assert password_bytes not in joined_argv
     assert password_bytes not in observed["stdout"]
     assert password_bytes not in observed["stderr"]
     assert len(observed["pass_fds"]) == 1
+    with pytest.raises(OSError):
+        os.fstat(observed["pass_fds"][0])
 
 
 def test_real_postgresql_exact_validator_and_compensation():
@@ -53,10 +56,22 @@ def test_real_postgresql_exact_validator_and_compensation():
     login = os.environ.get("AIOS_TEST_PGPASS_USER", "pipe_test_user")
 
     diagnostics = []
+    observed_calls = []
 
-    def admin_runner(_argv, stdin, _env, _pass_fds):
-        argv = (executable, "-X", "-A", "-t", "-q", "-v", "ON_ERROR_STOP=1", "-h", host, "-p", port, "-U", login, "-d", database)
-        completed = subprocess.run(list(argv), input=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=dict(helper.ADMIN_ENV), check=False)
+    def admin_runner(requested_argv, stdin, requested_env, requested_pass_fds):
+        if requested_argv and requested_argv[0] == executable:
+            argv = tuple(requested_argv)
+            child_env = dict(requested_env)
+            pass_fds = requested_pass_fds
+        else:
+            argv = (executable, "-X", "-A", "-t", "-q", "-v", "ON_ERROR_STOP=1", "-h", host, "-p", port, "-U", login, "-d", database)
+            child_env = dict(helper.ADMIN_ENV)
+            admin_password = os.environ.get("AIOS_TEST_ADMIN_PASSWORD")
+            if admin_password:
+                child_env["PGPASSWORD"] = admin_password
+            pass_fds = ()
+        completed = subprocess.run(list(argv), input=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env, pass_fds=pass_fds, check=False)
+        observed_calls.append((argv, pass_fds))
         diagnostics.append(completed.stderr.replace(b"A" * 43, b"<redacted>").replace(b"B" * 43, b"<redacted>"))
         return helper.ProcessResult(completed.returncode, completed.stdout)
 
@@ -69,6 +84,12 @@ def test_real_postgresql_exact_validator_and_compensation():
     posting = helper.Secret(b"B" * 43)
     assert postgres.provision(candidate, posting), diagnostics[-1].decode("utf-8", "replace")
     assert postgres.reconcile() is helper.LifecycleState.DB_COMMITTED
+    assert postgres.authenticate(candidate, posting), diagnostics[-1].decode("utf-8", "replace")
+    probe_argv = [argv for argv, passed in observed_calls if passed]
+    assert len(probe_argv) == 2
+    assert all(argv[argv.index("-h") + 1] == "/var/run/postgresql" for argv in probe_argv)
+    assert all("localhost" not in argv and "127.0.0.1" not in argv for argv in probe_argv)
+    assert all(argv[argv.index("-p") + 1] == "5432" and argv[argv.index("-d") + 1] == "aios" for argv in probe_argv)
 
     def validation_passes():
         return admin_runner((), helper.validation_sql().encode("ascii"), None, ()).returncode == 0
@@ -82,6 +103,9 @@ def test_real_postgresql_exact_validator_and_compensation():
         (f"ALTER ROLE {helper.CANDIDATE_LOGIN} NOINHERIT;", f"ALTER ROLE {helper.CANDIDATE_LOGIN} INHERIT;"),
         (f"GRANT SELECT ON public.inventory_movements TO {helper.CANDIDATE_LOGIN};", f"REVOKE SELECT ON public.inventory_movements FROM {helper.CANDIDATE_LOGIN};"),
         (f"GRANT SELECT ON public.material_stock TO {helper.CANDIDATE_ROLE} WITH GRANT OPTION;", f"REVOKE GRANT OPTION FOR SELECT ON public.material_stock FROM {helper.CANDIDATE_ROLE};"),
+        ("GRANT SELECT ON public.material_receipts TO PUBLIC;", "REVOKE SELECT ON public.material_receipts FROM PUBLIC;"),
+        ("GRANT UPDATE ON public.material_stock TO PUBLIC;", "REVOKE UPDATE ON public.material_stock FROM PUBLIC;"),
+        (f"GRANT UPDATE (material_id) ON public.material_stock TO {helper.POSTING_ROLE};", f"REVOKE UPDATE (material_id) ON public.material_stock FROM {helper.POSTING_ROLE};"),
     )
     for apply_sql, undo_sql in adversarial:
         execute(apply_sql)
