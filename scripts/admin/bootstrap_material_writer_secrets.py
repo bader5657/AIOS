@@ -50,6 +50,10 @@ CONTAINER_INSPECT_ARGV = (
     POSTGRES_CONTAINER,
 )
 RUNTIME_BINDING_INSPECT_ARGV = (
+    DOCKER, "inspect", "--format", '{{json (index .NetworkSettings.Ports "5432/tcp")}}',
+    POSTGRES_CONTAINER,
+)
+RUNTIME_CONFIGURED_BINDING_INSPECT_ARGV = (
     DOCKER, "inspect", "--format", '{{json (index .HostConfig.PortBindings "5432/tcp")}}',
     POSTGRES_CONTAINER,
 )
@@ -422,14 +426,18 @@ FROM pg_hba_file_rules;
 """.encode("ascii")
 
 
-def validate_runtime_binding(output: bytes) -> None:
-    """Accept only the single frozen numeric-loopback Docker publication."""
+def _parse_runtime_binding(output: bytes) -> object:
     try:
-        bindings = json.loads(output.decode("ascii"))
+        return json.loads(output.decode("ascii"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise BootstrapError("runtime PostgreSQL binding preflight failed") from exc
+
+
+def validate_runtime_bindings(effective_output: bytes, configured_output: bytes) -> None:
+    """Require effective and configured state to agree on one frozen publication."""
     expected = [{"HostIp": RUNTIME_PROBE_HOST, "HostPort": RUNTIME_PROBE_PORT}]
-    if bindings != expected:
+    if (_parse_runtime_binding(effective_output) != expected
+            or _parse_runtime_binding(configured_output) != expected):
         raise BootstrapError("unsafe runtime PostgreSQL publication")
 
 
@@ -464,7 +472,9 @@ matching AS (
   JOIN pg_hba_file_rules r ON r.error IS NULL
    AND r.type IN ('host', 'hostnossl')
    AND ('all' = ANY(r.database) OR '{RUNTIME_PROBE_DATABASE}' = ANY(r.database))
-   AND ('all' = ANY(r.user_name) OR t.login = ANY(r.user_name))
+   AND ('all' = ANY(r.user_name) OR t.login = ANY(r.user_name)
+        OR (t.login = '{CANDIDATE_LOGIN}' AND '+{CANDIDATE_ROLE}' = ANY(r.user_name))
+        OR (t.login = '{POSTING_LOGIN}' AND '+{POSTING_ROLE}' = ANY(r.user_name)))
    AND CASE
      WHEN r.address = 'all' THEN true
      WHEN r.address ~ '^[0-9A-Fa-f:.]+$'
@@ -502,7 +512,7 @@ allowed = ('{CANDIDATE_LOGIN}', '{POSTING_LOGIN}')
 if len(sys.argv) != 2 or sys.argv[1] not in allowed:
     raise SystemExit(2)
 with psycopg.connect(host='{RUNTIME_PROBE_HOST}', port={int(RUNTIME_PROBE_PORT)},
-                     dbname='{RUNTIME_PROBE_DATABASE}', user=sys.argv[1], connect_timeout=5) as connection:
+                     dbname='{RUNTIME_PROBE_DATABASE}', user=sys.argv[1], sslmode='disable', connect_timeout=5) as connection:
     with connection.cursor() as cursor:
         cursor.execute("SELECT 1")
         if cursor.fetchone() != (1,):
@@ -759,12 +769,15 @@ class Postgres:
     def _runtime_preflight(self) -> None:
         try:
             binding = self.runner(RUNTIME_BINDING_INSPECT_ARGV, b"", ADMIN_ENV, ())
+            configured = self.runner(RUNTIME_CONFIGURED_BINDING_INSPECT_ARGV, b"", ADMIN_ENV, ())
             gateway = self.runner(RUNTIME_GATEWAY_INSPECT_ARGV, b"", ADMIN_ENV, ())
         except (OSError, subprocess.SubprocessError) as exc:
             raise BootstrapError("runtime PostgreSQL Docker preflight unavailable") from exc
         if binding.returncode != 0:
             raise BootstrapError("runtime PostgreSQL binding preflight failed")
-        validate_runtime_binding(binding.stdout.strip())
+        if configured.returncode != 0:
+            raise BootstrapError("runtime PostgreSQL configured binding preflight failed")
+        validate_runtime_bindings(binding.stdout.strip(), configured.stdout.strip())
         if gateway.returncode != 0:
             raise BootstrapError("runtime PostgreSQL gateway preflight failed")
         gateway_address = validate_runtime_gateway(gateway.stdout)
@@ -838,6 +851,11 @@ class Postgres:
 
     def authenticate(self, candidate: Secret, posting: Secret) -> bool:
         return self._probe(CANDIDATE_LOGIN, candidate) and self._probe(POSTING_LOGIN, posting)
+
+    def revalidate_runtime_transport(self) -> None:
+        """Recheck the governed data plane immediately before LOGIN probes."""
+        self._container_preflight()
+        self._runtime_preflight()
 
     def compensate(self) -> None:
         sql = f"""\
@@ -948,6 +966,7 @@ def bootstrap(policy: FilesystemPolicy, postgres: Postgres, generator: Callable[
             signals.check()
 
             try:
+                postgres.revalidate_runtime_transport()
                 authenticated = postgres.authenticate(candidate, posting)
             except BootstrapError:
                 authenticated = False

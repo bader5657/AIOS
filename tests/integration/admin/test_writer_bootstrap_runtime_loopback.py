@@ -61,13 +61,18 @@ def loopback_postgres(monkeypatch, isolated_network):
     )
     assert started.returncode == 0, started.stderr.decode("utf-8", "replace")
     try:
-        for _ in range(120):
-            health = docker("inspect", "--format", "{{.State.Health.Status}}", TEST_CONTAINER)
-            if health.stdout.strip() == b"healthy":
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            ready = docker(
+                "exec", "-i", TEST_CONTAINER, "/usr/local/bin/psql", "-X", "-A", "-t", "-q",
+                "-v", "ON_ERROR_STOP=1", "-h", "/var/run/postgresql", "-U", "aios", "-d", "aios",
+                stdin=b"SELECT 1;\n",
+            )
+            if ready.returncode == 0 and ready.stdout.strip() == b"1":
                 break
             time.sleep(0.25)
         else:
-            pytest.fail("disposable PostgreSQL did not become healthy")
+            pytest.fail("disposable PostgreSQL readiness query timed out")
 
         publication = docker("port", TEST_CONTAINER, "5432/tcp")
         assert publication.returncode == 0
@@ -96,14 +101,18 @@ CREATE ROLE {helper.POSTING_LOGIN} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
         docker("stop", "--time", "1", TEST_CONTAINER)
 
 
-def test_real_scram_runtime_probes_use_only_numeric_loopback(loopback_postgres):
+def test_real_scram_runtime_probes_use_only_numeric_loopback(loopback_postgres, capsys):
     port = loopback_postgres
     runner = helper.subprocess_runner
     postgres = helper.Postgres(runner)
+    assert not postgres._probe(helper.POSTING_LOGIN, helper.Secret(b"wrong-password"))
 
     assert postgres._probe(helper.CANDIDATE_LOGIN, helper.Secret(CANDIDATE_PASSWORD))
     assert postgres._probe(helper.POSTING_LOGIN, helper.Secret(POSTING_PASSWORD))
     assert not postgres._probe(helper.CANDIDATE_LOGIN, helper.Secret(b"wrong-password"))
+    captured = capsys.readouterr()
+    assert CANDIDATE_PASSWORD.decode() not in captured.out + captured.err
+    assert POSTING_PASSWORD.decode() not in captured.out + captured.err
 
     argv = (*helper.RUNTIME_PROBE_ARGV, helper.CANDIDATE_LOGIN)
     assert not helper.private_pgpass_probe(
@@ -116,6 +125,7 @@ def test_real_scram_runtime_probes_use_only_numeric_loopback(loopback_postgres):
         "inspect", "--format", '{{json (index .NetworkSettings.Ports "5432/tcp")}}',
         TEST_CONTAINER,
     )
+    assert b"sslmode='disable'" in helper.runtime_probe_program()
     bindings = json.loads(inspected.stdout)
     assert len(bindings) == 1
     assert bindings[0]["HostIp"] == "127.0.0.1"
