@@ -32,44 +32,88 @@ def _is_uuid_json_name(name: str) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class SourceContext:
-    """Canonical identity for retained Universal Ingestion evidence."""
+    """Canonical identity for retained Universal Ingestion evidence.
+
+    Frozen DTOs provide normal immutability, not proof that construction-time
+    validation occurred. Public boundaries revalidate current field values.
+    """
 
     manifest_reference: str
     registry_record_id: int | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.manifest_reference, str):
+        self._validate_values(self.manifest_reference, self.registry_record_id)
+
+    @staticmethod
+    def _validate_values(
+        manifest_reference: object, registry_record_id: object
+    ) -> None:
+        if not isinstance(manifest_reference, str):
             raise ValueError("manifest_reference must be canonical manifest identity")
-        if self.manifest_reference != self.manifest_reference.strip():
+        if manifest_reference != manifest_reference.strip():
             raise ValueError("manifest_reference must be canonical")
-        reference = PurePosixPath(self.manifest_reference)
+        reference = PurePosixPath(manifest_reference)
         if (
             not reference.is_absolute()
-            or str(reference) != self.manifest_reference
+            or str(reference) != manifest_reference
             or reference.parent != _MANIFEST_ROOT
             or not _is_uuid_json_name(reference.name)
         ):
             raise ValueError("manifest_reference must be canonical manifest identity")
-        if self.registry_record_id is not None and (
-            type(self.registry_record_id) is not int or self.registry_record_id <= 0
+        if registry_record_id is not None and (
+            type(registry_record_id) is not int or registry_record_id <= 0
         ):
             raise ValueError("registry_record_id must be a positive integer or None")
+
+    @classmethod
+    def validate(cls, value: object) -> SourceContext:
+        """Revalidate an exact DTO instance before any capability is used."""
+
+        if type(value) is not cls:
+            raise ValueError("source_context must be an exact SourceContext")
+        try:
+            manifest_reference = value.manifest_reference
+            registry_record_id = value.registry_record_id
+        except AttributeError as exc:
+            raise ValueError("source_context is incomplete") from exc
+        cls._validate_values(manifest_reference, registry_record_id)
+        return value
 
 
 @dataclass(frozen=True, slots=True)
 class ActorContext:
-    """Canonical review/audit identity with no operational authority."""
+    """Canonical review/audit identity with no operational authority.
+
+    Current values are revalidated at public boundaries even for exact frozen
+    instances because Python objects can be forged outside normal construction.
+    """
 
     actor_reference: str
 
     def __post_init__(self) -> None:
-        if (
-            not isinstance(self.actor_reference, str)
-            or _ACTOR_REFERENCE.fullmatch(self.actor_reference) is None
-        ):
+        self._validate_value(self.actor_reference)
+
+    @staticmethod
+    def _validate_value(actor_reference: object) -> None:
+        if not isinstance(actor_reference, str) or _ACTOR_REFERENCE.fullmatch(
+            actor_reference
+        ) is None:
             raise ValueError(
                 "actor_reference must match operator:<id> or reviewer:<id>"
             )
+
+    @classmethod
+    def validate(cls, value: object) -> ActorContext:
+        """Revalidate an exact DTO instance before any capability is used."""
+
+        if type(value) is not cls:
+            raise ValueError("actor_context must be an exact ActorContext")
+        try:
+            actor_reference = value.actor_reference
+        except AttributeError as exc:
+            raise ValueError("actor_context is incomplete") from exc
+        cls._validate_value(actor_reference)
+        return value
 
 
 class ReviewFacade:
@@ -89,8 +133,7 @@ class ReviewFacade:
         self, request: ReceiptCandidateRequest, source_context: SourceContext
     ) -> ReceiptForReview:
         self._require_request(request)
-        if type(source_context) is not SourceContext:
-            raise ReviewApplicationError(ReviewFailureCode.INVALID_REVIEW_REQUEST)
+        self._require_source_context(source_context)
         if request.source_asset_reference != source_context.manifest_reference:
             raise ReviewApplicationError(ReviewFailureCode.SOURCE_IDENTITY_CONFLICT)
         self._require_retained(source_context)
@@ -195,8 +238,21 @@ class ReviewFacade:
 
     @staticmethod
     def _require_actor(actor_context: object) -> None:
-        if type(actor_context) is not ActorContext:
-            raise ReviewApplicationError(ReviewFailureCode.INVALID_REVIEW_REQUEST)
+        try:
+            ActorContext.validate(actor_context)
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ReviewApplicationError(
+                ReviewFailureCode.INVALID_REVIEW_REQUEST
+            ) from exc
+
+    @staticmethod
+    def _require_source_context(source_context: object) -> None:
+        try:
+            SourceContext.validate(source_context)
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ReviewApplicationError(
+                ReviewFailureCode.INVALID_REVIEW_REQUEST
+            ) from exc
 
     @staticmethod
     def _candidate_error(exc: MaterialReceiptError) -> ReviewApplicationError:

@@ -386,3 +386,146 @@ async def test_candidate_and_unexpected_errors_are_sanitized() -> None:
         await facade.get_candidate_for_review(request.receipt_id, ActorContext("reviewer:system"))
     assert str(unexpected.value) == "INTERNAL_FAILURE"
     assert "secret" not in str(unexpected.value)
+
+
+def forge_source_context(
+    manifest_reference: object, registry_record_id: object = None
+) -> SourceContext:
+    context = object.__new__(SourceContext)
+    object.__setattr__(context, "manifest_reference", manifest_reference)
+    object.__setattr__(context, "registry_record_id", registry_record_id)
+    return context
+
+
+def forge_actor_context(actor_reference: object) -> ActorContext:
+    context = object.__new__(ActorContext)
+    object.__setattr__(context, "actor_reference", actor_reference)
+    return context
+
+
+def test_forged_source_contexts_fail_before_verifier_or_candidate_port() -> None:
+    invalid_values = (
+        ("/etc/passwd", None),
+        (
+            "/opt/aios/data/documents/manifests/not-a-canonical-uuid.json",
+            None,
+        ),
+        (manifest_reference(), 0),
+    )
+    for reference, registry_record_id in invalid_values:
+        request = candidate_request(reference)
+        port = RecordingCandidatePort(review_view(request))
+        verifier = FakeRetainedEvidenceVerifier(reference)
+        facade = ReviewFacade(port, verifier)
+
+        with pytest.raises(ReviewApplicationError) as caught:
+            asyncio.run(
+                facade.create_candidate(
+                    request,
+                    forge_source_context(reference, registry_record_id),
+                )
+            )
+
+        assert caught.value.code is ReviewFailureCode.INVALID_REVIEW_REQUEST
+        assert verifier.calls == []
+        assert port.calls == []
+
+
+def test_forged_actor_contexts_fail_before_revision_or_retrieval_port_calls() -> None:
+    invalid_values = (
+        "postgresql://user:secret@127.0.0.1:5432/aios",
+        "postgres://user:secret@127.0.0.1/database",
+        "password=secret",
+        "SELECT * FROM material_receipts",
+        "INSERT INTO material_receipts VALUES (1)",
+        "UPDATE material_receipts SET status=CONFIRMED",
+        "DELETE FROM material_receipts",
+        "KEY=value",
+        "/etc/passwd",
+        "../path",
+        "reviewer:bad\nactor",
+        "admin:actor",
+        "reviewer:",
+        "reviewer:" + "x" * 65,
+        "reviewer:\N{CYRILLIC SMALL LETTER A}",
+    )
+    for actor_reference in invalid_values:
+        request = candidate_request()
+        actor_context = forge_actor_context(actor_reference)
+
+        revision_port = RecordingCandidatePort(review_view(request))
+        with pytest.raises(ReviewApplicationError) as revision:
+            asyncio.run(
+                facade_for(revision_port).revise_candidate(
+                    request, 1, actor_context
+                )
+            )
+        assert revision.value.code is ReviewFailureCode.INVALID_REVIEW_REQUEST
+        assert revision_port.calls == []
+
+        retrieval_port = RecordingCandidatePort(review_view(request))
+        with pytest.raises(ReviewApplicationError) as retrieval:
+            asyncio.run(
+                facade_for(retrieval_port).get_candidate_for_review(
+                    request.receipt_id, actor_context
+                )
+            )
+        assert retrieval.value.code is ReviewFailureCode.INVALID_REVIEW_REQUEST
+        assert retrieval_port.calls == []
+
+
+def test_constructor_and_boundary_revalidation_share_canonical_invariants(
+    monkeypatch,
+) -> None:
+    source_calls: list[tuple[object, object]] = []
+    actor_calls: list[object] = []
+    source_validator = SourceContext._validate_values
+    actor_validator = ActorContext._validate_value
+
+    def record_source(manifest: object, registry: object) -> None:
+        source_calls.append((manifest, registry))
+        source_validator(manifest, registry)
+
+    def record_actor(actor: object) -> None:
+        actor_calls.append(actor)
+        actor_validator(actor)
+
+    monkeypatch.setattr(
+        SourceContext, "_validate_values", staticmethod(record_source)
+    )
+    monkeypatch.setattr(ActorContext, "_validate_value", staticmethod(record_actor))
+
+    source = SourceContext(manifest_reference(), registry_record_id=7)
+    actor = ActorContext("operator:review-7")
+    SourceContext.validate(source)
+    ActorContext.validate(actor)
+
+    assert source_calls == [
+        (source.manifest_reference, 7),
+        (source.manifest_reference, 7),
+    ]
+    assert actor_calls == [actor.actor_reference, actor.actor_reference]
+
+
+def test_valid_contexts_still_pass_boundary_revalidation() -> None:
+    request = candidate_request()
+    port = RecordingCandidatePort(review_view(request))
+    facade = facade_for(port)
+
+    created = asyncio.run(
+        facade.create_candidate(
+            request, SourceContext(request.source_asset_reference)
+        )
+    )
+    retrieved = asyncio.run(
+        facade.get_candidate_for_review(
+            request.receipt_id, ActorContext("operator:review-7")
+        )
+    )
+
+    assert created == port.current
+    assert retrieved == port.current
+    assert [call[0] for call in port.calls] == [
+        "create_candidate",
+        "get_candidate_for_review",
+    ]

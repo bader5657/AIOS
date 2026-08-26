@@ -20,6 +20,7 @@ from core.app.material_receipts.results import (
     ReviewFailureCode,
 )
 from core.app.material_receipts.review_use_cases import (
+    ActorContext,
     ReviewFacade,
     SourceContext,
 )
@@ -242,3 +243,70 @@ def test_no_generic_execution_or_authority_parameters_enter_use_cases() -> None:
             not any(word in name.lower() for word in prohibited)
             for name in parameters
         )
+
+
+def forged_source_context(reference: object) -> SourceContext:
+    context = object.__new__(SourceContext)
+    object.__setattr__(context, "manifest_reference", reference)
+    object.__setattr__(context, "registry_record_id", None)
+    return context
+
+
+def forged_actor_context(reference: object) -> ActorContext:
+    context = object.__new__(ActorContext)
+    object.__setattr__(context, "actor_reference", reference)
+    return context
+
+
+def test_forged_contexts_cause_zero_verifier_or_repository_construction(
+    monkeypatch,
+) -> None:
+    verifier_calls = 0
+    repository_constructions = 0
+
+    def reject_verifier(self, context):
+        nonlocal verifier_calls
+        verifier_calls += 1
+        raise AssertionError("invalid DTO must fail before retained verification")
+
+    def reject_repository(cls):
+        nonlocal repository_constructions
+        repository_constructions += 1
+        raise AssertionError("invalid DTO must fail before repository construction")
+
+    monkeypatch.setattr(
+        composition._FilesystemRetainedEvidenceVerifier,
+        "is_retained",
+        reject_verifier,
+    )
+    monkeypatch.setattr(
+        MaterialReceiptRepository,
+        "from_environment",
+        classmethod(reject_repository),
+    )
+    graph = composition.compose_review_application()
+
+    invalid_source_request = candidate_request("/etc/passwd")
+    with pytest.raises(ReviewApplicationError) as source_error:
+        asyncio.run(
+            graph.facade.create_candidate(
+                invalid_source_request,
+                forged_source_context("/etc/passwd"),
+            )
+        )
+    assert source_error.value.code is ReviewFailureCode.INVALID_REVIEW_REQUEST
+
+    request = candidate_request()
+    invalid_actor = forged_actor_context("password=secret")
+    with pytest.raises(ReviewApplicationError) as revision_error:
+        asyncio.run(graph.facade.revise_candidate(request, 1, invalid_actor))
+    assert revision_error.value.code is ReviewFailureCode.INVALID_REVIEW_REQUEST
+
+    with pytest.raises(ReviewApplicationError) as retrieval_error:
+        asyncio.run(
+            graph.facade.get_candidate_for_review(request.receipt_id, invalid_actor)
+        )
+    assert retrieval_error.value.code is ReviewFailureCode.INVALID_REVIEW_REQUEST
+
+    assert verifier_calls == 0
+    assert repository_constructions == 0
