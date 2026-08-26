@@ -1,0 +1,31 @@
+"""Bounded failures for the material-receipt candidate boundary."""
+
+from enum import Enum
+
+
+class MaterialReceiptFailureCode(str, Enum):
+    RECEIPT_NOT_FOUND = "RECEIPT_NOT_FOUND"
+    INVALID_RECEIPT_STATE = "INVALID_RECEIPT_STATE"
+    STALE_RECEIPT_VERSION = "STALE_RECEIPT_VERSION"
+    RECEIPT_NOT_CONFIRMED = "RECEIPT_NOT_CONFIRMED"
+    NO_POSTABLE_ITEMS = "NO_POSTABLE_ITEMS"
+    ITEM_NOT_CONFIRMED = "ITEM_NOT_CONFIRMED"
+    MATERIAL_UNRESOLVED = "MATERIAL_UNRESOLVED"
+    MATERIAL_NOT_FOUND = "MATERIAL_NOT_FOUND"
+    MATERIAL_INACTIVE = "MATERIAL_INACTIVE"
+    UNIT_MISMATCH = "UNIT_MISMATCH"
+    PACKAGING_FORMULA_INVALID = "PACKAGING_FORMULA_INVALID"
+    DUPLICATE_POSTING = "DUPLICATE_POSTING"
+    CONFLICTING_POSTING = "CONFLICTING_POSTING"
+    DATABASE_UNAVAILABLE = "DATABASE_UNAVAILABLE"
+    DATA_INTEGRITY_ERROR = "DATA_INTEGRITY_ERROR"
+    RECEIPT_ITEM_NOT_FOUND = "RECEIPT_ITEM_NOT_FOUND"
+    INVALID_ITEM_STATE = "INVALID_ITEM_STATE"
+
+
+class MaterialReceiptError(RuntimeError):
+    """Sanitized candidate-boundary error safe for application callers."""
+
+    def __init__(self, code: MaterialReceiptFailureCode) -> None:
+        self.code = code
+        super().__init__(code.value)

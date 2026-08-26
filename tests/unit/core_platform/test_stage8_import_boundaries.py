@@ -315,7 +315,12 @@ class Stage8ImportBoundaryTests(unittest.TestCase):
             if _under(edge.target, "psycopg")
         }
         self.assertEqual(
-            psycopg_sources, {"core/registry/postgres_registry.py"}
+            psycopg_sources,
+            {
+                "core/registry/postgres_registry.py",
+                "core/material_receipts/repository.py",
+                "core/inventory_posting/repository.py",
+            },
         )
 
         registry_consumers = {
@@ -376,7 +381,11 @@ class Stage8ImportBoundaryTests(unittest.TestCase):
             },
             "dotenv": {"core/adapters/telegram/main.py"},
             "PIL": {"core/storage/metadata_engine.py"},
-            "psycopg": {"core/registry/postgres_registry.py"},
+            "psycopg": {
+                "core/registry/postgres_registry.py",
+                "core/material_receipts/repository.py",
+                "core/inventory_posting/repository.py",
+            },
             "httpx": {
                 "core/brain/providers/ollama.py",
                 "core/brain/staging_composition.py",
