@@ -4,8 +4,8 @@ Date: 2026-08-26 (Asia/Jakarta)
 
 ## Frozen source authority
 
-This documentation-only package is bound to merged `main` commit
-`4fc068532f197d399600229d73d5e570bee6bd74` and helper path
+This documentation-only package freezes the helper artifact introduced by merge
+commit `4fc068532f197d399600229d73d5e570bee6bd74` at helper path
 `scripts/admin/bootstrap_material_writer_secrets.py`.
 
 The mechanically calculated SHA-256 of that helper is:
@@ -23,8 +23,10 @@ separately authorize exactly one manually authenticated `sudo` invocation:
 
 `sudo -- /usr/bin/python3 scripts/admin/bootstrap_material_writer_secrets.py --execute-production`
 
-The command must be issued from the root of the clean source checkout whose
-`HEAD`, `main`, and `origin/main` resolve to the frozen merge commit. The exact
+The command must be issued from the root of the clean source checkout after this
+governance package is merged, with `HEAD`, `main`, and `origin/main` identical.
+The execution evidence records that governance merge commit and proves the helper
+path still has the frozen SHA-256. The exact
 repository helper path is `scripts/admin/bootstrap_material_writer_secrets.py`.
 No unverified absolute deployment path, alias, wrapper, environment activation,
 repeated attempt, modified helper, or alternate argument is authorized.
