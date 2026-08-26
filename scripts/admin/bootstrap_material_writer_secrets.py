@@ -13,6 +13,8 @@ import argparse
 import base64
 import enum
 import fcntl
+import ipaddress
+import json
 import os
 import re
 import secrets
@@ -35,7 +37,6 @@ DOLLAR = chr(36)
 DATABASE = "aios"
 SCHEMA = "public"
 ADMIN_PG_SOCKET = "/var/run/postgresql"
-RUNTIME_PG_SOCKET = "/var/run/postgresql"  # Frozen legacy contract; governance review required.
 PG_PORT = "5432"
 DOCKER = "/usr/bin/docker"
 POSTGRES_CONTAINER = "aios-postgres"
@@ -44,12 +45,36 @@ CONTAINER_PSQL = "/usr/local/bin/psql"
 ADMIN_ROLE = "aios"
 ADMIN_ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
 CONTAINER_INSPECT_ARGV = (
-    DOCKER, "inspect", "--format", "{{.Name}}|{{.State.Running}}|{{.Config.Image}}", POSTGRES_CONTAINER,
+    DOCKER, "inspect", "--format",
+    "{{.Name}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}|{{.Config.Image}}",
+    POSTGRES_CONTAINER,
+)
+RUNTIME_BINDING_INSPECT_ARGV = (
+    DOCKER, "inspect", "--format", '{{json (index .NetworkSettings.Ports "5432/tcp")}}',
+    POSTGRES_CONTAINER,
+)
+RUNTIME_CONFIGURED_BINDING_INSPECT_ARGV = (
+    DOCKER, "inspect", "--format", '{{json (index .HostConfig.PortBindings "5432/tcp")}}',
+    POSTGRES_CONTAINER,
+)
+RUNTIME_GATEWAY_INSPECT_ARGV = (
+    DOCKER, "inspect", "--format",
+    "{{range .NetworkSettings.Networks}}{{.Gateway}}{{println}}{{end}}", POSTGRES_CONTAINER,
 )
 ADMIN_ARGV = (
     DOCKER, "exec", "-i", POSTGRES_CONTAINER, CONTAINER_PSQL, "-X", "-A", "-t", "-q",
     "-v", "ON_ERROR_STOP=1", "-h", ADMIN_PG_SOCKET, "-p", PG_PORT, "-U", ADMIN_ROLE, "-d", DATABASE,
 )
+RUNTIME_PROBE_HOST = "127.0.0.1"
+RUNTIME_PROBE_PORT = "5432"
+RUNTIME_PROBE_DATABASE = "aios"
+RUNTIME_PROBE_PYTHON = "/opt/aios/runtime/venv/bin/python"
+RUNTIME_TCP_CHECK_ARGV = ("/usr/bin/python3", "-I", "-")
+RUNTIME_PROBE_ARGV = (RUNTIME_PROBE_PYTHON, "-I", "-")
+RFC1918_NETWORKS = tuple(ipaddress.IPv4Network(value) for value in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+))
+
 
 CANDIDATE_KEY = "AIOS_MATERIAL_RECEIPT_CANDIDATE_DB_PASSWORD"
 POSTING_KEY = "AIOS_MATERIAL_INVENTORY_POSTING_DB_PASSWORD"
@@ -404,6 +429,178 @@ FROM pg_hba_file_rules;
 """.encode("ascii")
 
 
+def _parse_runtime_binding(output: bytes) -> object:
+    try:
+        return json.loads(output.decode("ascii"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BootstrapError("runtime PostgreSQL binding preflight failed") from exc
+
+
+def validate_runtime_bindings(effective_output: bytes, configured_output: bytes) -> None:
+    """Require effective and configured state to agree on one frozen publication."""
+    expected = [{"HostIp": RUNTIME_PROBE_HOST, "HostPort": RUNTIME_PROBE_PORT}]
+    if (_parse_runtime_binding(effective_output) != expected
+            or _parse_runtime_binding(configured_output) != expected):
+        raise BootstrapError("unsafe runtime PostgreSQL publication")
+
+
+def validate_runtime_gateway(output: bytes) -> str:
+    """Return one dynamically derived RFC1918 Docker bridge gateway."""
+    try:
+        gateways = [line.decode("ascii") for line in output.splitlines() if line.strip()]
+    except UnicodeDecodeError as exc:
+        raise BootstrapError("runtime PostgreSQL gateway is invalid") from exc
+    if len(gateways) != 1:
+        raise BootstrapError("runtime PostgreSQL gateway is ambiguous")
+    try:
+        address = ipaddress.IPv4Address(gateways[0])
+    except ipaddress.AddressValueError as exc:
+        raise BootstrapError("runtime PostgreSQL gateway is invalid") from exc
+    if not any(address in network for network in RFC1918_NETWORKS):
+        raise BootstrapError("runtime PostgreSQL gateway is outside governed topology")
+    return str(address)
+
+
+def runtime_auth_preflight_sql(_gateway: str) -> bytes:
+    """Return ordered parsed HBA rules and password posture for local validation."""
+    return b"""BEGIN;
+SET LOCAL search_path = pg_catalog;
+SELECT json_build_object(
+  'password_encryption', current_setting('password_encryption'),
+  'rules', coalesce(
+    json_agg(json_build_object(
+      'rule_number', rule_number, 'type', type, 'database', database,
+      'user_name', user_name, 'address', address, 'netmask', netmask,
+      'auth_method', auth_method, 'error', error
+    ) ORDER BY rule_number),
+    '[]'::json
+  )
+)::text
+FROM pg_hba_file_rules;
+ROLLBACK;
+"""
+
+
+def _hba_list(value: object, field: str) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise BootstrapError(f"runtime PostgreSQL HBA {field} is malformed")
+    return value
+
+
+def _hba_database_matches(values: list[str]) -> bool:
+    return "all" in values or RUNTIME_PROBE_DATABASE in values
+
+
+def _hba_user_matches(values: list[str], login: str) -> bool:
+    if "all" in values or login in values:
+        return True
+    governed_membership = CANDIDATE_ROLE if login == CANDIDATE_LOGIN else POSTING_ROLE
+    return f"+{governed_membership}" in values
+
+
+def _hba_address_matches(address: object, netmask: object, source: ipaddress.IPv4Address) -> bool:
+    if address == "all":
+        return True
+    if not isinstance(address, str) or not isinstance(netmask, str):
+        raise BootstrapError("runtime PostgreSQL HBA address is malformed")
+    try:
+        parsed_address = ipaddress.ip_address(address)
+        parsed_mask = ipaddress.ip_address(netmask)
+    except ValueError as exc:
+        raise BootstrapError("runtime PostgreSQL HBA address is unsupported") from exc
+    if parsed_address.version != parsed_mask.version:
+        raise BootstrapError("runtime PostgreSQL HBA address is malformed")
+    if parsed_address.version != 4:
+        return False
+    try:
+        network = ipaddress.IPv4Network((str(parsed_address), str(parsed_mask)), strict=False)
+    except ValueError as exc:
+        raise BootstrapError("runtime PostgreSQL HBA address is malformed") from exc
+    return source in network
+
+
+def resolve_runtime_hba_methods(rules: object, gateway: str) -> dict[str, str]:
+    """Resolve PostgreSQL's first applicable non-TLS rule for each login."""
+    if not isinstance(rules, list):
+        raise BootstrapError("runtime PostgreSQL HBA rules are malformed")
+    try:
+        source = ipaddress.IPv4Address(gateway)
+    except ipaddress.AddressValueError as exc:
+        raise BootstrapError("runtime PostgreSQL gateway is invalid") from exc
+    resolved: dict[str, str] = {}
+    previous_rule = 0
+    for rule in rules:
+        if not isinstance(rule, dict) or set(rule) != {
+            "rule_number", "type", "database", "user_name", "address",
+            "netmask", "auth_method", "error",
+        }:
+            raise BootstrapError("runtime PostgreSQL HBA rule is malformed")
+        number = rule["rule_number"]
+        if not isinstance(number, int) or number <= previous_rule:
+            raise BootstrapError("runtime PostgreSQL HBA rule ordering is invalid")
+        previous_rule = number
+        if rule["error"] is not None:
+            raise BootstrapError("runtime PostgreSQL HBA contains a parse error")
+        rule_type = rule["type"]
+        if rule_type in ("local", "hostssl"):
+            continue
+        if rule_type not in ("host", "hostnossl"):
+            raise BootstrapError("runtime PostgreSQL HBA rule type is unsupported")
+        databases = _hba_list(rule["database"], "database")
+        users = _hba_list(rule["user_name"], "user")
+        if not _hba_database_matches(databases):
+            continue
+        if not _hba_address_matches(rule["address"], rule["netmask"], source):
+            continue
+        method = rule["auth_method"]
+        if not isinstance(method, str):
+            raise BootstrapError("runtime PostgreSQL HBA auth method is malformed")
+        for login in (CANDIDATE_LOGIN, POSTING_LOGIN):
+            if login not in resolved and _hba_user_matches(users, login):
+                resolved[login] = method
+    return resolved
+
+
+def validate_runtime_auth_output(output: bytes, gateway: str) -> None:
+    try:
+        payload = json.loads(output.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BootstrapError("runtime PostgreSQL authentication posture is malformed") from exc
+    if not isinstance(payload, dict) or set(payload) != {"password_encryption", "rules"}:
+        raise BootstrapError("runtime PostgreSQL authentication posture is malformed")
+    if payload["password_encryption"] != "scram-sha-256":
+        raise BootstrapError("unsafe runtime PostgreSQL authentication posture")
+    methods = resolve_runtime_hba_methods(payload["rules"], gateway)
+    expected = {CANDIDATE_LOGIN: "scram-sha-256", POSTING_LOGIN: "scram-sha-256"}
+    if methods != expected:
+        raise BootstrapError("unsafe runtime PostgreSQL authentication posture")
+
+
+def runtime_tcp_check_program() -> bytes:
+    return f"""\
+import socket
+connection = socket.create_connection(('{RUNTIME_PROBE_HOST}', {int(RUNTIME_PROBE_PORT)}), 5)
+connection.close()
+""".encode("ascii")
+
+
+def runtime_probe_program() -> bytes:
+    return f"""\
+import sys
+import psycopg
+allowed = ('{CANDIDATE_LOGIN}', '{POSTING_LOGIN}')
+if len(sys.argv) != 2 or sys.argv[1] not in allowed:
+    raise SystemExit(2)
+with psycopg.connect(host='{RUNTIME_PROBE_HOST}', port={int(RUNTIME_PROBE_PORT)},
+                     dbname='{RUNTIME_PROBE_DATABASE}', user=sys.argv[1],
+                     sslmode='disable', gssencmode='disable', connect_timeout=5) as connection:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1")
+        if cursor.fetchone() != (1,):
+            raise SystemExit(3)
+""".encode("ascii")
+
+
 def collision_preflight_sql() -> bytes:
     frozen = ", ".join("'%s'" % role for role in ROLES)
     return ("SELECT rolname FROM pg_roles WHERE rolname IN (" + frozen + ");\n").encode("ascii")
@@ -456,6 +653,7 @@ def provisioning_sql(candidate: Secret, posting: Secret) -> bytes:
     sql = f"""\
 BEGIN;
 SET LOCAL search_path = pg_catalog;
+SET LOCAL password_encryption = 'scram-sha-256';
 SET LOCAL log_statement = 'none';
 SET LOCAL log_min_duration_statement = -1;
 SET LOCAL log_duration = off;
@@ -645,9 +843,38 @@ class Postgres:
             result = self.runner(CONTAINER_INSPECT_ARGV, b"", ADMIN_ENV, ())
         except (OSError, subprocess.SubprocessError) as exc:
             raise BootstrapError("PostgreSQL container transport unavailable") from exc
-        expected = f"/{POSTGRES_CONTAINER}|true|{POSTGRES_IMAGE}".encode("ascii")
+        expected = f"/{POSTGRES_CONTAINER}|true|healthy|{POSTGRES_IMAGE}".encode("ascii")
         if result.returncode != 0 or result.stdout.strip() != expected:
             raise BootstrapError("PostgreSQL container identity preflight failed")
+
+    def _runtime_preflight(self) -> None:
+        try:
+            binding = self.runner(RUNTIME_BINDING_INSPECT_ARGV, b"", ADMIN_ENV, ())
+            configured = self.runner(RUNTIME_CONFIGURED_BINDING_INSPECT_ARGV, b"", ADMIN_ENV, ())
+            gateway = self.runner(RUNTIME_GATEWAY_INSPECT_ARGV, b"", ADMIN_ENV, ())
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise BootstrapError("runtime PostgreSQL Docker preflight unavailable") from exc
+        if binding.returncode != 0:
+            raise BootstrapError("runtime PostgreSQL binding preflight failed")
+        if configured.returncode != 0:
+            raise BootstrapError("runtime PostgreSQL configured binding preflight failed")
+        validate_runtime_bindings(binding.stdout.strip(), configured.stdout.strip())
+        if gateway.returncode != 0:
+            raise BootstrapError("runtime PostgreSQL gateway preflight failed")
+        gateway_address = validate_runtime_gateway(gateway.stdout)
+
+        auth = self._admin(runtime_auth_preflight_sql(gateway_address))
+        if auth.returncode != 0:
+            raise BootstrapError("runtime PostgreSQL authentication preflight failed")
+        validate_runtime_auth_output(auth.stdout.strip(), gateway_address)
+        try:
+            reachable = self.runner(
+                RUNTIME_TCP_CHECK_ARGV, runtime_tcp_check_program(), ADMIN_ENV, (),
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise BootstrapError("runtime PostgreSQL loopback probe unavailable") from exc
+        if reachable.returncode != 0:
+            raise BootstrapError("runtime PostgreSQL loopback is unreachable")
 
     def preflight(self) -> None:
         self._container_preflight()
@@ -658,6 +885,7 @@ class Postgres:
         ).encode("ascii")
         if identity.returncode != 0 or identity.stdout.strip() != expected_identity:
             raise BootstrapError("PostgreSQL administrative identity preflight failed")
+        self._runtime_preflight()
         logging_result = self._admin(logging_preflight_sql())
         if logging_result.returncode != 0:
             raise BootstrapError("PostgreSQL logging preflight failed")
@@ -689,12 +917,23 @@ class Postgres:
         return LifecycleState.DB_COMMITTED
 
     def _probe(self, login: str, password: Secret) -> bool:
-        argv = ("/usr/bin/psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", RUNTIME_PG_SOCKET, "-p", PG_PORT, "-U", login, "-d", DATABASE)
-        sql = b"SELECT 1; SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\n"
-        return private_pgpass_probe(self.runner, argv, RUNTIME_PG_SOCKET, PG_PORT, DATABASE, login, password, sql)
+        if login not in (CANDIDATE_LOGIN, POSTING_LOGIN):
+            raise BootstrapError("runtime PostgreSQL login target is invalid")
+        argv = (*RUNTIME_PROBE_ARGV, login)
+        return private_pgpass_probe(
+            self.runner, argv, RUNTIME_PROBE_HOST, RUNTIME_PROBE_PORT,
+            RUNTIME_PROBE_DATABASE, login, password, runtime_probe_program(),
+        )
+
+
 
     def authenticate(self, candidate: Secret, posting: Secret) -> bool:
         return self._probe(CANDIDATE_LOGIN, candidate) and self._probe(POSTING_LOGIN, posting)
+
+    def revalidate_runtime_transport(self) -> None:
+        """Recheck the governed data plane immediately before LOGIN probes."""
+        self._container_preflight()
+        self._runtime_preflight()
 
     def compensate(self) -> None:
         sql = f"""\
@@ -805,6 +1044,7 @@ def bootstrap(policy: FilesystemPolicy, postgres: Postgres, generator: Callable[
             signals.check()
 
             try:
+                postgres.revalidate_runtime_transport()
                 authenticated = postgres.authenticate(candidate, posting)
             except BootstrapError:
                 authenticated = False

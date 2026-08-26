@@ -36,6 +36,8 @@ def disposable_postgres(monkeypatch):
     started = docker(
         "run", "--rm", "-d", "--network", "none", "--name", TEST_CONTAINER,
         "-e", "POSTGRES_USER=aios", "-e", "POSTGRES_DB=aios",
+        "--health-cmd", "/usr/local/bin/pg_isready -U aios -d aios",
+        "--health-interval", "1s", "--health-retries", "30",
         "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "postgres:17-alpine",
     )
     assert started.returncode == 0, started.stderr.decode("utf-8", "replace")
@@ -49,10 +51,19 @@ def disposable_postgres(monkeypatch):
         else:
             pytest.fail("disposable PostgreSQL did not become ready")
 
+        for _ in range(60):
+            health = docker("inspect", "--format", "{{.State.Health.Status}}", TEST_CONTAINER)
+            if health.stdout.strip() == b"healthy":
+                break
+            time.sleep(0.25)
+        else:
+            pytest.fail("disposable PostgreSQL did not become healthy")
+
         monkeypatch.setattr(helper, "POSTGRES_CONTAINER", TEST_CONTAINER)
         monkeypatch.setattr(
             helper, "CONTAINER_INSPECT_ARGV",
-            (helper.DOCKER, "inspect", "--format", "{{.Name}}|{{.State.Running}}|{{.Config.Image}}", TEST_CONTAINER),
+            (helper.DOCKER, "inspect", "--format", "{{.Name}}|{{.State.Running}}|"
+             "{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}|{{.Config.Image}}", TEST_CONTAINER),
         )
         monkeypatch.setattr(
             helper, "ADMIN_ARGV",
@@ -60,6 +71,7 @@ def disposable_postgres(monkeypatch):
              "-X", "-A", "-t", "-q", "-v", "ON_ERROR_STOP=1", "-h", helper.ADMIN_PG_SOCKET,
              "-p", helper.PG_PORT, "-U", helper.ADMIN_ROLE, "-d", helper.DATABASE),
         )
+        monkeypatch.setattr(helper.Postgres, "_runtime_preflight", lambda self: None)
         yield
     finally:
         docker("stop", "--time", "1", TEST_CONTAINER)
