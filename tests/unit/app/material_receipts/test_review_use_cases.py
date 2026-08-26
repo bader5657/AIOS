@@ -115,6 +115,23 @@ class RecordingCandidatePort:
         return self.current
 
 
+class FakeRetainedEvidenceVerifier:
+    def __init__(self, *retained: str) -> None:
+        self.retained = frozenset(retained)
+        self.calls: list[SourceContext] = []
+
+    def is_retained(self, source_context: SourceContext) -> bool:
+        self.calls.append(source_context)
+        return source_context.manifest_reference in self.retained
+
+
+def facade_for(
+    port: RecordingCandidatePort, *retained: str
+) -> ReviewFacade:
+    identities = retained or (port.current.source_asset_reference,)
+    return ReviewFacade(port, FakeRetainedEvidenceVerifier(*identities))
+
+
 def async_test(function):
     def wrapper():
         return asyncio.run(function())
@@ -149,12 +166,26 @@ def test_facade_and_port_expose_exactly_three_review_operations() -> None:
         assert not hasattr(CandidateReviewPort, prohibited)
 
 
+@async_test
+async def test_invented_canonical_manifest_is_rejected_when_not_retained() -> None:
+    request = candidate_request()
+    port = RecordingCandidatePort(review_view(request))
+    facade = ReviewFacade(port, FakeRetainedEvidenceVerifier())
+
+    with pytest.raises(ReviewApplicationError) as caught:
+        await facade.create_candidate(
+            request, SourceContext(request.source_asset_reference)
+        )
+
+    assert caught.value.code is ReviewFailureCode.SOURCE_IDENTITY_INVALID
+    assert port.calls == []
+
 
 @async_test
 async def test_create_binds_exact_source_context_and_delegates() -> None:
     request = candidate_request()
     port = RecordingCandidatePort(review_view(request))
-    facade = ReviewFacade(port)
+    facade = facade_for(port)
 
     result = await facade.create_candidate(
         request, SourceContext(request.source_asset_reference, registry_record_id=7)
@@ -164,12 +195,11 @@ async def test_create_binds_exact_source_context_and_delegates() -> None:
     assert port.calls == [("create_candidate", request)]
 
 
-
 @async_test
 async def test_create_rejects_conflicting_source_without_port_activity() -> None:
     request = candidate_request()
     port = RecordingCandidatePort(review_view(request))
-    facade = ReviewFacade(port)
+    facade = facade_for(port)
 
     with pytest.raises(ReviewApplicationError) as caught:
         await facade.create_candidate(request, SourceContext(manifest_reference()))
@@ -178,12 +208,11 @@ async def test_create_rejects_conflicting_source_without_port_activity() -> None
     assert port.calls == []
 
 
-
 @async_test
 async def test_revision_preserves_stored_source_and_expected_version() -> None:
     request = candidate_request()
     port = RecordingCandidatePort(review_view(request, version=3))
-    facade = ReviewFacade(port)
+    facade = facade_for(port)
 
     await facade.revise_candidate(request, 3, ActorContext("reviewer:7"))
 
@@ -191,7 +220,6 @@ async def test_revision_preserves_stored_source_and_expected_version() -> None:
         ("get_candidate_for_review", request.receipt_id),
         ("revise_candidate", request, 3),
     ]
-
 
 
 @async_test
@@ -216,7 +244,7 @@ async def test_revision_rejects_source_override_before_mutation() -> None:
     port = RecordingCandidatePort(existing)
 
     with pytest.raises(ReviewApplicationError) as caught:
-        await ReviewFacade(port).revise_candidate(
+        await facade_for(port).revise_candidate(
             request, 1, ActorContext("reviewer:7")
         )
 
@@ -224,13 +252,12 @@ async def test_revision_rejects_source_override_before_mutation() -> None:
     assert port.calls == [("get_candidate_for_review", request.receipt_id)]
 
 
-
 @async_test
 async def test_get_uses_actor_only_as_bounded_review_context() -> None:
     request = candidate_request()
     port = RecordingCandidatePort(review_view(request))
 
-    result = await ReviewFacade(port).get_candidate_for_review(
+    result = await facade_for(port).get_candidate_for_review(
         request.receipt_id, ActorContext("reviewer:7")
     )
 
@@ -274,7 +301,20 @@ def test_actor_context_is_immutable_typed_bounded_and_minimal() -> None:
     assert [field.name for field in fields(ActorContext)] == ["actor_reference"]
     with pytest.raises(FrozenInstanceError):
         context.actor_reference = "changed"  # type: ignore[misc]
-    for invalid in ("", " ", " reviewer", "reviewer\n7", "x" * 257):
+    invalid_values = (
+        "", " ", " reviewer", "reviewer\n7", "x" * 257,
+        "password=secret",
+        "postgresql://user:pass@127.0.0.1/db",
+        "SELECT * FROM material_receipts",
+        "INSERT INTO material_receipts VALUES (1)",
+        "UPDATE material_receipts SET status=CONFIRMED",
+        "DELETE FROM material_receipts",
+        "DATABASE_URL=postgresql://host/db",
+        "/opt/aios/actor",
+        "reviewer:../admin",
+        "admin:1",
+    )
+    for invalid in invalid_values:
         with pytest.raises(ValueError):
             ActorContext(invalid)
 
@@ -289,18 +329,40 @@ def test_contexts_have_no_authority_or_infrastructure_fields() -> None:
     assert all(not any(word in name for word in prohibited) for name in names)
 
 
-
 @async_test
 async def test_retrieval_fails_closed_on_malformed_persisted_source() -> None:
     request = candidate_request("asset:not-retained-manifest")
-    facade = ReviewFacade(RecordingCandidatePort(review_view(request)))
+    facade = facade_for(RecordingCandidatePort(review_view(request)))
 
     with pytest.raises(ReviewApplicationError) as caught:
         await facade.get_candidate_for_review(
-            request.receipt_id, ActorContext("reviewer")
+            request.receipt_id, ActorContext("reviewer:system")
         )
 
     assert caught.value.code is ReviewFailureCode.SOURCE_IDENTITY_INVALID
+
+
+@async_test
+async def test_stale_version_is_bounded_and_preserved() -> None:
+    request = candidate_request()
+
+    class StalePort(RecordingCandidatePort):
+        async def revise_candidate(self, request, expected_version):
+            raise MaterialReceiptError(
+                MaterialReceiptFailureCode.STALE_RECEIPT_VERSION
+            )
+
+    facade = facade_for(StalePort(review_view(request, version=2)))
+    with pytest.raises(ReviewApplicationError) as caught:
+        await facade.revise_candidate(
+            request, 1, ActorContext("reviewer:system")
+        )
+
+    assert caught.value.code is ReviewFailureCode.CANDIDATE_OPERATION_FAILED
+    assert (
+        caught.value.candidate_code
+        is MaterialReceiptFailureCode.STALE_RECEIPT_VERSION
+    )
 
 
 @async_test
@@ -314,13 +376,13 @@ async def test_candidate_and_unexpected_errors_are_sanitized() -> None:
         async def get_candidate_for_review(self, receipt_id: uuid.UUID) -> ReceiptForReview:
             raise psycopg.OperationalError("password=secret dsn SQL SELECT")
 
-    facade = ReviewFacade(FailingPort(review_view(request)))
+    facade = facade_for(FailingPort(review_view(request)))
     with pytest.raises(ReviewApplicationError) as candidate:
         await facade.create_candidate(request, SourceContext(request.source_asset_reference))
     assert str(candidate.value) == "CANDIDATE_OPERATION_FAILED"
     assert candidate.value.candidate_code is MaterialReceiptFailureCode.DATA_INTEGRITY_ERROR
 
     with pytest.raises(ReviewApplicationError) as unexpected:
-        await facade.get_candidate_for_review(request.receipt_id, ActorContext("reviewer"))
+        await facade.get_candidate_for_review(request.receipt_id, ActorContext("reviewer:system"))
     assert str(unexpected.value) == "INTERNAL_FAILURE"
     assert "secret" not in str(unexpected.value)

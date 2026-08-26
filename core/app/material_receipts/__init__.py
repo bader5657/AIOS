@@ -3,7 +3,6 @@
 from .composition import (
     ReviewComposition,
     compose_review_application,
-    compose_review_application_from_environment,
 )
 from .review_use_cases import ActorContext, ReviewFacade, SourceContext
 from .results import ReviewApplicationError, ReviewFailureCode
@@ -16,5 +15,4 @@ __all__ = [
     "ReviewFailureCode",
     "SourceContext",
     "compose_review_application",
-    "compose_review_application_from_environment",
 ]
