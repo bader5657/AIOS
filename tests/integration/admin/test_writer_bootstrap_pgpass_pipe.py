@@ -20,7 +20,9 @@ def test_real_libpq_accepts_private_pgpass_descriptor():
     executable = os.environ.get("AIOS_TEST_PGPASS_PSQL")
     if not executable:
         pytest.skip("disposable PostgreSQL psql path not configured")
-    host = os.environ.get("AIOS_TEST_PGPASS_HOST", "127.0.0.1")
+    host = os.environ.get("AIOS_TEST_PGPASS_HOST", "/var/run/postgresql")
+    if not host.startswith("/"):
+        pytest.fail("real pgpass integration requires a Unix socket directory")
     port = os.environ.get("AIOS_TEST_PGPASS_PORT", "55434")
     database = os.environ.get("AIOS_TEST_PGPASS_DATABASE", "aios")
     login = os.environ.get("AIOS_TEST_PGPASS_USER", "pipe_test_user")
@@ -34,8 +36,7 @@ def test_real_libpq_accepts_private_pgpass_descriptor():
         return helper.ProcessResult(completed.returncode, completed.stdout)
 
     argv = (executable, "-X", "-A", "-t", "-q", "-v", "ON_ERROR_STOP=1", "-h", host, "-p", port, "-U", login, "-d", database)
-    pgpass_host = "localhost" if host.startswith("/") else host
-    succeeded = helper.private_pgpass_probe(real_runner, argv, pgpass_host, port, database, login, password, b"SELECT 1;\n")
+    succeeded = helper.private_pgpass_probe(real_runner, argv, host, port, database, login, password, b"SELECT 1;\n")
     assert succeeded
     joined_argv = b" ".join(part.encode("utf-8") for part in observed["argv"])
     assert password_bytes not in joined_argv
@@ -45,8 +46,16 @@ def test_real_libpq_accepts_private_pgpass_descriptor():
     with pytest.raises(OSError):
         os.fstat(observed["pass_fds"][0])
 
+    # The same Unix-socket connection must reject a localhost-bound pgpass
+    # record. Explicit socket-directory connections match that exact directory.
+    assert not helper.private_pgpass_probe(
+        real_runner, argv, "localhost", port, database, login, password, b"SELECT 1;\n"
+    )
+    assert observed["argv"][observed["argv"].index("-h") + 1] == host
+    assert "localhost" not in observed["argv"] and "127.0.0.1" not in observed["argv"]
 
-def test_real_postgresql_exact_validator_and_compensation():
+
+def test_real_postgresql_exact_validator_and_compensation(monkeypatch):
     executable = os.environ.get("AIOS_TEST_PGPASS_PSQL")
     if not executable or os.environ.get("AIOS_TEST_FULL_BOOTSTRAP_SQL") != "1":
         pytest.skip("disposable full SQL fixture not configured")
@@ -54,13 +63,16 @@ def test_real_postgresql_exact_validator_and_compensation():
     port = os.environ.get("AIOS_TEST_PGPASS_PORT", "55434")
     database = os.environ.get("AIOS_TEST_PGPASS_DATABASE", "aios")
     login = os.environ.get("AIOS_TEST_PGPASS_USER", "pipe_test_user")
+    if not host.startswith("/"):
+        pytest.fail("full SQL integration requires a Unix socket directory")
+    monkeypatch.setattr(helper, "PG_SOCKET", host)
 
     diagnostics = []
     observed_calls = []
 
     def admin_runner(requested_argv, stdin, requested_env, requested_pass_fds):
-        if requested_argv and requested_argv[0] == executable:
-            argv = tuple(requested_argv)
+        if requested_pass_fds:
+            argv = (executable, *requested_argv[1:])
             child_env = dict(requested_env)
             pass_fds = requested_pass_fds
         else:
@@ -87,7 +99,7 @@ def test_real_postgresql_exact_validator_and_compensation():
     assert postgres.authenticate(candidate, posting), diagnostics[-1].decode("utf-8", "replace")
     probe_argv = [argv for argv, passed in observed_calls if passed]
     assert len(probe_argv) == 2
-    assert all(argv[argv.index("-h") + 1] == "/var/run/postgresql" for argv in probe_argv)
+    assert all(argv[argv.index("-h") + 1] == host for argv in probe_argv)
     assert all("localhost" not in argv and "127.0.0.1" not in argv for argv in probe_argv)
     assert all(argv[argv.index("-p") + 1] == "5432" and argv[argv.index("-d") + 1] == "aios" for argv in probe_argv)
 

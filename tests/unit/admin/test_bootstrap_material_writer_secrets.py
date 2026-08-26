@@ -306,6 +306,9 @@ def test_auth_password_uses_inherited_private_pipe_not_argv(monkeypatch):
     assert value._value not in b" ".join(x.encode() for x in observed["argv"])
     assert value._value not in observed["stdin"]
     assert value._value in observed["pipe"]
+    assert observed["pipe"].startswith(
+        f"{helper.PG_SOCKET}:{helper.PG_PORT}:{helper.DATABASE}:{helper.CANDIDATE_LOGIN}:".encode("ascii")
+    )
     assert observed["pass_fds"]
     assert observed["descriptor_regular"] and observed["descriptor_mode"] == 0o600
     assert observed["descriptor_links"] == 0
@@ -685,6 +688,14 @@ def test_authentication_probe_is_frozen_to_unix_socket():
     assert argv[argv.index("-d") + 1] == "aios"
     assert "localhost" not in argv and "127.0.0.1" not in argv
     assert value._value not in b" ".join(part.encode() for part in argv)
+
+
+def test_production_helper_has_no_tcp_or_host_override_tokens():
+    source = MODULE_PATH.read_text()
+    assert '"localhost"' not in source
+    assert '"127.0.0.1"' not in source
+    assert "PGHOST" not in source
+    assert source.count('PG_SOCKET = "/var/run/postgresql"') == 1
 
 
 @pytest.mark.parametrize("identity", helper.ROLES)

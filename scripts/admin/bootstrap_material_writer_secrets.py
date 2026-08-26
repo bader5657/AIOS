@@ -650,7 +650,7 @@ class Postgres:
     def _probe(self, login: str, password: Secret) -> bool:
         argv = ("/usr/bin/psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", PG_SOCKET, "-p", PG_PORT, "-U", login, "-d", DATABASE)
         sql = b"SELECT 1; SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\n"
-        return private_pgpass_probe(self.runner, argv, "localhost", PG_PORT, DATABASE, login, password, sql)
+        return private_pgpass_probe(self.runner, argv, PG_SOCKET, PG_PORT, DATABASE, login, password, sql)
 
     def authenticate(self, candidate: Secret, posting: Secret) -> bool:
         return self._probe(CANDIDATE_LOGIN, candidate) and self._probe(POSTING_LOGIN, posting)
