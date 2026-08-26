@@ -34,12 +34,21 @@ LOCK_FILE = CONFIG / ".runtime.env.writer-bootstrap.lock"
 DOLLAR = chr(36)
 DATABASE = "aios"
 SCHEMA = "public"
-PG_SOCKET = "/var/run/postgresql"
+ADMIN_PG_SOCKET = "/var/run/postgresql"
+RUNTIME_PG_SOCKET = "/var/run/postgresql"  # Frozen legacy contract; governance review required.
 PG_PORT = "5432"
+DOCKER = "/usr/bin/docker"
+POSTGRES_CONTAINER = "aios-postgres"
+POSTGRES_IMAGE = "postgres:17-alpine"
+CONTAINER_PSQL = "/usr/local/bin/psql"
+ADMIN_ROLE = "aios"
 ADMIN_ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
+CONTAINER_INSPECT_ARGV = (
+    DOCKER, "inspect", "--format", "{{.Name}}|{{.State.Running}}|{{.Config.Image}}", POSTGRES_CONTAINER,
+)
 ADMIN_ARGV = (
-    "/usr/bin/sudo", "-n", "-u", "postgres", "/usr/bin/psql", "-X", "-A", "-t", "-q",
-    "-v", "ON_ERROR_STOP=1", "-h", PG_SOCKET, "-p", PG_PORT, "-d", DATABASE,
+    DOCKER, "exec", "-i", POSTGRES_CONTAINER, CONTAINER_PSQL, "-X", "-A", "-t", "-q",
+    "-v", "ON_ERROR_STOP=1", "-h", ADMIN_PG_SOCKET, "-p", PG_PORT, "-U", ADMIN_ROLE, "-d", DATABASE,
 )
 
 CANDIDATE_KEY = "AIOS_MATERIAL_RECEIPT_CANDIDATE_DB_PASSWORD"
@@ -380,6 +389,21 @@ ROLLBACK;
 """
 
 
+def admin_identity_preflight_sql() -> bytes:
+    """Verify the frozen database identity and local, passwordless control plane."""
+    return f"""\
+SELECT current_user, session_user, current_database(),
+       current_setting('server_version_num')::integer / 10000,
+       current_setting('unix_socket_directories');
+SELECT rolcanlogin, rolsuper, rolcreaterole
+FROM pg_roles WHERE rolname = '{ADMIN_ROLE}';
+SELECT count(*) FILTER (WHERE type = 'local' AND database = ARRAY['all']
+                         AND user_name = ARRAY['all'] AND auth_method = 'trust'),
+       count(*) FILTER (WHERE error IS NOT NULL)
+FROM pg_hba_file_rules;
+""".encode("ascii")
+
+
 def collision_preflight_sql() -> bytes:
     frozen = ", ".join("'%s'" % role for role in ROLES)
     return ("SELECT rolname FROM pg_roles WHERE rolname IN (" + frozen + ");\n").encode("ascii")
@@ -616,7 +640,24 @@ class Postgres:
         except (OSError, subprocess.SubprocessError) as exc:
             raise BootstrapError("PostgreSQL client transport failed") from exc
 
+    def _container_preflight(self) -> None:
+        try:
+            result = self.runner(CONTAINER_INSPECT_ARGV, b"", ADMIN_ENV, ())
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise BootstrapError("PostgreSQL container transport unavailable") from exc
+        expected = f"/{POSTGRES_CONTAINER}|true|{POSTGRES_IMAGE}".encode("ascii")
+        if result.returncode != 0 or result.stdout.strip() != expected:
+            raise BootstrapError("PostgreSQL container identity preflight failed")
+
     def preflight(self) -> None:
+        self._container_preflight()
+        identity = self._admin(admin_identity_preflight_sql())
+        expected_identity = (
+            f"{ADMIN_ROLE}|{ADMIN_ROLE}|{DATABASE}|17|{ADMIN_PG_SOCKET}\n"
+            "t|t|t\n1|0"
+        ).encode("ascii")
+        if identity.returncode != 0 or identity.stdout.strip() != expected_identity:
+            raise BootstrapError("PostgreSQL administrative identity preflight failed")
         logging_result = self._admin(logging_preflight_sql())
         if logging_result.returncode != 0:
             raise BootstrapError("PostgreSQL logging preflight failed")
@@ -648,9 +689,9 @@ class Postgres:
         return LifecycleState.DB_COMMITTED
 
     def _probe(self, login: str, password: Secret) -> bool:
-        argv = ("/usr/bin/psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", PG_SOCKET, "-p", PG_PORT, "-U", login, "-d", DATABASE)
+        argv = ("/usr/bin/psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", RUNTIME_PG_SOCKET, "-p", PG_PORT, "-U", login, "-d", DATABASE)
         sql = b"SELECT 1; SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\n"
-        return private_pgpass_probe(self.runner, argv, PG_SOCKET, PG_PORT, DATABASE, login, password, sql)
+        return private_pgpass_probe(self.runner, argv, RUNTIME_PG_SOCKET, PG_PORT, DATABASE, login, password, sql)
 
     def authenticate(self, candidate: Secret, posting: Secret) -> bool:
         return self._probe(CANDIDATE_LOGIN, candidate) and self._probe(POSTING_LOGIN, posting)

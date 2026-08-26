@@ -228,6 +228,12 @@ class RecordingRunner:
 
     def __call__(self, argv, stdin, env, pass_fds):
         self.calls.append((tuple(argv), stdin, env, pass_fds))
+        if tuple(argv) == helper.CONTAINER_INSPECT_ARGV:
+            output = f"/{helper.POSTGRES_CONTAINER}|true|{helper.POSTGRES_IMAGE}\n".encode()
+            return helper.ProcessResult(0, output)
+        if stdin == helper.admin_identity_preflight_sql():
+            output = f"{helper.ADMIN_ROLE}|{helper.ADMIN_ROLE}|{helper.DATABASE}|17|{helper.ADMIN_PG_SOCKET}\nt|t|t\n1|0\n".encode()
+            return helper.ProcessResult(0, output)
         try:
             return next(self.replies)
         except StopIteration:
@@ -237,9 +243,44 @@ class RecordingRunner:
 def test_logging_preflight_safe_then_no_collision():
     runner = RecordingRunner([helper.ProcessResult(0, b"none|-1|off|panic|-1|0|0||||\n"), helper.ProcessResult(0, b""), helper.ProcessResult(0, b"4|0\n0\n")])
     helper.Postgres(runner).preflight()
-    assert runner.calls[0][0] == helper.ADMIN_ARGV
-    assert b"log_statement" in runner.calls[0][1]
+    assert runner.calls[0][0] == helper.CONTAINER_INSPECT_ARGV
+    assert runner.calls[1][0] == helper.ADMIN_ARGV
+    assert b"current_user" in runner.calls[1][1]
+    assert b"log_statement" in runner.calls[2][1]
     assert all(call[2] == helper.ADMIN_ENV for call in runner.calls)
+
+
+def test_admin_command_is_exact_fixed_container_transport():
+    assert helper.ADMIN_ARGV[:5] == ("/usr/bin/docker", "exec", "-i", "aios-postgres", "/usr/local/bin/psql")
+    assert helper.ADMIN_ARGV[helper.ADMIN_ARGV.index("-U") + 1] == "aios"
+    assert helper.ADMIN_ARGV[helper.ADMIN_ARGV.index("-d") + 1] == "aios"
+    assert "sudo" not in " ".join(helper.ADMIN_ARGV)
+    assert "postgres" not in helper.ADMIN_ARGV
+
+
+@pytest.mark.parametrize("output", [b"", b"/aios-postgres|false|postgres:17-alpine\n", b"/aios-postgres|true|other\n"])
+def test_container_identity_failure_blocks_before_sql(output):
+    calls = []
+
+    def runner(argv, stdin, env, pass_fds):
+        calls.append((tuple(argv), stdin, env, pass_fds))
+        return helper.ProcessResult(0, output)
+
+    with pytest.raises(helper.BootstrapError, match="container identity preflight failed"):
+        helper.Postgres(runner).preflight()
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("identity", [b"", b"aios|aios|aios|17|/var/run/postgresql\nt|f|t\n1|0\n", b"aios|aios|other|17|/var/run/postgresql\nt|t|t\n1|0\n", b"aios|aios|aios|17|/var/run/postgresql\nt|t|t\n0|0\n"])
+def test_admin_identity_or_auth_contract_failure_blocks(identity):
+    def runner(argv, stdin, env, pass_fds):
+        if tuple(argv) == helper.CONTAINER_INSPECT_ARGV:
+            output = f"/{helper.POSTGRES_CONTAINER}|true|{helper.POSTGRES_IMAGE}\n".encode()
+            return helper.ProcessResult(0, output)
+        return helper.ProcessResult(0, identity)
+
+    with pytest.raises(helper.BootstrapError, match="administrative identity preflight failed"):
+        helper.Postgres(runner).preflight()
 
 
 @pytest.mark.parametrize("posture", [b"all|-1|off|\n", b"none|0|off|\n", b"none|-1|on|\n", b"none|-1|off|write\n"])
@@ -247,7 +288,7 @@ def test_unsafe_logging_posture_blocks_before_collision(posture):
     runner = RecordingRunner([helper.ProcessResult(0, posture)])
     with pytest.raises(helper.BootstrapError, match="unsafe PostgreSQL logging posture"):
         helper.Postgres(runner).preflight()
-    assert len(runner.calls) == 1
+    assert len(runner.calls) == 3
 
 
 def test_role_collision_blocks():
@@ -307,7 +348,7 @@ def test_auth_password_uses_inherited_private_pipe_not_argv(monkeypatch):
     assert value._value not in observed["stdin"]
     assert value._value in observed["pipe"]
     assert observed["pipe"].startswith(
-        f"{helper.PG_SOCKET}:{helper.PG_PORT}:{helper.DATABASE}:{helper.CANDIDATE_LOGIN}:".encode("ascii")
+        f"{helper.RUNTIME_PG_SOCKET}:{helper.PG_PORT}:{helper.DATABASE}:{helper.CANDIDATE_LOGIN}:".encode("ascii")
     )
     assert observed["pass_fds"]
     assert observed["descriptor_regular"] and observed["descriptor_mode"] == 0o600
@@ -526,7 +567,7 @@ def test_every_known_unsafe_logging_state_blocks(unsafe):
     runner = RecordingRunner([helper.ProcessResult(0, unsafe)])
     with pytest.raises(helper.BootstrapError, match="unsafe PostgreSQL logging posture"):
         helper.Postgres(runner).preflight()
-    assert len(runner.calls) == 1
+    assert len(runner.calls) == 3
 
 
 def test_all_governed_relations_are_schema_qualified():
@@ -695,7 +736,7 @@ def test_production_helper_has_no_tcp_or_host_override_tokens():
     assert '"localhost"' not in source
     assert '"127.0.0.1"' not in source
     assert "PGHOST" not in source
-    assert source.count('PG_SOCKET = "/var/run/postgresql"') == 1
+    assert source.count('RUNTIME_PG_SOCKET = "/var/run/postgresql"') == 1
 
 
 @pytest.mark.parametrize("identity", helper.ROLES)
@@ -714,8 +755,8 @@ def test_each_collision_precedes_secret_generation_and_mutation(identity, fixtur
     with pytest.raises(helper.BootstrapError, match="database identity collision"):
         helper.bootstrap(fixture_policy, helper.Postgres(runner), generator)
     assert calls == {"generator": 0, "write": 0}
-    assert len(runner.calls) == 2
-    assert identity.encode("ascii") in runner.calls[1][1]
+    assert len(runner.calls) == 4
+    assert identity.encode("ascii") in runner.calls[3][1]
     assert not fixture_policy.lock_file.exists()
 
 
