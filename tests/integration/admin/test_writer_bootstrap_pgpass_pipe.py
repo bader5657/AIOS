@@ -65,7 +65,7 @@ def test_real_postgresql_exact_validator_and_compensation(monkeypatch):
     login = os.environ.get("AIOS_TEST_PGPASS_USER", "pipe_test_user")
     if not host.startswith("/"):
         pytest.fail("full SQL integration requires a Unix socket directory")
-    monkeypatch.setattr(helper, "PG_SOCKET", host)
+    monkeypatch.setattr(helper, "RUNTIME_PG_SOCKET", host)
 
     diagnostics = []
     observed_calls = []
