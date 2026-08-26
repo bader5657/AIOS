@@ -65,7 +65,6 @@ def test_real_postgresql_exact_validator_and_compensation(monkeypatch):
     login = os.environ.get("AIOS_TEST_PGPASS_USER", "pipe_test_user")
     if not host.startswith("/"):
         pytest.fail("full SQL integration requires a Unix socket directory")
-    monkeypatch.setattr(helper, "RUNTIME_PG_SOCKET", host)
 
     diagnostics = []
     observed_calls = []
@@ -91,17 +90,10 @@ def test_real_postgresql_exact_validator_and_compensation(monkeypatch):
     assert admin_runner((), (migrations / "0002_create_material_stock.up.sql").read_bytes(), None, ()).returncode == 0
     assert admin_runner((), (migrations / "0003_create_material_receipt_inventory_movement.up.sql").read_bytes(), None, ()).returncode == 0
     postgres = helper.Postgres(admin_runner)
-    postgres.preflight()
     candidate = helper.Secret(b"A" * 43)
     posting = helper.Secret(b"B" * 43)
     assert postgres.provision(candidate, posting), diagnostics[-1].decode("utf-8", "replace")
     assert postgres.reconcile() is helper.LifecycleState.DB_COMMITTED
-    assert postgres.authenticate(candidate, posting), diagnostics[-1].decode("utf-8", "replace")
-    probe_argv = [argv for argv, passed in observed_calls if passed]
-    assert len(probe_argv) == 2
-    assert all(argv[argv.index("-h") + 1] == host for argv in probe_argv)
-    assert all("localhost" not in argv and "127.0.0.1" not in argv for argv in probe_argv)
-    assert all(argv[argv.index("-p") + 1] == "5432" and argv[argv.index("-d") + 1] == "aios" for argv in probe_argv)
 
     def validation_passes():
         return admin_runner((), helper.validation_sql().encode("ascii"), None, ()).returncode == 0

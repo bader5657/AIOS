@@ -229,7 +229,20 @@ class RecordingRunner:
     def __call__(self, argv, stdin, env, pass_fds):
         self.calls.append((tuple(argv), stdin, env, pass_fds))
         if tuple(argv) == helper.CONTAINER_INSPECT_ARGV:
-            output = f"/{helper.POSTGRES_CONTAINER}|true|{helper.POSTGRES_IMAGE}\n".encode()
+            output = f"/{helper.POSTGRES_CONTAINER}|true|healthy|{helper.POSTGRES_IMAGE}\n".encode()
+            return helper.ProcessResult(0, output)
+        if tuple(argv) == helper.RUNTIME_BINDING_INSPECT_ARGV:
+            output = f'[{chr(123)}"HostIp":"{helper.RUNTIME_PROBE_HOST}","HostPort":"{helper.RUNTIME_PROBE_PORT}"{chr(125)}]\n'.encode()
+            return helper.ProcessResult(0, output)
+        if tuple(argv) == helper.RUNTIME_GATEWAY_INSPECT_ARGV:
+            return helper.ProcessResult(0, b"172.16.2.1\n")
+        if tuple(argv) == helper.RUNTIME_TCP_CHECK_ARGV:
+            return helper.ProcessResult(0, b"")
+        if stdin == helper.runtime_auth_preflight_sql("172.16.2.1"):
+            output = (
+                f"scram-sha-256|0|0|{helper.POSTING_LOGIN}:scram-sha-256,"
+                f"{helper.CANDIDATE_LOGIN}:scram-sha-256\n"
+            ).encode()
             return helper.ProcessResult(0, output)
         if stdin == helper.admin_identity_preflight_sql():
             output = f"{helper.ADMIN_ROLE}|{helper.ADMIN_ROLE}|{helper.DATABASE}|17|{helper.ADMIN_PG_SOCKET}\nt|t|t\n1|0\n".encode()
@@ -246,7 +259,7 @@ def test_logging_preflight_safe_then_no_collision():
     assert runner.calls[0][0] == helper.CONTAINER_INSPECT_ARGV
     assert runner.calls[1][0] == helper.ADMIN_ARGV
     assert b"current_user" in runner.calls[1][1]
-    assert b"log_statement" in runner.calls[2][1]
+    assert b"log_statement" in runner.calls[6][1]
     assert all(call[2] == helper.ADMIN_ENV for call in runner.calls)
 
 
@@ -258,7 +271,7 @@ def test_admin_command_is_exact_fixed_container_transport():
     assert "postgres" not in helper.ADMIN_ARGV
 
 
-@pytest.mark.parametrize("output", [b"", b"/aios-postgres|false|postgres:17-alpine\n", b"/aios-postgres|true|other\n"])
+@pytest.mark.parametrize("output", [b"", b"/aios-postgres|false|healthy|postgres:17-alpine\n", b"/aios-postgres|true|unhealthy|postgres:17-alpine\n", b"/aios-postgres|true|healthy|other\n"])
 def test_container_identity_failure_blocks_before_sql(output):
     calls = []
 
@@ -275,7 +288,7 @@ def test_container_identity_failure_blocks_before_sql(output):
 def test_admin_identity_or_auth_contract_failure_blocks(identity):
     def runner(argv, stdin, env, pass_fds):
         if tuple(argv) == helper.CONTAINER_INSPECT_ARGV:
-            output = f"/{helper.POSTGRES_CONTAINER}|true|{helper.POSTGRES_IMAGE}\n".encode()
+            output = f"/{helper.POSTGRES_CONTAINER}|true|healthy|{helper.POSTGRES_IMAGE}\n".encode()
             return helper.ProcessResult(0, output)
         return helper.ProcessResult(0, identity)
 
@@ -288,7 +301,7 @@ def test_unsafe_logging_posture_blocks_before_collision(posture):
     runner = RecordingRunner([helper.ProcessResult(0, posture)])
     with pytest.raises(helper.BootstrapError, match="unsafe PostgreSQL logging posture"):
         helper.Postgres(runner).preflight()
-    assert len(runner.calls) == 3
+    assert len(runner.calls) == 7
 
 
 def test_role_collision_blocks():
@@ -346,9 +359,13 @@ def test_auth_password_uses_inherited_private_pipe_not_argv(monkeypatch):
     assert helper.Postgres(runner)._probe(helper.CANDIDATE_LOGIN, value)
     assert value._value not in b" ".join(x.encode() for x in observed["argv"])
     assert value._value not in observed["stdin"]
+    assert tuple(observed["argv"][:-1]) == helper.RUNTIME_PROBE_ARGV
+    assert observed["argv"][-1] == helper.CANDIDATE_LOGIN
+    assert observed["stdin"] == helper.runtime_probe_program()
+    assert helper.DOCKER not in observed["argv"]
     assert value._value in observed["pipe"]
     assert observed["pipe"].startswith(
-        f"{helper.RUNTIME_PG_SOCKET}:{helper.PG_PORT}:{helper.DATABASE}:{helper.CANDIDATE_LOGIN}:".encode("ascii")
+        f"{helper.RUNTIME_PROBE_HOST}:{helper.RUNTIME_PROBE_PORT}:{helper.RUNTIME_PROBE_DATABASE}:{helper.CANDIDATE_LOGIN}:".encode("ascii")
     )
     assert observed["pass_fds"]
     assert observed["descriptor_regular"] and observed["descriptor_mode"] == 0o600
@@ -567,7 +584,7 @@ def test_every_known_unsafe_logging_state_blocks(unsafe):
     runner = RecordingRunner([helper.ProcessResult(0, unsafe)])
     with pytest.raises(helper.BootstrapError, match="unsafe PostgreSQL logging posture"):
         helper.Postgres(runner).preflight()
-    assert len(runner.calls) == 3
+    assert len(runner.calls) == 7
 
 
 def test_all_governed_relations_are_schema_qualified():
@@ -719,24 +736,29 @@ def test_public_acl_preflight_requires_four_tables_and_zero_acl_rows():
             helper.Postgres(runner).preflight()
 
 
-def test_authentication_probe_is_frozen_to_unix_socket():
+def test_authentication_probe_is_frozen_to_numeric_loopback():
     value = secret(b"u")
     runner = RecordingRunner()
     assert helper.Postgres(runner)._probe(helper.CANDIDATE_LOGIN, value)
-    argv = runner.calls[0][0]
-    assert argv[argv.index("-h") + 1] == "/var/run/postgresql"
-    assert argv[argv.index("-p") + 1] == "5432"
-    assert argv[argv.index("-d") + 1] == "aios"
-    assert "localhost" not in argv and "127.0.0.1" not in argv
-    assert value._value not in b" ".join(part.encode() for part in argv)
+    argv, program, _, _ = runner.calls[0]
+    assert argv == (*helper.RUNTIME_PROBE_ARGV, helper.CANDIDATE_LOGIN)
+    assert b"127.0.0.1" in program and b"5432" in program and b"aios" in program
+    assert b"localhost" not in program and b"/var/run/postgresql" not in program
+    assert helper.DOCKER not in argv
+    with pytest.raises(helper.BootstrapError, match="login target is invalid"):
+        helper.Postgres(runner)._probe("arbitrary", value)
 
 
-def test_production_helper_has_no_tcp_or_host_override_tokens():
+def test_production_helper_has_only_frozen_runtime_target():
     source = MODULE_PATH.read_text()
     assert '"localhost"' not in source
-    assert '"127.0.0.1"' not in source
+    assert source.count('RUNTIME_PROBE_HOST = "127.0.0.1"') == 1
+    assert source.count('RUNTIME_PROBE_PORT = "5432"') == 1
+    assert source.count('RUNTIME_PROBE_DATABASE = "aios"') == 1
+    assert "RUNTIME_PG_SOCKET" not in source
     assert "PGHOST" not in source
-    assert source.count('RUNTIME_PG_SOCKET = "/var/run/postgresql"') == 1
+
+
 
 
 @pytest.mark.parametrize("identity", helper.ROLES)
@@ -755,8 +777,8 @@ def test_each_collision_precedes_secret_generation_and_mutation(identity, fixtur
     with pytest.raises(helper.BootstrapError, match="database identity collision"):
         helper.bootstrap(fixture_policy, helper.Postgres(runner), generator)
     assert calls == {"generator": 0, "write": 0}
-    assert len(runner.calls) == 4
-    assert identity.encode("ascii") in runner.calls[3][1]
+    assert len(runner.calls) == 8
+    assert identity.encode("ascii") in runner.calls[7][1]
     assert not fixture_policy.lock_file.exists()
 
 
@@ -793,3 +815,90 @@ def test_lifecycle_order_is_exercised_by_orchestrator(fixture_policy, monkeypatc
     helper.bootstrap(fixture_policy, Ordered(), generate)
     assert events[:7] == ["filesystem", "preflight", "filesystem", "preflight", "secret", "secret", "env"]
     assert events.index("env") < events.index("provision") < events.index("authenticate")
+
+
+def test_exact_loopback_binding_is_accepted():
+    helper.validate_runtime_binding(b'[{"HostIp":"127.0.0.1","HostPort":"5432"}]')
+
+
+@pytest.mark.parametrize("binding", [
+    b'[{"HostIp":"0.0.0.0","HostPort":"5432"}]',
+    b'[{"HostIp":"::","HostPort":"5432"}]',
+    b'[{"HostIp":"203.0.113.8","HostPort":"5432"}]',
+    b'[{"HostIp":"localhost","HostPort":"5432"}]',
+    b'[{"HostIp":"/var/run/postgresql","HostPort":"5432"}]',
+    b'[{"HostIp":"127.0.0.1","HostPort":"55432"}]',
+    b'[{"HostIp":"127.0.0.1","HostPort":"5432"},{"HostIp":"::1","HostPort":"5432"}]',
+    b'null', b'{}', b'not-json',
+])
+def test_unsafe_or_ambiguous_runtime_binding_is_rejected(binding):
+    with pytest.raises(helper.BootstrapError):
+        helper.validate_runtime_binding(binding)
+
+
+@pytest.mark.parametrize("gateway", [
+    b"", b"172.16.2.1\n172.17.0.1\n", b"127.0.0.1\n", b"8.8.8.8\n", b"invalid\n",
+])
+def test_unsafe_or_ambiguous_runtime_gateway_is_rejected(gateway):
+    with pytest.raises(helper.BootstrapError):
+        helper.validate_runtime_gateway(gateway)
+
+
+@pytest.mark.parametrize("posture", [
+    b"trust|0|0|aios_material_inventory_posting_runtime:scram-sha-256,aios_material_receipt_candidate_runtime:scram-sha-256\n",
+    b"scram-sha-256|0|0|aios_material_inventory_posting_runtime:md5,aios_material_receipt_candidate_runtime:md5\n",
+    b"scram-sha-256|0|0|aios_material_inventory_posting_runtime:reject,aios_material_receipt_candidate_runtime:reject\n",
+    b"scram-sha-256|0|0|aios_material_inventory_posting_runtime:NONE,aios_material_receipt_candidate_runtime:NONE\n",
+    b"scram-sha-256|0|1|aios_material_inventory_posting_runtime:scram-sha-256,aios_material_receipt_candidate_runtime:scram-sha-256\n",
+])
+def test_unsafe_runtime_auth_posture_fails_closed(posture):
+    def runner(argv, stdin, env, pass_fds):
+        if tuple(argv) == helper.RUNTIME_BINDING_INSPECT_ARGV:
+            return helper.ProcessResult(0, b'[{"HostIp":"127.0.0.1","HostPort":"5432"}]\n')
+        if tuple(argv) == helper.RUNTIME_GATEWAY_INSPECT_ARGV:
+            return helper.ProcessResult(0, b"172.16.2.1\n")
+        return helper.ProcessResult(0, posture)
+
+    with pytest.raises(helper.BootstrapError, match="unsafe runtime PostgreSQL authentication posture"):
+        helper.Postgres(runner)._runtime_preflight()
+
+
+def test_unsafe_runtime_binding_precedes_secret_generation_and_mutation(fixture_policy, monkeypatch):
+    calls = {"generator": 0, "write": 0}
+
+    def runner(argv, stdin, env, pass_fds):
+        if tuple(argv) == helper.CONTAINER_INSPECT_ARGV:
+            output = f"/{helper.POSTGRES_CONTAINER}|true|healthy|{helper.POSTGRES_IMAGE}\n".encode()
+            return helper.ProcessResult(0, output)
+        if stdin == helper.admin_identity_preflight_sql():
+            output = f"{helper.ADMIN_ROLE}|{helper.ADMIN_ROLE}|{helper.DATABASE}|17|{helper.ADMIN_PG_SOCKET}\nt|t|t\n1|0\n".encode()
+            return helper.ProcessResult(0, output)
+        if tuple(argv) == helper.RUNTIME_BINDING_INSPECT_ARGV:
+            return helper.ProcessResult(0, b'[{"HostIp":"0.0.0.0","HostPort":"5432"}]\n')
+        return helper.ProcessResult(0, b"")
+
+    def generator():
+        calls["generator"] += 1
+        return secret(b"x")
+
+    monkeypatch.setattr(
+        helper, "atomic_write",
+        lambda *_args, **_kwargs: calls.__setitem__("write", calls["write"] + 1),
+    )
+    with pytest.raises(helper.BootstrapError, match="unsafe runtime PostgreSQL publication"):
+        helper.bootstrap(fixture_policy, helper.Postgres(runner), generator)
+    assert calls == {"generator": 0, "write": 0}
+    assert not fixture_policy.lock_file.exists()
+
+
+def test_compensation_and_reconciliation_remain_admin_only():
+    compensation = RecordingRunner([
+        helper.ProcessResult(0, b""),
+        helper.ProcessResult(0, b"2|t\n"),
+    ])
+    helper.Postgres(compensation).compensate()
+    assert all(call[0] == helper.ADMIN_ARGV for call in compensation.calls)
+
+    reconciliation = RecordingRunner([helper.ProcessResult(0, b"")])
+    assert helper.Postgres(reconciliation).reconcile() is helper.LifecycleState.DB_ROLLED_BACK
+    assert all(call[0] == helper.ADMIN_ARGV for call in reconciliation.calls)
