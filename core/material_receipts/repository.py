@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Final
 from uuid import UUID
@@ -31,6 +32,37 @@ _ITEM_COLUMNS: Final = (
     "canonical_display_name, size_description, specification, material_id, "
     "full_colly_count, qty_per_full_colly, partial_qty, total_qty, unit, status"
 )
+_CANDIDATE_RUNTIME_USER: Final = "aios_material_receipt_candidate_runtime"
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateDatabaseConfig:
+    """Exact-identity connection configuration for the candidate boundary."""
+
+    password: str = field(repr=False)
+    host: str = "127.0.0.1"
+    port: int = 5432
+    dbname: str = "aios"
+    username: str = _CANDIDATE_RUNTIME_USER
+    search_path: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.username != _CANDIDATE_RUNTIME_USER:
+            raise ValueError("candidate database identity is not authorized")
+        if self.host != "127.0.0.1":
+            raise ValueError("candidate database host must be numeric loopback")
+        if type(self.port) is not int or not 1 <= self.port <= 65535:
+            raise ValueError("candidate database port is invalid")
+        if not isinstance(self.dbname, str) or not self.dbname.strip():
+            raise ValueError("candidate database name is required")
+        if not isinstance(self.password, str) or not self.password:
+            raise ValueError("candidate database password is required")
+        if self.search_path is not None and (
+            not self.search_path
+            or not self.search_path[0].isalpha()
+            or not self.search_path.replace("_", "").isalnum()
+        ):
+            raise ValueError("candidate database search path is invalid")
 
 
 def _required_actor(actor_reference: object) -> str:
@@ -77,10 +109,20 @@ def _map_receipt(
 class MaterialReceiptRepository:
     """Own one candidate-runtime connection and transaction per operation."""
 
-    def __init__(self, database_url: str) -> None:
-        if not isinstance(database_url, str) or not database_url:
-            raise ValueError("database_url must be non-blank text")
-        self._database_url = database_url
+    def __init__(self, config: CandidateDatabaseConfig) -> None:
+        if type(config) is not CandidateDatabaseConfig:
+            raise TypeError("config must be CandidateDatabaseConfig")
+        parameters = dict(
+            host=config.host,
+            port=config.port,
+            dbname=config.dbname,
+            user=config.username,
+            password=config.password,
+            sslmode="disable",
+        )
+        if config.search_path is not None:
+            parameters["options"] = f"-csearch_path={config.search_path}"
+        self._database_url = conninfo.make_conninfo(**parameters)
 
     @classmethod
     def from_environment(cls) -> "MaterialReceiptRepository":
@@ -89,16 +131,7 @@ class MaterialReceiptRepository:
             raise ValueError(
                 "AIOS_MATERIAL_RECEIPT_CANDIDATE_DB_PASSWORD is required"
             )
-        return cls(
-            conninfo.make_conninfo(
-                host="127.0.0.1",
-                port=5432,
-                dbname="aios",
-                user="aios_material_receipt_candidate_runtime",
-                password=password,
-                sslmode="disable",
-            )
-        )
+        return cls(CandidateDatabaseConfig(password=password))
 
     async def create_receipt_candidate(
         self, request: ReceiptCandidateRequest

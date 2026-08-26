@@ -4,9 +4,15 @@ import os
 from pathlib import Path
 import unittest
 import uuid
+from unittest.mock import AsyncMock, patch
 
 import psycopg
 from psycopg import conninfo, sql
+
+from tests.integration.business_context.disposable_postgres import (
+    OPT_IN,
+    admit_disposable_postgres,
+)
 
 
 TEST_URL = os.environ.get("AIOS_MATERIAL_TEST_DATABASE_URL")
@@ -15,19 +21,107 @@ STOCK_SQL = (ROOT / "migrations/postgres/0002_create_material_stock.up.sql").rea
 RECEIPT_SQL = (ROOT / "migrations/postgres/0003_create_material_receipt_inventory_movement.up.sql").read_text()
 
 
-@unittest.skipUnless(TEST_URL, "AIOS_MATERIAL_TEST_DATABASE_URL is required")
+class DisposableAdmissionTests(unittest.TestCase):
+    valid_url = (
+        "postgresql://postgres:disposable-only@127.0.0.1:32888/"
+        "aios_material_disposable_review"
+    )
+    admitted_environment = {OPT_IN: "1"}
+
+    def assert_denied_without_connection(self, url, environment):
+        connect = AsyncMock()
+        with patch.object(psycopg.AsyncConnection, "connect", connect):
+            with self.assertRaises(RuntimeError):
+                admit_disposable_postgres(url, environment=environment)
+        connect.assert_not_called()
+
+    def test_missing_opt_in_and_otherwise_valid_target_are_denied(self):
+        self.assert_denied_without_connection(self.valid_url, {})
+
+    def test_production_database_and_endpoint_are_denied(self):
+        self.assert_denied_without_connection(
+            "postgresql://postgres:x@127.0.0.1:32888/aios",
+            self.admitted_environment,
+        )
+        self.assert_denied_without_connection(
+            "postgresql://postgres:x@127.0.0.1:5432/"
+            "aios_material_disposable_review",
+            self.admitted_environment,
+        )
+
+    def test_governed_and_unexpected_setup_identities_are_denied(self):
+        for username in (
+            "aios",
+            "aios_material_receipt_candidate_runtime",
+            "aios_material_inventory_posting_runtime",
+            "aios_material_stock_reader",
+            "unexpected_admin",
+        ):
+            url = (
+                f"postgresql://{username}:x@127.0.0.1:32888/"
+                "aios_material_disposable_review"
+            )
+            with self.subTest(username=username):
+                self.assert_denied_without_connection(
+                    url, self.admitted_environment
+                )
+
+    def test_governed_candidate_and_posting_passwords_are_denied(self):
+        for key in (
+            "AIOS_MATERIAL_RECEIPT_CANDIDATE_DB_PASSWORD",
+            "AIOS_MATERIAL_INVENTORY_POSTING_DB_PASSWORD",
+            "AIOS_MATERIAL_STOCK_DB_PASSWORD",
+            "AIOS_MATERIAL_STOCK_READER_DB_PASSWORD",
+        ):
+            environment = {OPT_IN: "1", key: "governed-secret"}
+            self.assert_denied_without_connection(
+                "postgresql://postgres:governed-secret@127.0.0.1:32888/"
+                "aios_material_disposable_review",
+                environment,
+            )
+
+    def test_malformed_ambiguous_and_unexpected_targets_are_denied(self):
+        for url in (
+            "not a postgres target",
+            "postgresql://postgres:x@localhost:32888/"
+            "aios_material_disposable_review",
+            "postgresql://postgres:x@127.0.0.1:32888/test_database",
+            "postgresql://postgres@127.0.0.1:32888/"
+            "aios_material_disposable_review",
+            "postgresql://postgres:x@127.0.0.1:32888/"
+            "aios_material_disposable_review?service=production",
+        ):
+            with self.subTest(url=url):
+                self.assert_denied_without_connection(
+                    url, self.admitted_environment
+                )
+
+    def test_positive_disposable_contract_is_admitted_without_mutation(self):
+        target = admit_disposable_postgres(
+            self.valid_url, environment=self.admitted_environment
+        )
+        self.assertEqual(target.host, "127.0.0.1")
+        self.assertEqual(target.port, 32888)
+        self.assertEqual(target.dbname, "aios_material_disposable_review")
+        self.assertEqual(target.admin_user, "postgres")
+
+
+@unittest.skipUnless(
+    TEST_URL or os.environ.get(OPT_IN),
+    "disposable PostgreSQL configuration is required",
+)
 class MaterialWriterSecurityBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        parsed = conninfo.conninfo_to_dict(TEST_URL)
-        if parsed.get("dbname") == "aios":
-            self.fail("production database name is prohibited for disposable tests")
+        self.target = admit_disposable_postgres(TEST_URL)
         suffix = uuid.uuid4().hex[:12]
         self.schema = "security_" + suffix
         self.candidate = "candidate_" + suffix
         self.posting = "posting_" + suffix
         self.reader = "reader_" + suffix
         self.password = "disposable-test-only"
-        async with await psycopg.AsyncConnection.connect(TEST_URL, autocommit=True) as admin:
+        async with await psycopg.AsyncConnection.connect(
+            self.target.url, autocommit=True
+        ) as admin:
             for role in (self.candidate, self.posting, self.reader):
                 await admin.execute(
                     sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
@@ -35,7 +129,9 @@ class MaterialWriterSecurityBoundaryTests(unittest.IsolatedAsyncioTestCase):
                     )
                 )
             await admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(self.schema)))
-        self.admin_url = conninfo.make_conninfo(TEST_URL, options=f"-csearch_path={self.schema}")
+        self.admin_url = conninfo.make_conninfo(
+            self.target.url, options=f"-csearch_path={self.schema}"
+        )
         async with await psycopg.AsyncConnection.connect(self.admin_url, autocommit=True) as con:
             await con.execute(STOCK_SQL); await con.execute(RECEIPT_SQL)
             await con.execute("CREATE TABLE unrelated_records (id integer)")
@@ -55,7 +151,7 @@ class MaterialWriterSecurityBoundaryTests(unittest.IsolatedAsyncioTestCase):
             await con.execute("INSERT INTO material_receipts (receipt_id,supplier_name,received_at,source_asset_reference) VALUES (%s,'Supplier',%s,'asset:test')", (receipt, now))
             await con.execute("INSERT INTO material_receipt_items (receipt_item_id,receipt_id,line_number,material_id,full_colly_count,qty_per_full_colly,partial_qty,total_qty,unit) VALUES (%s,%s,1,%s,1,1,0,1,'sheet')", (item, receipt, material))
             self.ids = material, receipt, item
-        base = conninfo.conninfo_to_dict(TEST_URL)
+        base = conninfo.conninfo_to_dict(self.target.url)
         base.update(user=self.candidate, password=self.password,
                     options=f"-csearch_path={self.schema}")
         self.candidate_url = conninfo.make_conninfo(**base)
@@ -65,7 +161,9 @@ class MaterialWriterSecurityBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.reader_url = conninfo.make_conninfo(**base)
 
     async def asyncTearDown(self):
-        async with await psycopg.AsyncConnection.connect(TEST_URL, autocommit=True) as admin:
+        async with await psycopg.AsyncConnection.connect(
+            self.target.url, autocommit=True
+        ) as admin:
             await admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(self.schema)))
             for role in (self.candidate, self.posting, self.reader):
                 await admin.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))

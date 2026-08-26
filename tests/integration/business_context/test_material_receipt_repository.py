@@ -13,6 +13,11 @@ from core.material_receipts import (
     MaterialReceiptRepository, ReceiptCandidateRequest, ReceiptItemCandidate,
     ReceiptStatus,
 )
+from core.material_receipts.repository import CandidateDatabaseConfig
+from tests.integration.business_context.disposable_postgres import (
+    OPT_IN,
+    admit_disposable_postgres,
+)
 
 
 TEST_URL = os.environ.get("AIOS_MATERIAL_TEST_DATABASE_URL")
@@ -44,24 +49,76 @@ def candidate_request(*items, receipt_id=None, **overrides):
     return ReceiptCandidateRequest(**values)
 
 
-@unittest.skipUnless(TEST_URL, "AIOS_MATERIAL_TEST_DATABASE_URL is required")
+@unittest.skipUnless(
+    TEST_URL or os.environ.get(OPT_IN),
+    "disposable PostgreSQL configuration is required",
+)
 class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        parsed = conninfo.conninfo_to_dict(TEST_URL)
-        if parsed.get("dbname") == "aios":
-            self.fail("production database name is prohibited for disposable tests")
+        self.target = admit_disposable_postgres(TEST_URL)
         self.schema = "candidate_" + uuid.uuid4().hex
-        async with await psycopg.AsyncConnection.connect(TEST_URL, autocommit=True) as admin:
+        self.runtime_user = "aios_material_receipt_candidate_runtime"
+        self.runtime_password = "candidate-disposable-only"
+        async with await psycopg.AsyncConnection.connect(
+            self.target.url, autocommit=True
+        ) as admin:
+            await admin.execute(
+                sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
+                    sql.Identifier(self.runtime_user),
+                    sql.Literal(self.runtime_password),
+                )
+            )
             await admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(self.schema)))
-        self.url = conninfo.make_conninfo(TEST_URL, options=f"-csearch_path={self.schema}")
+        self.url = conninfo.make_conninfo(
+            self.target.url, options=f"-csearch_path={self.schema}"
+        )
         async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as con:
             await con.execute(STOCK_SQL)
             await con.execute(RECEIPT_SQL)
-        self.repository = MaterialReceiptRepository(self.url)
+            role = sql.Identifier(self.runtime_user)
+            schema = sql.Identifier(self.schema)
+            await con.execute(
+                sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(schema, role)
+            )
+            await con.execute(sql.SQL(
+                "GRANT SELECT ON material_receipts, material_receipt_items, "
+                "material_stock TO {}"
+            ).format(role))
+            await con.execute(sql.SQL(
+                "GRANT INSERT (receipt_id,supplier_name,document_number,document_date,"
+                "received_at,source_asset_reference), UPDATE (supplier_name,"
+                "document_number,document_date,received_at,source_asset_reference,"
+                "status,version,confirmed_version,confirmed_at,"
+                "confirmation_actor_reference,updated_at) ON material_receipts TO {}"
+            ).format(role))
+            await con.execute(sql.SQL(
+                "GRANT INSERT (receipt_item_id,receipt_id,line_number,"
+                "candidate_material_description,canonical_display_name,size_description,"
+                "specification,material_id,full_colly_count,qty_per_full_colly,"
+                "partial_qty,total_qty,unit), UPDATE (line_number,"
+                "candidate_material_description,canonical_display_name,size_description,"
+                "specification,material_id,full_colly_count,qty_per_full_colly,"
+                "partial_qty,total_qty,unit,status,updated_at) "
+                "ON material_receipt_items TO {}"
+            ).format(role))
+        self.repository = MaterialReceiptRepository(
+            CandidateDatabaseConfig(
+                password=self.runtime_password,
+                host=self.target.host,
+                port=self.target.port,
+                dbname=self.target.dbname,
+                search_path=self.schema,
+            )
+        )
 
     async def asyncTearDown(self):
-        async with await psycopg.AsyncConnection.connect(TEST_URL, autocommit=True) as admin:
+        async with await psycopg.AsyncConnection.connect(
+            self.target.url, autocommit=True
+        ) as admin:
             await admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(self.schema)))
+            await admin.execute(
+                sql.SQL("DROP ROLE {}").format(sql.Identifier(self.runtime_user))
+            )
 
     async def material(self, *, active=True, unit="sheet"):
         material_id = uuid.uuid4()

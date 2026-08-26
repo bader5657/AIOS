@@ -3,13 +3,18 @@ from decimal import Decimal
 import inspect
 import unittest
 import uuid
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
+
+from psycopg import conninfo
 
 from core.inventory_posting import (
     InventoryPostingError, InventoryPostingFailureCode, MovementEvidence,
     PostConfirmedReceiptRequest,
 )
-from core.inventory_posting.repository import InventoryPostingRepository
+from core.inventory_posting.repository import (
+    InventoryPostingRepository,
+    PostingDatabaseConfig,
+)
 from core.inventory_posting.service import InventoryPostingService
 
 
@@ -58,6 +63,36 @@ class PostingServiceTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(caught.exception.code,
                          InventoryPostingFailureCode.PACKAGING_FORMULA_INVALID)
+
+    def test_posting_config_rejects_every_other_identity(self):
+        for username in (
+            "aios",
+            "aios_material_receipt_candidate_runtime",
+            "aios_material_stock_reader",
+            "unexpected_user",
+        ):
+            with self.subTest(username=username), self.assertRaises(ValueError):
+                PostingDatabaseConfig(password="test", username=username)
+
+    def test_governed_environment_construction_uses_only_posting_identity(self):
+        with patch.dict(
+            "os.environ",
+            {"AIOS_MATERIAL_INVENTORY_POSTING_DB_PASSWORD": "test-secret"},
+            clear=True,
+        ):
+            repository = InventoryPostingRepository.from_environment()
+        parsed = conninfo.conninfo_to_dict(repository._database_url)
+        self.assertEqual(
+            parsed["user"], "aios_material_inventory_posting_runtime"
+        )
+        self.assertEqual(parsed["host"], "127.0.0.1")
+        self.assertEqual(parsed["port"], "5432")
+        self.assertEqual(parsed["dbname"], "aios")
+        self.assertNotIn("test-secret", repr(PostingDatabaseConfig("test-secret")))
+
+    def test_unrestricted_database_url_is_not_a_constructor_seam(self):
+        with self.assertRaises(TypeError):
+            InventoryPostingRepository("postgresql://aios@127.0.0.1/aios")
 
 
 if __name__ == "__main__":

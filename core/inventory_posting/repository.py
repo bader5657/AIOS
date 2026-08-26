@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
@@ -21,21 +22,64 @@ from .models import (
 )
 
 
+_POSTING_RUNTIME_USER = "aios_material_inventory_posting_runtime"
+
+
+@dataclass(frozen=True, slots=True)
+class PostingDatabaseConfig:
+    """Exact-identity connection configuration for the posting boundary."""
+
+    password: str = field(repr=False)
+    host: str = "127.0.0.1"
+    port: int = 5432
+    dbname: str = "aios"
+    username: str = _POSTING_RUNTIME_USER
+    search_path: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.username != _POSTING_RUNTIME_USER:
+            raise ValueError("posting database identity is not authorized")
+        if self.host != "127.0.0.1":
+            raise ValueError("posting database host must be numeric loopback")
+        if type(self.port) is not int or not 1 <= self.port <= 65535:
+            raise ValueError("posting database port is invalid")
+        if not isinstance(self.dbname, str) or not self.dbname.strip():
+            raise ValueError("posting database name is required")
+        if not isinstance(self.password, str) or not self.password:
+            raise ValueError("posting database password is required")
+        if self.search_path is not None and (
+            not self.search_path
+            or not self.search_path[0].isalpha()
+            or not self.search_path.replace("_", "").isalnum()
+        ):
+            raise ValueError("posting database search path is invalid")
+
+
 class InventoryPostingRepository:
     """Expose only one governed posting operation over posting credentials."""
 
     def __init__(
         self,
-        database_url: str,
+        config: PostingDatabaseConfig,
         *,
         movement_id_factory: Callable[[], UUID] = uuid.uuid4,
         clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
-        if not isinstance(database_url, str) or not database_url:
-            raise ValueError("database_url must be non-blank text")
+        if type(config) is not PostingDatabaseConfig:
+            raise TypeError("config must be PostingDatabaseConfig")
         if not callable(movement_id_factory) or not callable(clock):
             raise ValueError("identity and clock sources must be callable")
-        self._database_url = database_url
+        parameters = dict(
+            host=config.host,
+            port=config.port,
+            dbname=config.dbname,
+            user=config.username,
+            password=config.password,
+            sslmode="disable",
+        )
+        if config.search_path is not None:
+            parameters["options"] = f"-csearch_path={config.search_path}"
+        self._database_url = conninfo.make_conninfo(**parameters)
         self._movement_id_factory = movement_id_factory
         self._clock = clock
 
@@ -46,16 +90,7 @@ class InventoryPostingRepository:
             raise ValueError(
                 "AIOS_MATERIAL_INVENTORY_POSTING_DB_PASSWORD is required"
             )
-        return cls(
-            conninfo.make_conninfo(
-                host="127.0.0.1",
-                port=5432,
-                dbname="aios",
-                user="aios_material_inventory_posting_runtime",
-                password=password,
-                sslmode="disable",
-            )
-        )
+        return cls(PostingDatabaseConfig(password=password))
 
     async def post_confirmed_receipt(
         self, receipt_id: UUID, expected_version: int, actor_reference: str

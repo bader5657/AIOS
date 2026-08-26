@@ -12,6 +12,11 @@ from core.inventory_posting import (
     InventoryPostingError, InventoryPostingFailureCode as Code,
     InventoryPostingRepository, PostingOutcome,
 )
+from core.inventory_posting.repository import PostingDatabaseConfig
+from tests.integration.business_context.disposable_postgres import (
+    OPT_IN,
+    admit_disposable_postgres,
+)
 
 
 TEST_URL = os.environ.get("AIOS_MATERIAL_TEST_DATABASE_URL")
@@ -20,24 +25,71 @@ STOCK_SQL = (ROOT / "migrations/postgres/0002_create_material_stock.up.sql").rea
 RECEIPT_SQL = (ROOT / "migrations/postgres/0003_create_material_receipt_inventory_movement.up.sql").read_text()
 
 
-@unittest.skipUnless(TEST_URL, "AIOS_MATERIAL_TEST_DATABASE_URL is required")
+@unittest.skipUnless(
+    TEST_URL or os.environ.get(OPT_IN),
+    "disposable PostgreSQL configuration is required",
+)
 class PostingRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        parsed = conninfo.conninfo_to_dict(TEST_URL)
-        if parsed.get("dbname") == "aios":
-            self.fail("production database name is prohibited for disposable tests")
+        self.target = admit_disposable_postgres(TEST_URL)
         self.schema = "posting_" + uuid.uuid4().hex
-        async with await psycopg.AsyncConnection.connect(TEST_URL, autocommit=True) as admin:
+        self.runtime_user = "aios_material_inventory_posting_runtime"
+        self.runtime_password = "posting-disposable-only"
+        async with await psycopg.AsyncConnection.connect(
+            self.target.url, autocommit=True
+        ) as admin:
+            await admin.execute(
+                sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
+                    sql.Identifier(self.runtime_user),
+                    sql.Literal(self.runtime_password),
+                )
+            )
             await admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(self.schema)))
-        self.url = conninfo.make_conninfo(TEST_URL, options=f"-csearch_path={self.schema}")
+        self.url = conninfo.make_conninfo(
+            self.target.url, options=f"-csearch_path={self.schema}"
+        )
         async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as con:
             await con.execute(STOCK_SQL)
             await con.execute(RECEIPT_SQL)
-        self.repository = InventoryPostingRepository(self.url)
+            role = sql.Identifier(self.runtime_user)
+            schema = sql.Identifier(self.schema)
+            await con.execute(
+                sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(schema, role)
+            )
+            await con.execute(sql.SQL(
+                "GRANT SELECT ON material_receipts,material_receipt_items,"
+                "inventory_movements,material_stock TO {}"
+            ).format(role))
+            await con.execute(sql.SQL(
+                "GRANT UPDATE (status,updated_at) ON material_receipts,"
+                "material_receipt_items TO {}"
+            ).format(role))
+            await con.execute(sql.SQL(
+                "GRANT INSERT (movement_id,material_id,movement_type,quantity_delta,"
+                "unit,source_receipt_item_id,occurred_at,posting_actor_reference,"
+                "balance_before,balance_after) ON inventory_movements TO {}"
+            ).format(role))
+            await con.execute(sql.SQL(
+                "GRANT UPDATE (stock_qty,updated_at) ON material_stock TO {}"
+            ).format(role))
+        self.repository = InventoryPostingRepository(
+            PostingDatabaseConfig(
+                password=self.runtime_password,
+                host=self.target.host,
+                port=self.target.port,
+                dbname=self.target.dbname,
+                search_path=self.schema,
+            )
+        )
 
     async def asyncTearDown(self):
-        async with await psycopg.AsyncConnection.connect(TEST_URL, autocommit=True) as admin:
+        async with await psycopg.AsyncConnection.connect(
+            self.target.url, autocommit=True
+        ) as admin:
             await admin.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(self.schema)))
+            await admin.execute(
+                sql.SQL("DROP ROLE {}").format(sql.Identifier(self.runtime_user))
+            )
 
     async def material(self, stock="1000", unit="sheet", active=True):
         material_id = uuid.uuid4()
