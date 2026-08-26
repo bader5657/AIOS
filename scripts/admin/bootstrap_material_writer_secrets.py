@@ -71,6 +71,9 @@ RUNTIME_PROBE_DATABASE = "aios"
 RUNTIME_PROBE_PYTHON = "/opt/aios/runtime/venv/bin/python"
 RUNTIME_TCP_CHECK_ARGV = ("/usr/bin/python3", "-I", "-")
 RUNTIME_PROBE_ARGV = (RUNTIME_PROBE_PYTHON, "-I", "-")
+RFC1918_NETWORKS = tuple(ipaddress.IPv4Network(value) for value in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+))
 
 
 CANDIDATE_KEY = "AIOS_MATERIAL_RECEIPT_CANDIDATE_DB_PASSWORD"
@@ -442,58 +445,135 @@ def validate_runtime_bindings(effective_output: bytes, configured_output: bytes)
 
 
 def validate_runtime_gateway(output: bytes) -> str:
-    """Return the one private Docker gateway through which host traffic arrives."""
-    gateways = [line.decode("ascii") for line in output.splitlines() if line.strip()]
+    """Return one dynamically derived RFC1918 Docker bridge gateway."""
+    try:
+        gateways = [line.decode("ascii") for line in output.splitlines() if line.strip()]
+    except UnicodeDecodeError as exc:
+        raise BootstrapError("runtime PostgreSQL gateway is invalid") from exc
     if len(gateways) != 1:
         raise BootstrapError("runtime PostgreSQL gateway is ambiguous")
     try:
-        address = ipaddress.ip_address(gateways[0])
-    except ValueError as exc:
+        address = ipaddress.IPv4Address(gateways[0])
+    except ipaddress.AddressValueError as exc:
         raise BootstrapError("runtime PostgreSQL gateway is invalid") from exc
-    if address.version != 4 or not address.is_private or address.is_loopback:
-        raise BootstrapError("runtime PostgreSQL gateway is unsafe")
+    if not any(address in network for network in RFC1918_NETWORKS):
+        raise BootstrapError("runtime PostgreSQL gateway is outside governed topology")
     return str(address)
 
 
-def runtime_auth_preflight_sql(gateway: str) -> bytes:
-    """Resolve the first HBA rule matching each frozen runtime login."""
-    try:
-        normalized = str(ipaddress.IPv4Address(gateway))
-    except ipaddress.AddressValueError as exc:
-        raise BootstrapError("runtime PostgreSQL gateway is invalid") from exc
-    return f"""\
-BEGIN;
+def runtime_auth_preflight_sql(_gateway: str) -> bytes:
+    """Return ordered parsed HBA rules and password posture for local validation."""
+    return b"""BEGIN;
 SET LOCAL search_path = pg_catalog;
-WITH targets(login) AS (VALUES ('{CANDIDATE_LOGIN}'), ('{POSTING_LOGIN}')),
-matching AS (
-  SELECT t.login, r.auth_method,
-         row_number() OVER (PARTITION BY t.login ORDER BY r.rule_number) AS position
-  FROM targets t
-  JOIN pg_hba_file_rules r ON r.error IS NULL
-   AND r.type IN ('host', 'hostnossl')
-   AND ('all' = ANY(r.database) OR '{RUNTIME_PROBE_DATABASE}' = ANY(r.database))
-   AND ('all' = ANY(r.user_name) OR t.login = ANY(r.user_name)
-        OR (t.login = '{CANDIDATE_LOGIN}' AND '+{CANDIDATE_ROLE}' = ANY(r.user_name))
-        OR (t.login = '{POSTING_LOGIN}' AND '+{POSTING_ROLE}' = ANY(r.user_name)))
-   AND CASE
-     WHEN r.address = 'all' THEN true
-     WHEN r.address ~ '^[0-9A-Fa-f:.]+$'
-       THEN CASE WHEN family(r.address::inet) = family(inet '{normalized}')
-                 THEN (inet '{normalized}' & r.netmask::inet)
-                      = (r.address::inet & r.netmask::inet)
-                 ELSE false END
-     ELSE false
-   END
-)
-SELECT current_setting('password_encryption'),
-       count(*) FILTER (WHERE error IS NOT NULL),
-       count(*) FILTER (WHERE type IN ('host','hostnossl') AND address <> 'all'
-                         AND address !~ '^[0-9A-Fa-f:.]+$'),
-       (SELECT string_agg(t.login || ':' || coalesce(m.auth_method, 'NONE'), ',' ORDER BY t.login)
-        FROM targets t LEFT JOIN matching m ON m.login = t.login AND m.position = 1)
+SELECT json_build_object(
+  'password_encryption', current_setting('password_encryption'),
+  'rules', coalesce(
+    json_agg(json_build_object(
+      'rule_number', rule_number, 'type', type, 'database', database,
+      'user_name', user_name, 'address', address, 'netmask', netmask,
+      'auth_method', auth_method, 'error', error
+    ) ORDER BY rule_number),
+    '[]'::json
+  )
+)::text
 FROM pg_hba_file_rules;
 ROLLBACK;
-""".encode("ascii")
+"""
+
+
+def _hba_list(value: object, field: str) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise BootstrapError(f"runtime PostgreSQL HBA {field} is malformed")
+    return value
+
+
+def _hba_database_matches(values: list[str]) -> bool:
+    return "all" in values or RUNTIME_PROBE_DATABASE in values
+
+
+def _hba_user_matches(values: list[str], login: str) -> bool:
+    if "all" in values or login in values:
+        return True
+    governed_membership = CANDIDATE_ROLE if login == CANDIDATE_LOGIN else POSTING_ROLE
+    return f"+{governed_membership}" in values
+
+
+def _hba_address_matches(address: object, netmask: object, source: ipaddress.IPv4Address) -> bool:
+    if address == "all":
+        return True
+    if not isinstance(address, str) or not isinstance(netmask, str):
+        raise BootstrapError("runtime PostgreSQL HBA address is malformed")
+    try:
+        parsed_address = ipaddress.ip_address(address)
+        parsed_mask = ipaddress.ip_address(netmask)
+    except ValueError as exc:
+        raise BootstrapError("runtime PostgreSQL HBA address is unsupported") from exc
+    if parsed_address.version != parsed_mask.version:
+        raise BootstrapError("runtime PostgreSQL HBA address is malformed")
+    if parsed_address.version != 4:
+        return False
+    try:
+        network = ipaddress.IPv4Network((str(parsed_address), str(parsed_mask)), strict=False)
+    except ValueError as exc:
+        raise BootstrapError("runtime PostgreSQL HBA address is malformed") from exc
+    return source in network
+
+
+def resolve_runtime_hba_methods(rules: object, gateway: str) -> dict[str, str]:
+    """Resolve PostgreSQL's first applicable non-TLS rule for each login."""
+    if not isinstance(rules, list):
+        raise BootstrapError("runtime PostgreSQL HBA rules are malformed")
+    try:
+        source = ipaddress.IPv4Address(gateway)
+    except ipaddress.AddressValueError as exc:
+        raise BootstrapError("runtime PostgreSQL gateway is invalid") from exc
+    resolved: dict[str, str] = {}
+    previous_rule = 0
+    for rule in rules:
+        if not isinstance(rule, dict) or set(rule) != {
+            "rule_number", "type", "database", "user_name", "address",
+            "netmask", "auth_method", "error",
+        }:
+            raise BootstrapError("runtime PostgreSQL HBA rule is malformed")
+        number = rule["rule_number"]
+        if not isinstance(number, int) or number <= previous_rule:
+            raise BootstrapError("runtime PostgreSQL HBA rule ordering is invalid")
+        previous_rule = number
+        if rule["error"] is not None:
+            raise BootstrapError("runtime PostgreSQL HBA contains a parse error")
+        rule_type = rule["type"]
+        if rule_type in ("local", "hostssl"):
+            continue
+        if rule_type not in ("host", "hostnossl"):
+            raise BootstrapError("runtime PostgreSQL HBA rule type is unsupported")
+        databases = _hba_list(rule["database"], "database")
+        users = _hba_list(rule["user_name"], "user")
+        if not _hba_database_matches(databases):
+            continue
+        if not _hba_address_matches(rule["address"], rule["netmask"], source):
+            continue
+        method = rule["auth_method"]
+        if not isinstance(method, str):
+            raise BootstrapError("runtime PostgreSQL HBA auth method is malformed")
+        for login in (CANDIDATE_LOGIN, POSTING_LOGIN):
+            if login not in resolved and _hba_user_matches(users, login):
+                resolved[login] = method
+    return resolved
+
+
+def validate_runtime_auth_output(output: bytes, gateway: str) -> None:
+    try:
+        payload = json.loads(output.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BootstrapError("runtime PostgreSQL authentication posture is malformed") from exc
+    if not isinstance(payload, dict) or set(payload) != {"password_encryption", "rules"}:
+        raise BootstrapError("runtime PostgreSQL authentication posture is malformed")
+    if payload["password_encryption"] != "scram-sha-256":
+        raise BootstrapError("unsafe runtime PostgreSQL authentication posture")
+    methods = resolve_runtime_hba_methods(payload["rules"], gateway)
+    expected = {CANDIDATE_LOGIN: "scram-sha-256", POSTING_LOGIN: "scram-sha-256"}
+    if methods != expected:
+        raise BootstrapError("unsafe runtime PostgreSQL authentication posture")
 
 
 def runtime_tcp_check_program() -> bytes:
@@ -512,7 +592,8 @@ allowed = ('{CANDIDATE_LOGIN}', '{POSTING_LOGIN}')
 if len(sys.argv) != 2 or sys.argv[1] not in allowed:
     raise SystemExit(2)
 with psycopg.connect(host='{RUNTIME_PROBE_HOST}', port={int(RUNTIME_PROBE_PORT)},
-                     dbname='{RUNTIME_PROBE_DATABASE}', user=sys.argv[1], sslmode='disable', connect_timeout=5) as connection:
+                     dbname='{RUNTIME_PROBE_DATABASE}', user=sys.argv[1],
+                     sslmode='disable', gssencmode='disable', connect_timeout=5) as connection:
     with connection.cursor() as cursor:
         cursor.execute("SELECT 1")
         if cursor.fetchone() != (1,):
@@ -783,12 +864,9 @@ class Postgres:
         gateway_address = validate_runtime_gateway(gateway.stdout)
 
         auth = self._admin(runtime_auth_preflight_sql(gateway_address))
-        expected_auth = (
-            f"scram-sha-256|0|0|{POSTING_LOGIN}:scram-sha-256,"
-            f"{CANDIDATE_LOGIN}:scram-sha-256"
-        ).encode("ascii")
-        if auth.returncode != 0 or auth.stdout.strip() != expected_auth:
-            raise BootstrapError("unsafe runtime PostgreSQL authentication posture")
+        if auth.returncode != 0:
+            raise BootstrapError("runtime PostgreSQL authentication preflight failed")
+        validate_runtime_auth_output(auth.stdout.strip(), gateway_address)
         try:
             reachable = self.runner(
                 RUNTIME_TCP_CHECK_ARGV, runtime_tcp_check_program(), ADMIN_ENV, (),

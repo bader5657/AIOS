@@ -106,9 +106,12 @@ def test_real_scram_runtime_probes_use_only_numeric_loopback(loopback_postgres, 
     runner = helper.subprocess_runner
     postgres = helper.Postgres(runner)
     assert not postgres._probe(helper.POSTING_LOGIN, helper.Secret(b"wrong-password"))
+    assert CANDIDATE_PASSWORD != POSTING_PASSWORD
 
     assert postgres._probe(helper.CANDIDATE_LOGIN, helper.Secret(CANDIDATE_PASSWORD))
     assert postgres._probe(helper.POSTING_LOGIN, helper.Secret(POSTING_PASSWORD))
+    assert not postgres._probe(helper.CANDIDATE_LOGIN, helper.Secret(POSTING_PASSWORD))
+    assert not postgres._probe(helper.POSTING_LOGIN, helper.Secret(CANDIDATE_PASSWORD))
     assert not postgres._probe(helper.CANDIDATE_LOGIN, helper.Secret(b"wrong-password"))
     captured = capsys.readouterr()
     assert CANDIDATE_PASSWORD.decode() not in captured.out + captured.err
@@ -126,6 +129,7 @@ def test_real_scram_runtime_probes_use_only_numeric_loopback(loopback_postgres, 
         TEST_CONTAINER,
     )
     assert b"sslmode='disable'" in helper.runtime_probe_program()
+    assert b"gssencmode='disable'" in helper.runtime_probe_program()
     bindings = json.loads(inspected.stdout)
     assert len(bindings) == 1
     assert bindings[0]["HostIp"] == "127.0.0.1"
