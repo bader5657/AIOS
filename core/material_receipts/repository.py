@@ -135,7 +135,7 @@ class MaterialReceiptRepository:
         return cls(CandidateDatabaseConfig(password=password))
 
     async def create_receipt_candidate(
-        self, request: ReceiptCandidateRequest
+        self, request: ReceiptCandidateRequest, created_by_actor_reference: str
     ) -> ReceiptForReview:
         try:
             async with await psycopg.AsyncConnection.connect(self._database_url) as con:
@@ -145,8 +145,8 @@ class MaterialReceiptRepository:
                         """
                         INSERT INTO material_receipts (
                             receipt_id, supplier_name, document_number, document_date,
-                            received_at, source_asset_reference
-                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                            received_at, source_asset_reference, created_by_actor_reference
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             request.receipt_id,
@@ -155,6 +155,7 @@ class MaterialReceiptRepository:
                             request.document_date,
                             request.received_at,
                             request.source_asset_reference,
+                            created_by_actor_reference,
                         ),
                     )
                     for item in request.items:

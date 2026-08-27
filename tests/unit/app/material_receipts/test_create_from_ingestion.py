@@ -24,7 +24,7 @@ from core.app.material_receipts.candidate_input_errors import (
     CandidateInputFailureCode,
 )
 from core.app.material_receipts.results import ReviewApplicationError, ReviewFailureCode
-from core.app.material_receipts.review_use_cases import ReviewFacade, SourceContext
+from core.app.material_receipts.review_use_cases import ActorContext, ReviewFacade, SourceContext
 from core.ingestion.universal_ingestion import IngestionResult
 from core.inventory_posting.repository import (
     InventoryPostingRepository,
@@ -42,6 +42,8 @@ from core.material_receipts.repository import (
     CandidateDatabaseConfig,
     MaterialReceiptRepository,
 )
+
+ACTOR = ActorContext("operator:550e8400-e29b-41d4-a716-446655440000")
 
 
 def request(*, source: str | None = None) -> ReceiptCandidateRequest:
@@ -112,11 +114,11 @@ class RecordingCreateCapability:
     __slots__ = ("calls", "result")
 
     def __init__(self, result: ReceiptForReview) -> None:
-        self.calls: list[tuple[ReceiptCandidateRequest, SourceContext]] = []
+        self.calls: list[tuple[ReceiptCandidateRequest, SourceContext, ActorContext]] = []
         self.result = result
 
-    async def create_candidate(self, candidate, source_context):
-        self.calls.append((candidate, source_context))
+    async def create_candidate(self, candidate, source_context, actor_context):
+        self.calls.append((candidate, source_context, actor_context))
         return self.result
 
 
@@ -176,17 +178,105 @@ async def test_public_api_maps_once_then_creates_once(monkeypatch) -> None:
     monkeypatch.setattr(create_from_ingestion, "_candidate_capability", lambda: capability)
 
     actual = await create_from_ingestion.create_review_candidate_from_ingestion(
-        evidence, facts
+        evidence, facts, ACTOR
     )
 
     assert actual is result
     assert mapper_calls == [(evidence, facts)]
     assert capability.calls == [
-        (candidate, SourceContext(candidate.source_asset_reference))
+        (candidate, SourceContext(candidate.source_asset_reference), ACTOR)
     ]
 
 
-def test_public_surface_has_one_two_input_operation() -> None:
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("actor", "code"), [
+    (None, ReviewFailureCode.ACTOR_REQUIRED),
+    (object(), ReviewFailureCode.ACTOR_INVALID),
+    (ActorContext("reviewer:review-7"), ReviewFailureCode.ACTOR_UNAUTHORIZED),
+    (ActorContext("operator:legacy-7"), ReviewFailureCode.ACTOR_UNAUTHORIZED),
+])
+async def test_actor_failures_precede_mapper_and_capability(monkeypatch, actor, code) -> None:
+    mapper_calls = capability_calls = 0
+    def mapper(*args):
+        nonlocal mapper_calls
+        mapper_calls += 1
+        raise AssertionError("actor must be checked before mapper")
+    def capability():
+        nonlocal capability_calls
+        capability_calls += 1
+        raise AssertionError("actor must be checked before capability")
+    monkeypatch.setattr(create_from_ingestion, "build_receipt_candidate_request", mapper)
+    monkeypatch.setattr(create_from_ingestion, "_candidate_capability", capability)
+    with pytest.raises(ReviewApplicationError) as caught:
+        await create_from_ingestion.create_review_candidate_from_ingestion(object(), object(), actor)
+    assert caught.value.code is code
+    assert mapper_calls == capability_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_omitted_actor_is_actor_required_before_mapper(monkeypatch) -> None:
+    monkeypatch.setattr(
+        create_from_ingestion,
+        "build_receipt_candidate_request",
+        lambda *args: (_ for _ in ()).throw(AssertionError("mapper called")),
+    )
+    with pytest.raises(ReviewApplicationError) as caught:
+        await create_from_ingestion.create_review_candidate_from_ingestion(object(), object())
+    assert caught.value.code is ReviewFailureCode.ACTOR_REQUIRED
+
+
+def test_actor_is_a_separate_typed_public_argument() -> None:
+    signature = inspect.signature(create_from_ingestion.create_review_candidate_from_ingestion)
+    assert tuple(signature.parameters) == ("ingestion_result", "trusted_receipt_facts", "actor_context")
+    assert all("actor" not in field.name for field in fields(IngestionResult))
+    assert all("actor" not in field.name for field in fields(TrustedReceiptFacts))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("actor", "code"),
+    [
+        (None, ReviewFailureCode.ACTOR_REQUIRED),
+        (object(), ReviewFailureCode.ACTOR_INVALID),
+        (ActorContext("reviewer:review-7"), ReviewFailureCode.ACTOR_UNAUTHORIZED),
+        (ActorContext("operator:legacy-7"), ReviewFailureCode.ACTOR_UNAUTHORIZED),
+    ],
+)
+async def test_actor_failures_precede_mapper_and_capability(monkeypatch, actor, code) -> None:
+    mapper_calls = 0
+    capability_calls = 0
+
+    def mapper(*args):
+        nonlocal mapper_calls
+        mapper_calls += 1
+        raise AssertionError("actor must be checked before mapper")
+
+    def capability():
+        nonlocal capability_calls
+        capability_calls += 1
+        raise AssertionError("actor must be checked before capability")
+
+    monkeypatch.setattr(create_from_ingestion, "build_receipt_candidate_request", mapper)
+    monkeypatch.setattr(create_from_ingestion, "_candidate_capability", capability)
+    with pytest.raises(ReviewApplicationError) as caught:
+        await create_from_ingestion.create_review_candidate_from_ingestion(
+            object(), object(), actor
+        )
+    assert caught.value.code is code
+    assert mapper_calls == 0
+    assert capability_calls == 0
+
+
+def test_actor_is_not_accepted_from_ingestion_or_trusted_fact_objects() -> None:
+    signature = inspect.signature(create_from_ingestion.create_review_candidate_from_ingestion)
+    assert tuple(signature.parameters) == (
+        "ingestion_result", "trusted_receipt_facts", "actor_context"
+    )
+    assert "actor" not in {field.name for field in fields(IngestionResult)}
+    assert "actor" not in {field.name for field in fields(TrustedReceiptFacts)}
+
+
+def test_public_surface_has_one_three_input_operation() -> None:
     assert create_from_ingestion.__all__ == (
         "create_review_candidate_from_ingestion",
     )
@@ -196,8 +286,9 @@ def test_public_surface_has_one_two_input_operation() -> None:
     assert tuple(signature.parameters) == (
         "ingestion_result",
         "trusted_receipt_facts",
+        "actor_context",
     )
-    assert not hasattr(create_from_ingestion, "ActorContext")
+    assert create_from_ingestion.ActorContext is ActorContext
 
 
 @pytest.mark.asyncio
@@ -219,7 +310,7 @@ async def test_mapper_failure_prevents_capability_construction(monkeypatch) -> N
 
     with pytest.raises(CandidateInputError) as caught:
         await create_from_ingestion.create_review_candidate_from_ingestion(
-            object(), object()
+            object(), object(), ACTOR
         )
     assert caught.value.code is CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE
     assert capability_calls == 0
@@ -246,7 +337,7 @@ async def test_invalid_inputs_never_construct_candidate_capability(
     monkeypatch.setattr(create_from_ingestion, "_candidate_capability", forbidden)
     with pytest.raises(CandidateInputError) as caught:
         await create_from_ingestion.create_review_candidate_from_ingestion(
-            evidence, facts
+            evidence, facts, ACTOR
         )
     assert caught.value.code is code
     assert calls == 0
@@ -268,7 +359,7 @@ async def test_forged_trusted_facts_prevents_candidate_capability(monkeypatch) -
     monkeypatch.setattr(create_from_ingestion, "_candidate_capability", forbidden)
     with pytest.raises(CandidateInputError) as caught:
         await create_from_ingestion.create_review_candidate_from_ingestion(
-            ingestion_evidence(), forged
+            ingestion_evidence(), forged, ACTOR
         )
     assert caught.value.code is CandidateInputFailureCode.TRUSTED_FACTS_INVALID
     assert calls == 0
@@ -292,7 +383,7 @@ async def test_non_authoritative_mapper_source_is_rejected_before_create(monkeyp
     monkeypatch.setattr(create_from_ingestion, "_candidate_capability", forbidden)
     with pytest.raises(ReviewApplicationError) as caught:
         await create_from_ingestion.create_review_candidate_from_ingestion(
-            object(), object()
+            object(), object(), ACTOR
         )
     assert caught.value.code is ReviewFailureCode.SOURCE_IDENTITY_INVALID
     assert calls == 0
@@ -312,7 +403,7 @@ async def test_non_review_safe_result_fails_closed(monkeypatch) -> None:
     monkeypatch.setattr(create_from_ingestion, "_candidate_capability", lambda: capability)
     with pytest.raises(ReviewApplicationError) as caught:
         await create_from_ingestion.create_review_candidate_from_ingestion(
-            object(), object()
+            object(), object(), ACTOR
         )
     assert caught.value.code is ReviewFailureCode.INTERNAL_FAILURE
     assert len(capability.calls) == 1
@@ -426,7 +517,7 @@ _SENTINEL_CREDENTIAL = "stage031b-sentinel-credential-7f483ac9"
 async def capture_review_error(evidence, facts) -> ReviewApplicationError:
     try:
         await create_from_ingestion.create_review_candidate_from_ingestion(
-            evidence, facts
+            evidence, facts, ACTOR
         )
     except ReviewApplicationError as exc:
         return exc
@@ -436,7 +527,7 @@ async def capture_review_error(evidence, facts) -> ReviewApplicationError:
 async def capture_candidate_input_error(evidence, facts) -> CandidateInputError:
     try:
         await create_from_ingestion.create_review_candidate_from_ingestion(
-            evidence, facts
+            evidence, facts, ACTOR
         )
     except CandidateInputError as exc:
         return exc

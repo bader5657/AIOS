@@ -30,6 +30,8 @@ from core.material_receipts import (
     ReceiptStatus,
 )
 
+CREATOR = ActorContext("operator:550e8400-e29b-41d4-a716-446655440000")
+
 
 def manifest_reference() -> str:
     return f"/opt/aios/data/documents/manifests/{uuid.uuid4()}.json"
@@ -100,8 +102,8 @@ class RecordingCandidatePort:
         self.current = current
         self.calls: list[tuple[object, ...]] = []
 
-    async def create_candidate(self, request: ReceiptCandidateRequest) -> ReceiptForReview:
-        self.calls.append(("create_candidate", request))
+    async def create_candidate(self, request: ReceiptCandidateRequest, created_by_actor_reference: str) -> ReceiptForReview:
+        self.calls.append(("create_candidate", request, created_by_actor_reference))
         return self.current
 
     async def revise_candidate(
@@ -174,10 +176,21 @@ async def test_invented_canonical_manifest_is_rejected_when_not_retained() -> No
 
     with pytest.raises(ReviewApplicationError) as caught:
         await facade.create_candidate(
-            request, SourceContext(request.source_asset_reference)
+            request, SourceContext(request.source_asset_reference), CREATOR
         )
 
     assert caught.value.code is ReviewFailureCode.SOURCE_IDENTITY_INVALID
+    assert port.calls == []
+
+
+@async_test
+async def test_create_missing_actor_is_required_before_other_checks() -> None:
+    request = candidate_request()
+    port = RecordingCandidatePort(review_view(request))
+    facade = facade_for(port)
+    with pytest.raises(ReviewApplicationError) as caught:
+        await facade.create_candidate(request, SourceContext(request.source_asset_reference))
+    assert caught.value.code is ReviewFailureCode.ACTOR_REQUIRED
     assert port.calls == []
 
 
@@ -188,11 +201,11 @@ async def test_create_binds_exact_source_context_and_delegates() -> None:
     facade = facade_for(port)
 
     result = await facade.create_candidate(
-        request, SourceContext(request.source_asset_reference, registry_record_id=7)
+        request, SourceContext(request.source_asset_reference, registry_record_id=7), CREATOR
     )
 
     assert result == port.current
-    assert port.calls == [("create_candidate", request)]
+    assert port.calls == [("create_candidate", request, CREATOR.actor_reference)]
 
 
 @async_test
@@ -202,7 +215,7 @@ async def test_create_rejects_conflicting_source_without_port_activity() -> None
     facade = facade_for(port)
 
     with pytest.raises(ReviewApplicationError) as caught:
-        await facade.create_candidate(request, SourceContext(manifest_reference()))
+        await facade.create_candidate(request, SourceContext(manifest_reference()), CREATOR)
 
     assert caught.value.code is ReviewFailureCode.SOURCE_IDENTITY_CONFLICT
     assert port.calls == []
@@ -370,7 +383,7 @@ async def test_candidate_and_unexpected_errors_are_sanitized() -> None:
     request = candidate_request()
 
     class FailingPort(RecordingCandidatePort):
-        async def create_candidate(self, request: ReceiptCandidateRequest) -> ReceiptForReview:
+        async def create_candidate(self, request: ReceiptCandidateRequest, created_by_actor_reference: str) -> ReceiptForReview:
             raise MaterialReceiptError(MaterialReceiptFailureCode.DATA_INTEGRITY_ERROR)
 
         async def get_candidate_for_review(self, receipt_id: uuid.UUID) -> ReceiptForReview:
@@ -378,7 +391,7 @@ async def test_candidate_and_unexpected_errors_are_sanitized() -> None:
 
     facade = facade_for(FailingPort(review_view(request)))
     with pytest.raises(ReviewApplicationError) as candidate:
-        await facade.create_candidate(request, SourceContext(request.source_asset_reference))
+        await facade.create_candidate(request, SourceContext(request.source_asset_reference), CREATOR)
     assert str(candidate.value) == "CANDIDATE_OPERATION_FAILED"
     assert candidate.value.candidate_code is MaterialReceiptFailureCode.DATA_INTEGRITY_ERROR
 
@@ -423,6 +436,7 @@ def test_forged_source_contexts_fail_before_verifier_or_candidate_port() -> None
                 facade.create_candidate(
                     request,
                     forge_source_context(reference, registry_record_id),
+                    CREATOR,
                 )
             )
 
@@ -514,7 +528,7 @@ def test_valid_contexts_still_pass_boundary_revalidation() -> None:
 
     created = asyncio.run(
         facade.create_candidate(
-            request, SourceContext(request.source_asset_reference)
+            request, SourceContext(request.source_asset_reference), CREATOR
         )
     )
     retrieved = asyncio.run(

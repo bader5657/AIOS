@@ -10,9 +10,6 @@ class MaterialReceiptService:
     def __init__(self, repository: MaterialReceiptRepository) -> None:
         self._repository = repository
 
-    async def create_receipt_candidate(self, request: ReceiptCandidateRequest):
-        return await self._repository.create_receipt_candidate(request)
-
     async def revise_receipt_candidate(self, request: ReceiptCandidateRequest,
                                        expected_version: int):
         return await self._repository.revise_receipt_candidate(request, expected_version)
