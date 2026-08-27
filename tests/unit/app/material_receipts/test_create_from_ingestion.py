@@ -7,7 +7,7 @@ import os
 from dataclasses import fields, is_dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from types import FunctionType, MethodType
+from types import FrameType, FunctionType, MethodType, SimpleNamespace, TracebackType
 from uuid import uuid4
 
 import psycopg
@@ -30,6 +30,7 @@ from core.inventory_posting.repository import (
     InventoryPostingRepository,
     PostingDatabaseConfig,
 )
+from core.material_receipts.errors import MaterialReceiptFailureCode
 from core.material_receipts.models import (
     ReceiptCandidateRequest,
     ReceiptForReview,
@@ -328,6 +329,26 @@ def reachable_objects(root: object) -> tuple[object, ...]:
         seen[id(value)] = value
         if isinstance(value, atomic):
             continue
+        if isinstance(value, BaseException):
+            pending.extend(
+                (
+                    value.args,
+                    value.__cause__,
+                    value.__context__,
+                    value.__traceback__,
+                )
+            )
+            if isinstance(value, BaseExceptionGroup):
+                pending.append(value.exceptions)
+        if isinstance(value, TracebackType):
+            pending.extend((value.tb_frame, value.tb_next))
+        if isinstance(value, FrameType):
+            pending.extend(value.f_locals.values())
+        if isinstance(value, dict):
+            pending.extend(value.keys())
+            pending.extend(value.values())
+        if isinstance(value, (tuple, list, set, frozenset)):
+            pending.extend(value)
         if is_dataclass(value) and not isinstance(value, type):
             pending.extend(getattr(value, field.name) for field in fields(value))
         mapping = getattr(value, "__dict__", None)
@@ -397,6 +418,170 @@ def test_terminal_create_capability_object_graph_is_empty_and_create_only() -> N
         "transaction",
     }
     assert all(not hasattr(capability, name) for name in forbidden_names)
+
+
+_SENTINEL_CREDENTIAL = "stage031b-sentinel-credential-7f483ac9"
+
+
+async def capture_review_error(evidence, facts) -> ReviewApplicationError:
+    try:
+        await create_from_ingestion.create_review_candidate_from_ingestion(
+            evidence, facts
+        )
+    except ReviewApplicationError as exc:
+        return exc
+    raise AssertionError("Stage 0.31B operation unexpectedly succeeded")
+
+
+async def capture_candidate_input_error(evidence, facts) -> CandidateInputError:
+    try:
+        await create_from_ingestion.create_review_candidate_from_ingestion(
+            evidence, facts
+        )
+    except CandidateInputError as exc:
+        return exc
+    raise AssertionError("Stage 0.31B input unexpectedly succeeded")
+
+
+def assert_exception_graph_is_quarantined(error: ReviewApplicationError) -> None:
+    reachable = reachable_objects(error)
+    forbidden_types = (
+        ReviewFacade,
+        MaterialReceiptRepository,
+        CandidateDatabaseConfig,
+        InventoryPostingRepository,
+        PostingDatabaseConfig,
+        psycopg.AsyncConnection,
+    )
+    strings = tuple(value for value in reachable if isinstance(value, str))
+
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert _SENTINEL_CREDENTIAL not in str(error)
+    assert all(_SENTINEL_CREDENTIAL not in value for value in error.args)
+    assert not any(isinstance(value, forbidden_types) for value in reachable)
+    assert not any(_SENTINEL_CREDENTIAL in value for value in strings)
+    assert not any(
+        "postgresql://" in value
+        or "postgresql dbname=" in value
+        or "password=" in value
+        for value in strings
+    )
+
+
+@pytest.mark.asyncio
+async def test_candidate_database_failure_exception_graph_is_quarantined(
+    monkeypatch,
+) -> None:
+    candidate = request()
+
+    async def fail_connection(*args, **kwargs):
+        raise psycopg.OperationalError("candidate database unavailable")
+
+    monkeypatch.setenv(
+        "AIOS_MATERIAL_RECEIPT_CANDIDATE_DB_PASSWORD",
+        _SENTINEL_CREDENTIAL,
+    )
+    monkeypatch.setattr(
+        create_from_ingestion,
+        "build_receipt_candidate_request",
+        lambda *args: candidate,
+    )
+    monkeypatch.setattr(
+        "core.app.material_receipts.composition.os.stat",
+        lambda *args, **kwargs: SimpleNamespace(st_mode=0o100600),
+    )
+    monkeypatch.setattr(psycopg.AsyncConnection, "connect", fail_connection)
+
+    error = await capture_review_error(object(), object())
+
+    assert error.code is ReviewFailureCode.CANDIDATE_OPERATION_FAILED
+    assert (
+        error.candidate_code
+        is MaterialReceiptFailureCode.DATABASE_UNAVAILABLE
+    )
+    assert_exception_graph_is_quarantined(error)
+
+
+@pytest.mark.asyncio
+async def test_unexpected_candidate_failure_exception_graph_is_quarantined(
+    monkeypatch,
+) -> None:
+    candidate = request()
+
+    class UnexpectedFacade:
+        async def create_candidate(self, request, source_context):
+            raise RuntimeError(_SENTINEL_CREDENTIAL)
+
+    monkeypatch.setattr(
+        create_from_ingestion,
+        "build_receipt_candidate_request",
+        lambda *args: candidate,
+    )
+    monkeypatch.setattr(
+        "core.app.material_receipts.composition.compose_review_application",
+        lambda: SimpleNamespace(facade=UnexpectedFacade()),
+    )
+
+    error = await capture_review_error(object(), object())
+
+    assert error.code is ReviewFailureCode.INTERNAL_FAILURE
+    assert error.candidate_code is None
+    assert_exception_graph_is_quarantined(error)
+
+
+@pytest.mark.asyncio
+async def test_retained_evidence_failure_graph_preserves_only_bounded_input_code(
+    monkeypatch,
+) -> None:
+    def fail_lstat(*args, **kwargs):
+        raise OSError(_SENTINEL_CREDENTIAL)
+
+    monkeypatch.setattr(
+        "core.app.material_receipts.candidate_input.os.lstat", fail_lstat
+    )
+    captured = await capture_candidate_input_error(
+        ingestion_evidence(), trusted_facts()
+    )
+
+    assert captured.code is CandidateInputFailureCode.RETAINED_MANIFEST_INVALID
+    assert captured.__cause__ is None
+    assert captured.__context__ is None
+    reachable = reachable_objects(captured)
+    assert not any(
+        isinstance(value, str) and _SENTINEL_CREDENTIAL in value
+        for value in reachable
+    )
+
+
+@pytest.mark.asyncio
+async def test_malformed_result_failure_graph_discards_unsafe_result(
+    monkeypatch,
+) -> None:
+    candidate = request()
+    unsafe = review_result(candidate)
+
+    class UnsafeItem:
+        @property
+        def status(self):
+            raise RuntimeError(_SENTINEL_CREDENTIAL)
+
+    object.__setattr__(unsafe, "items", (UnsafeItem(),))
+    capability = RecordingCreateCapability(unsafe)
+    monkeypatch.setattr(
+        create_from_ingestion,
+        "build_receipt_candidate_request",
+        lambda *args: candidate,
+    )
+    monkeypatch.setattr(
+        create_from_ingestion, "_candidate_capability", lambda: capability
+    )
+
+    error = await capture_review_error(object(), object())
+
+    assert error.code is ReviewFailureCode.INTERNAL_FAILURE
+    assert error.candidate_code is None
+    assert_exception_graph_is_quarantined(error)
 
 
 def test_import_and_inert_construction_have_zero_side_effects(monkeypatch) -> None:
