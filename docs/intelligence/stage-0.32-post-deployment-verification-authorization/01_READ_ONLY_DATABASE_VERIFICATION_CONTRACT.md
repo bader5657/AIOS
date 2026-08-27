@@ -112,8 +112,17 @@ no posting/admin membership; posting roles remain separate. The approved new
 index is the only intended pre-migration schema difference.
 
 The execution transaction produced identical before/after bounded snapshot
-digests. The post-deployment verifier must reproduce the same projections,
-ordering, canonical settings, and exclusions and require these frozen values:
+digests. Their sole authoritative projection, ordering, representation, filter,
+join, exclusion, and hash definition is:
+
+```text
+docs/intelligence/stage-0.32-post-deployment-verification-authorization/
+03_EXECUTION_SECURITY_OBJECT_SNAPSHOT_SQL_CONTRACT.md
+SHA-256: 5e34825bbdff326a5f7502bdacd03cbcb56d1a2f5f4476619eff9d57fafa89a8
+```
+
+The verifier must establish that exact path and SHA before executing the eight
+queries unchanged and requiring these frozen values:
 
 | Snapshot | Execution digest |
 |---|---|
@@ -127,9 +136,10 @@ ordering, canonical settings, and exclusions and require these frozen values:
 | Public non-index relations | `a51c24af830e4f3ad62ec26172ed1dc3` |
 
 The new active-source index is verified structurally on its own and excluded
-from the governed/unrelated-index digest exactly as it was after DDL. No other
-snapshot exclusion or algorithm change is allowed; an incomparable snapshot is
-inconclusive and blocks closure.
+only by Snapshot 1's exact recovered after-DDL expression in the authoritative
+contract. No other snapshot definition, exclusion, or algorithm is permitted.
+A missing/changed contract or incomparable snapshot is inconclusive and blocks
+closure.
 
 Passwords, password hashes, authentication secrets, DSNs, credentials, and
 business-row contents must not be queried or emitted. A preservation mismatch

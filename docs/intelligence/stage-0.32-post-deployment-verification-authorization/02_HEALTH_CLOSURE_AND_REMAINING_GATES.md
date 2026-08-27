@@ -40,7 +40,10 @@ read-only verification proves every condition:
 5. all four counts equal the locked execution baseline;
 6. all four canonical digests equal the locked execution baseline;
 7. roles, memberships, ACLs, owners, triggers, functions, schemas, extensions,
-   governed relations, and unrelated indexes are preserved;
+   governed relations, and unrelated indexes match all eight frozen digests
+   using the unchanged authoritative snapshot contract at
+   `docs/intelligence/stage-0.32-post-deployment-verification-authorization/03_EXECUTION_SECURITY_OBJECT_SNAPSHOT_SQL_CONTRACT.md`, SHA-256
+   `5e34825bbdff326a5f7502bdacd03cbcb56d1a2f5f4476619eff9d57fafa89a8`;
 8. service/runtime/Telegram/Universal Ingestion state is unchanged; and
 9. candidate, confirmation, and posting activation is absent.
 

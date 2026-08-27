@@ -41,6 +41,8 @@ counts/digests, and identical bounded before/after security/object digests.
 | DOWN SHA-256 | `4a702755c855c55f0300b9f57d8aa290846d413d2c7de88cb728f5e490225977` |
 | UP state | deployed once |
 | DOWN state | not executed / not authorized |
+| Security/object snapshot contract | `docs/intelligence/stage-0.32-post-deployment-verification-authorization/03_EXECUTION_SECURITY_OBJECT_SNAPSHOT_SQL_CONTRACT.md` |
+| Snapshot contract SHA-256 | `5e34825bbdff326a5f7502bdacd03cbcb56d1a2f5f4476619eff9d57fafa89a8` |
 
 Runtime service state, `runtime.env`, Telegram, and Universal Ingestion were
 unchanged. Candidate, confirmation, and posting activation did not occur.
@@ -61,6 +63,10 @@ The verification authority becomes active only after:
 3. the conditional Project Owner approval below remains recorded;
 4. clean synchronized `HEAD == main == origin/main` is established; and
 5. the migration hashes and fixed read-only target/control plane are reverified.
+
+Activation also requires the authoritative snapshot-contract path and SHA-256
+above to match exactly. A missing or changed contract makes security/object
+comparison inconclusive and blocks verification.
 
 Until then: **POST-DEPLOYMENT READ-ONLY VERIFICATION AUTHORITY: INACTIVE**.
 
