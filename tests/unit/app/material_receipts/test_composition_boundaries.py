@@ -186,7 +186,7 @@ def test_traversed_candidate_capability_cannot_bypass_retention(monkeypatch) -> 
 
 
 
-def test_review_package_has_no_posting_brain_telegram_or_unauthorized_ingestion_imports() -> None:
+def test_review_package_has_only_authorized_contract_imports() -> None:
     imports = set()
     for path in PACKAGE_ROOT.glob("*.py"):
         path_imports = imported_modules(path)

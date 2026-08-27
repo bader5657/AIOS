@@ -11,9 +11,11 @@ import os
 from pathlib import Path
 from stat import S_ISREG
 from typing import NoReturn
+import unicodedata
 from uuid import UUID, uuid4
 
 from core.app.input_classifier import InputType
+from core.event import EventDeliveryFailureCode
 from core.ingestion.universal_ingestion import IngestionResult
 from core.material_receipts.models import ReceiptCandidateRequest, ReceiptItemCandidate
 from core.storage.document_manifest import validate_manifest
@@ -44,7 +46,12 @@ def _canonical_text(
 ) -> None:
     if optional and value is None:
         return
-    if type(value) is not str or not value or value != value.strip():
+    if (
+        type(value) is not str
+        or not value
+        or value != value.strip()
+        or any(unicodedata.category(character) in {"Cc", "Cs"} for character in value)
+    ):
         _fail(CandidateInputFailureCode.TRUSTED_FACTS_INVALID)
     if len(value) > maximum:
         _fail(CandidateInputFailureCode.LIMIT_EXCEEDED)
@@ -262,8 +269,15 @@ def source_context_from_ingestion_result(result: object) -> SourceContext:
         _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
     manifest_path = current["manifest_path"]
     register_handoff_ready = current["register_handoff_ready"]
+    process_handoff_ready = current["process_handoff_ready"]
+    route_handoff_ready = current["route_handoff_ready"]
+    respond_acknowledgement_ready = current["respond_acknowledgement_ready"]
     registration_succeeded = current["registration_succeeded"]
     registry_record_id = current["registry_record_id"]
+    event_publication_attempted = current["event_publication_attempted"]
+    event_delivery_succeeded = current["event_delivery_succeeded"]
+    event_delivery_failure_code = current["event_delivery_failure_code"]
+    brain_result = current["brain_result"]
     if (
         type(current["input_type"]) is not InputType
         or type(current["recognized_input_type"]) is not InputType
@@ -286,12 +300,26 @@ def source_context_from_ingestion_result(result: object) -> SourceContext:
         _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
     if register_handoff_ready is not True:
         _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
-    if type(registration_succeeded) is not bool:
+    if process_handoff_ready is not False or respond_acknowledgement_ready is not True:
         _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
     if registration_succeeded:
         if type(registry_record_id) is not int or registry_record_id <= 0:
             _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
     elif registry_record_id is not None:
+        _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
+    if event_publication_attempted:
+        if not registration_succeeded:
+            _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
+        if event_delivery_succeeded:
+            if event_delivery_failure_code is not None:
+                _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
+        elif type(event_delivery_failure_code) is not EventDeliveryFailureCode:
+            _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
+    elif event_delivery_succeeded or event_delivery_failure_code is not None:
+        _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
+    if route_handoff_ready and not event_delivery_succeeded:
+        _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
+    if brain_result is not None:
         _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
     try:
         context = SourceContext(manifest_path, registry_record_id)
@@ -299,6 +327,7 @@ def source_context_from_ingestion_result(result: object) -> SourceContext:
         _fail(CandidateInputFailureCode.INVALID_INGESTION_EVIDENCE)
     _verified_manifest_id(context)
     return context
+
 
 
 def _verified_manifest_id(source_context: SourceContext) -> UUID:
