@@ -290,12 +290,18 @@ class Stage032PostgresTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_candidate_identity_has_only_governed_candidate_privileges(self):
         await self.apply(); await self.repo.create_receipt_candidate(request("asset:allowed"))
+        async with await psycopg.AsyncConnection.connect(self.admin_url, autocommit=True) as db:
+            await db.execute("INSERT INTO unrelated_records(id) VALUES (7)")
+            unrelated_before = tuple(await (await db.execute("SELECT id FROM unrelated_records ORDER BY id")).fetchall())
         runtime_url = conninfo.make_conninfo(host=self.target.host,port=self.target.port,dbname=self.target.dbname,user=CANDIDATE,password=CANDIDATE_PASSWORD,options=f"-csearch_path={self.schema}",sslmode="disable")
-        denied = ("CREATE INDEX forbidden ON material_receipts(supplier_name)", "ALTER TABLE material_receipts ADD COLUMN forbidden integer", "DROP TABLE unrelated_records", "CREATE TABLE forbidden(id int)", "ALTER SCHEMA " + self.schema + " OWNER TO " + CANDIDATE, "UPDATE material_stock SET stock_qty=1", "INSERT INTO inventory_movements DEFAULT VALUES", "UPDATE unrelated_records SET id=1")
+        denied = ("CREATE INDEX forbidden ON material_receipts(supplier_name)", "ALTER TABLE material_receipts ADD COLUMN forbidden integer", "DROP TABLE unrelated_records", "CREATE TABLE forbidden(id int)", "ALTER SCHEMA " + self.schema + " OWNER TO " + CANDIDATE, "UPDATE material_stock SET stock_qty=1", "INSERT INTO inventory_movements DEFAULT VALUES", "INSERT INTO unrelated_records(id) VALUES (8)", "UPDATE unrelated_records SET id=8", "DELETE FROM unrelated_records")
         for statement in denied:
             with self.subTest(statement=statement):
                 with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                     async with await psycopg.AsyncConnection.connect(runtime_url, autocommit=True) as db: await db.execute(statement)
+        async with await psycopg.AsyncConnection.connect(self.admin_url) as db:
+            unrelated_after = tuple(await (await db.execute("SELECT id FROM unrelated_records ORDER BY id")).fetchall())
+        self.assertEqual(unrelated_before, ((7,),)); self.assertEqual(unrelated_after, unrelated_before)
         async with await psycopg.AsyncConnection.connect(runtime_url) as db:
             identity = await (await db.execute("SELECT current_user")).fetchone()
             allowed = await (await db.execute("SELECT has_table_privilege(current_user,'material_receipts','SELECT'),has_column_privilege(current_user,'material_receipts','receipt_id','INSERT'),has_table_privilege(current_user,'material_receipt_items','SELECT'),has_column_privilege(current_user,'material_receipt_items','receipt_item_id','INSERT')")).fetchone()
@@ -305,7 +311,11 @@ class Stage032PostgresTests(unittest.IsolatedAsyncioTestCase):
             memberships = await (await db.execute("SELECT parent.rolname,m.admin_option FROM pg_auth_members m JOIN pg_roles member ON member.oid=m.member JOIN pg_roles parent ON parent.oid=m.roleid WHERE member.rolname=%s", (CANDIDATE,))).fetchall()
             prohibited = await (await db.execute("SELECT has_database_privilege(%s,current_database(),'CREATE'),has_schema_privilege(%s,%s,'CREATE'),has_table_privilege(%s,%s||'.inventory_movements','INSERT'),has_table_privilege(%s,%s||'.material_stock','UPDATE'),has_table_privilege(%s,%s||'.unrelated_records','UPDATE')", (CANDIDATE,CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema))).fetchone()
             grant_options = await (await db.execute("SELECT has_table_privilege(%s,%s||'.material_receipts','SELECT WITH GRANT OPTION'),has_column_privilege(%s,%s||'.material_receipts','receipt_id','INSERT WITH GRANT OPTION'),has_table_privilege(%s,%s||'.material_receipt_items','SELECT WITH GRANT OPTION'),has_column_privilege(%s,%s||'.material_receipt_items','receipt_item_id','INSERT WITH GRANT OPTION')", (CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema))).fetchone()
+            unrelated_acl = await (await db.execute("SELECT has_table_privilege(%s,%s||'.unrelated_records','INSERT'),has_table_privilege(%s,%s||'.unrelated_records','UPDATE'),has_table_privilege(%s,%s||'.unrelated_records','DELETE'),has_table_privilege(%s,%s||'.unrelated_records','TRUNCATE'),has_table_privilege(%s,%s||'.unrelated_records','REFERENCES'),has_table_privilege(%s,%s||'.unrelated_records','TRIGGER')", (CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema))).fetchone()
+            unrelated_grants = await (await db.execute("SELECT has_table_privilege(%s,%s||'.unrelated_records','INSERT WITH GRANT OPTION'),has_table_privilege(%s,%s||'.unrelated_records','UPDATE WITH GRANT OPTION'),has_table_privilege(%s,%s||'.unrelated_records','DELETE WITH GRANT OPTION')", (CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema))).fetchone()
+            unrelated_owner = await (await db.execute("SELECT r.rolname FROM pg_class c JOIN pg_roles r ON r.oid=c.relowner WHERE c.oid=(%s||'.unrelated_records')::regclass", (self.schema,))).fetchone()
         self.assertEqual(attributes, (False,False,False,False,False,False,False)); self.assertEqual(memberships, []); self.assertEqual(prohibited, (False,False,False,False,False)); self.assertEqual(grant_options, (False,False,False,False))
+        self.assertEqual(unrelated_acl, (False,False,False,False,False,False)); self.assertEqual(unrelated_grants, (False,False,False)); self.assertNotEqual(unrelated_owner, (CANDIDATE,))
         self.assertFalse(any("posting" in role for role, _ in memberships))
         with self.assertRaises(ValueError): posting_repository.PostingDatabaseConfig(password="stage032-posting-identity-sentinel", host=self.target.host, port=self.target.port, dbname=self.target.dbname, username=CANDIDATE, search_path=self.schema)
 
