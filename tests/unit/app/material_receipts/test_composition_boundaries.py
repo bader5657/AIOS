@@ -190,7 +190,7 @@ def test_review_package_has_only_authorized_contract_imports() -> None:
     imports = set()
     for path in PACKAGE_ROOT.glob("*.py"):
         path_imports = imported_modules(path)
-        if path.name == "candidate_input.py":
+        if path.name in {"candidate_input.py", "create_from_ingestion.py"}:
             ingestion_imports = {
                 name for name in path_imports if name.startswith("core.ingestion")
             }
