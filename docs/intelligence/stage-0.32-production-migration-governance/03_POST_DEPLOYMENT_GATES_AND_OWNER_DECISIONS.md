@@ -1,0 +1,84 @@
+# Post-Deployment Verification, Gate Closure, and Owner Decisions
+
+## Separate authorities and sequence
+
+Governance publication executes nothing. After independent review and normal
+merge, the required sequence is:
+
+1. issue narrow read-only production preflight authority;
+2. obtain classification A with zero active duplicate sources;
+3. issue a separate one-shot migration execution authority bound to the then-
+   current clean main commit, frozen file hashes, fixed control plane, target,
+   lock/timeouts, exact SQL, verifier, and no-retry rule;
+4. perform the single locked transaction and obtain migration classification A;
+5. issue/perform bounded read-only post-deployment verification.
+
+The one-shot authority cannot include data reconciliation, roles/grants,
+credentials, DOWN execution, runtime changes, service restart, or activation.
+
+## Post-deployment verification
+
+After a successful commit, bounded read-only verification must reconfirm:
+
+- production identity, health, restart continuity, database, user, and schema;
+- exact new index table, uniqueness, key, and predicate;
+- the existing non-unique source index remains;
+- zero active duplicate source groups;
+- all four business-table row counts and fingerprints match the locked
+  pre-migration baseline;
+- roles, memberships, owners, ACLs, triggers, functions, schemas, and unrelated
+  objects remain unchanged; and
+- no runtime, service, Telegram, Universal Ingestion, candidate-traffic,
+  confirmation, posting, OCR, Vision, LLM, or Brain change occurred.
+
+Any mismatch prevents operational gate closure and requires new governance. It
+does not authorize an automatic DOWN migration.
+
+## Source-idempotency operational gate
+
+The gate may close only when all are recorded:
+
+1. this governance package is reviewed and merged;
+2. production duplicate preflight classification A;
+3. one-shot migration classification A;
+4. structural verification PASS;
+5. business-data preservation PASS; and
+6. post-deployment verification PASS.
+
+Only then may governance state:
+
+```text
+SOURCE-MANIFEST IDEMPOTENCY OPERATIONAL GATE: CLOSED
+```
+
+Until then it remains OPEN. Index deployment alone does not authorize candidate
+traffic.
+
+## Gates intentionally left open
+
+- **RUNTIME-SECRET ROTATION / ACTIVATION SAFETY: OPEN.** The historical
+  test-environment exposure risk remains recorded. This package creates,
+  reads, rotates, or publishes no credential.
+- **DURABLE CANDIDATE-CREATION ACTOR PROVENANCE: OPEN.** No actor schema or
+  audit mutation is part of Migration 0004.
+- **EXPLICIT PRODUCTION ACTIVATION SAFETY REVIEW: OPEN.**
+- **PRODUCTION CANDIDATE ACTIVATION: NOT AUTHORIZED.**
+
+## Project Owner decisions requested by this PR
+
+The governance review must explicitly accept or reject:
+
+1. the exact control plane and frozen target;
+2. the exact duplicate query and hard-stop/no-reconciliation rule;
+3. minimized evidence and four-table fingerprint policy;
+4. `SHARE` table lock, five-second lock timeout, and five-minute statement
+   timeout;
+5. one explicit locked transaction and structured verifier;
+6. one attempt, rollback-before-commit, no-retry, and separately governed DOWN;
+7. separate read-only preflight, mutation, and post-deployment authorities; and
+8. the gate-closure criteria and continued activation prohibitions.
+
+This PR requests governance approval only. It does not authorize the read-only
+preflight or migration execution.
+
+`STAGE 0.32 PRODUCTION MIGRATION GOVERNANCE PROPOSED — READY FOR GOVERNANCE REVIEW / MERGE — PRODUCTION PREFLIGHT NOT YET EXECUTED — MIGRATION 0004 NOT YET AUTHORIZED FOR EXECUTION`
