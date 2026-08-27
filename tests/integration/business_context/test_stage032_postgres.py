@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import fields, is_dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from functools import partial
 import json
 import os
 from pathlib import Path
 import tempfile
+from types import FrameType, FunctionType, MethodType, TracebackType
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 import uuid
 
 import psycopg
@@ -22,8 +25,9 @@ from core.app.material_receipts.candidate_input import TrustedReceiptFacts, Trus
 from core.app.material_receipts.create_from_ingestion import create_review_candidate_from_ingestion
 from core.app.material_receipts.results import ReviewApplicationError, ReviewFailureCode
 from core.ingestion.universal_ingestion import IngestionResult
+from core.inventory_posting import repository as posting_repository
 from core.material_receipts.errors import MaterialReceiptError, MaterialReceiptFailureCode
-from core.material_receipts.models import ReceiptCandidateRequest, ReceiptItemCandidate
+from core.material_receipts.models import ReceiptCandidateRequest, ReceiptForReview, ReceiptItemCandidate
 from core.material_receipts.repository import CandidateDatabaseConfig, MaterialReceiptRepository
 from tests.integration.business_context.disposable_postgres import admit_disposable_postgres
 
@@ -37,7 +41,7 @@ STAGE_UP = (MIGRATIONS / "0004_add_material_receipt_source_active_uniqueness.up.
 STAGE_DOWN = (MIGRATIONS / "0004_add_material_receipt_source_active_uniqueness.down.sql").read_text()
 INDEX = "material_receipts_source_asset_active_uidx"
 CANDIDATE = "aios_material_receipt_candidate_runtime"
-CANDIDATE_PASSWORD = "stage032-candidate-disposable-sentinel"
+CANDIDATE_PASSWORD = "stage032-candidate-" + uuid.uuid4().hex
 
 
 def request(source: str, *, supplier: str = "Stage 032") -> ReceiptCandidateRequest:
@@ -45,6 +49,47 @@ def request(source: str, *, supplier: str = "Stage 032") -> ReceiptCandidateRequ
         datetime(2026, 8, 27, tzinfo=timezone.utc), source,
         (ReceiptItemCandidate(uuid.uuid4(), 1, "Steel", None, None, None, None,
          1, Decimal("50"), Decimal("0"), Decimal("50"), "sheet"),))
+
+
+class _InsertBarrierConnection:
+    """Test-only wrapper pausing real connections immediately before INSERT."""
+    def __init__(self, connection, barrier, poised):
+        self._connection = connection; self._barrier = barrier; self._poised = poised
+    async def __aenter__(self):
+        await self._connection.__aenter__(); return self
+    async def __aexit__(self, *args):
+        return await self._connection.__aexit__(*args)
+    def transaction(self):
+        return self._connection.transaction()
+    async def execute(self, statement, parameters=None):
+        if "INSERT INTO material_receipts" in str(statement):
+            self._poised.append(id(self._connection)); await self._barrier.wait()
+        return await self._connection.execute(statement, parameters)
+
+
+def _reachable(root):
+    """Walk bounded outward state, including tracebacks and frame locals."""
+    stack = [root]; seen = set()
+    while stack:
+        value = stack.pop()
+        if value is None or id(value) in seen: continue
+        seen.add(id(value)); yield value
+        if isinstance(value, BaseException):
+            stack.extend(value.args); stack.extend(value.__dict__.values()); stack.extend((value.__cause__, value.__context__, value.__traceback__))
+            if isinstance(value, BaseExceptionGroup): stack.extend(value.exceptions)
+        elif isinstance(value, TracebackType): stack.extend((value.tb_next, value.tb_frame))
+        elif isinstance(value, FrameType): stack.extend(value.f_locals.values())
+        elif isinstance(value, dict): stack.extend(value.keys()); stack.extend(value.values())
+        elif isinstance(value, (tuple, list, set, frozenset)): stack.extend(value)
+        elif is_dataclass(value) and not isinstance(value, type): stack.extend(getattr(value, field.name) for field in fields(value))
+        elif isinstance(value, MethodType): stack.extend((value.__self__, value.__func__))
+        elif isinstance(value, FunctionType): stack.extend(cell.cell_contents for cell in (value.__closure__ or ()))
+        elif isinstance(value, partial): stack.extend((value.func, value.args, value.keywords))
+        else:
+            for name in getattr(type(value), "__slots__", ()):
+                if isinstance(name, str) and hasattr(value, name): stack.append(getattr(value, name))
+            state = getattr(value, "__dict__", None)
+            if isinstance(state, dict): stack.extend(state.values())
 
 
 @unittest.skipUnless(TEST_URL, "Stage 0.32 disposable PostgreSQL infrastructure unavailable")
@@ -63,7 +108,7 @@ class Stage032PostgresTests(unittest.IsolatedAsyncioTestCase):
                 await db.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(sql.Identifier(CANDIDATE), sql.Literal(CANDIDATE_PASSWORD)))
         self.admin_url = conninfo.make_conninfo(self.target.url, options=f"-csearch_path={self.schema}")
         async with await psycopg.AsyncConnection.connect(self.admin_url, autocommit=True) as db:
-            await db.execute(STOCK_UP); await db.execute(RECEIPT_UP)
+            await db.execute(STOCK_UP); await db.execute(RECEIPT_UP); await db.execute("CREATE TABLE unrelated_records(id integer)")
         await self._grant_candidate()
         self.repo = MaterialReceiptRepository(CandidateDatabaseConfig(password=CANDIDATE_PASSWORD,
             host=self.target.host, port=self.target.port, dbname=self.target.dbname, search_path=self.schema))
@@ -88,6 +133,28 @@ class Stage032PostgresTests(unittest.IsolatedAsyncioTestCase):
     async def counts(self):
         async with await psycopg.AsyncConnection.connect(self.admin_url) as db:
             return tuple(await (await db.execute("SELECT (SELECT count(*) FROM material_receipts),(SELECT count(*) FROM material_receipt_items),(SELECT count(*) FROM material_stock),(SELECT count(*) FROM inventory_movements)")).fetchone())
+
+    def retained_evidence(self):
+        identifier = uuid.uuid4(); path = self.manifest_root / f"{identifier}.json"
+        path.write_text(json.dumps({"manifest_id": str(identifier), "represented_media_type": "text", "received_at": "2026-08-27T00:00:00Z", "manifest_status": "created", "metadata": {"media_type": "text", "character_count": 1}}), encoding="utf-8")
+        return path, IngestionResult(InputType.TEXT, InputType.TEXT, None, str(path), {}, "x", True, False, False, True)
+
+    @staticmethod
+    def trusted(supplier="Stage 032"):
+        return TrustedReceiptFacts(supplier, "DO-032", date(2026, 8, 27), datetime(2026, 8, 27, tzinfo=timezone.utc), (TrustedReceiptItemFacts(1,"Steel",None,None,None,None,1,Decimal("50"),Decimal("0"),Decimal("50"),"sheet"),))
+
+    async def public_create(self, evidence, trusted):
+        with patch.object(MaterialReceiptRepository, "from_environment", return_value=self.repo):
+            return await create_review_candidate_from_ingestion(evidence, trusted)
+
+    async def fingerprint(self):
+        async with await psycopg.AsyncConnection.connect(self.admin_url) as db:
+            receipts = await (await db.execute("SELECT receipt_id,supplier_name,document_number,document_date,received_at,source_asset_reference,status,version,confirmed_version,confirmed_at,confirmation_actor_reference,created_at,updated_at FROM material_receipts ORDER BY receipt_id")).fetchall()
+            items = await (await db.execute("SELECT * FROM material_receipt_items ORDER BY receipt_item_id")).fetchall()
+            stock = await (await db.execute("SELECT * FROM material_stock ORDER BY material_id")).fetchall()
+            movements = await (await db.execute("SELECT * FROM inventory_movements ORDER BY movement_id")).fetchall()
+        return tuple(receipts), tuple(items), tuple(stock), tuple(movements)
+
 
     async def test_catalog_structure_and_up_down_up_are_exact_and_non_mutating(self):
         async with await psycopg.AsyncConnection.connect(self.admin_url) as db:
@@ -128,7 +195,48 @@ class Stage032PostgresTests(unittest.IsolatedAsyncioTestCase):
             created = await self.repo.create_receipt_candidate(request(source))
             async with await psycopg.AsyncConnection.connect(self.admin_url) as db:
                 statuses = [r[0] for r in await (await db.execute("SELECT status FROM material_receipts WHERE source_asset_reference=%s", (source,))).fetchall()]
-            self.assertEqual(statuses.count(terminal), 2); self.assertEqual(statuses.count("NEEDS_REVIEW"), 1); self.assertNotIn(created.receipt_id, ())
+            self.assertEqual(statuses.count(terminal), 2); self.assertEqual(statuses.count("NEEDS_REVIEW"), 1)
+
+    async def _assert_public_duplicate(self, duplicate_facts):
+        await self.apply(); _, evidence = self.retained_evidence()
+        posting_password = "stage032-posting-must-not-load"
+        with patch.dict(os.environ, {"AIOS_MATERIAL_INVENTORY_POSTING_DB_PASSWORD": posting_password}), \
+             patch.object(posting_repository.InventoryPostingRepository, "__init__", return_value=None) as posting_repo_init, \
+             patch.object(posting_repository.PostingDatabaseConfig, "__init__", return_value=None) as posting_config_init, \
+             patch.object(posting_repository.InventoryPostingRepository, "from_environment", side_effect=AssertionError("posting credential load")) as posting_factory, \
+             patch.object(posting_repository.InventoryPostingRepository, "post_confirmed_receipt", new_callable=AsyncMock) as post_call, \
+             patch.object(MaterialReceiptRepository, "confirm_receipt", new_callable=AsyncMock) as confirm_call:
+            first = await self.public_create(evidence, self.trusted("First"))
+            self.assertIs(type(first), ReceiptForReview); self.assertEqual(first.status.value, "NEEDS_REVIEW"); self.assertIsNone(first.confirmed_version); self.assertIsNone(first.confirmed_at); self.assertIsNone(first.confirmation_actor_reference)
+            before = await self.fingerprint()
+            with self.assertRaises(ReviewApplicationError) as caught:
+                await self.public_create(evidence, duplicate_facts)
+            after = await self.fingerprint()
+        self.assertIs(caught.exception.code, ReviewFailureCode.SOURCE_ACTIVE_RECEIPT_EXISTS)
+        self.assertEqual(after, before); self.assertEqual(len(before[0]), 1); self.assertEqual(len(before[1]), 1)
+        posting_repo_init.assert_not_called(); posting_config_init.assert_not_called(); posting_factory.assert_not_called(); post_call.assert_not_awaited(); confirm_call.assert_not_awaited()
+
+    async def test_public_same_facts_duplicate_is_create_only_and_inert(self):
+        await self._assert_public_duplicate(self.trusted("First"))
+
+    async def test_public_different_facts_duplicate_is_create_only_and_inert(self):
+        await self._assert_public_duplicate(self.trusted("Different valid facts"))
+
+    async def test_terminal_history_retains_exact_ids_and_allows_only_one_active(self):
+        await self.apply(); path, _ = self.retained_evidence(); source = str(path)
+        rejected, cancelled = uuid.uuid4(), uuid.uuid4()
+        async with await psycopg.AsyncConnection.connect(self.admin_url, autocommit=True) as db:
+            await db.execute("INSERT INTO material_receipts(receipt_id,supplier_name,received_at,source_asset_reference,status) VALUES(%s,'S',now(),%s,'REJECTED'),(%s,'S',now(),%s,'CANCELLED')", (rejected, source, cancelled, source))
+        replacement = await self.repo.create_receipt_candidate(request(source))
+        before_duplicate = await self.fingerprint()
+        with self.assertRaises(MaterialReceiptError) as caught: await self.repo.create_receipt_candidate(request(source))
+        self.assertIs(caught.exception.code, MaterialReceiptFailureCode.SOURCE_ACTIVE_RECEIPT_EXISTS)
+        after_duplicate = await self.fingerprint(); self.assertEqual(after_duplicate, before_duplicate)
+        rows = {row[0]: row[6] for row in after_duplicate[0]}
+        self.assertEqual(rows[rejected], "REJECTED"); self.assertEqual(rows[cancelled], "CANCELLED")
+        self.assertNotIn(replacement.receipt_id, {rejected, cancelled})
+        self.assertEqual(sum(status not in {"REJECTED", "CANCELLED"} for status in rows.values()), 1)
+
 
     async def test_sequential_same_and_different_facts_are_create_only_and_inert(self):
         await self.apply(); source = "asset:sequential"; before = await self.counts()
@@ -157,37 +265,66 @@ class Stage032PostgresTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(MaterialReceiptError) as missing: await self.repo.create_receipt_candidate(request("asset:missing-diag"))
         self.assertIs(missing.exception.code, MaterialReceiptFailureCode.DATA_INTEGRITY_ERROR)
 
-    async def test_real_concurrent_race_rolls_back_loser_and_preserves_inventory(self):
-        await self.apply(); source = "asset:race"; before = await self.counts(); barrier = asyncio.Barrier(2)
-        async def compete():
-            await barrier.wait()
-            try: await self.repo.create_receipt_candidate(request(source)); return "success"
+    async def test_real_concurrent_race_synchronizes_immediately_before_insert(self):
+        await self.apply(); source = "asset:race"; before = await self.fingerprint()
+        barrier = asyncio.Barrier(2); poised = []; real_connect = psycopg.AsyncConnection.connect
+        async def synchronized_connect(*args, **kwargs):
+            connection = await real_connect(*args, **kwargs)
+            return _InsertBarrierConnection(connection, barrier, poised)
+        async def compete(candidate):
+            try: await self.repo.create_receipt_candidate(candidate); return "success"
             except MaterialReceiptError as exc: return "duplicate" if exc.code is MaterialReceiptFailureCode.SOURCE_ACTIVE_RECEIPT_EXISTS else "other"
             except Exception: return "other"
-        outcomes = await asyncio.gather(compete(), compete())
+        contenders = (request(source), request(source))
+        with patch.object(psycopg.AsyncConnection, "connect", side_effect=synchronized_connect):
+            outcomes = await asyncio.wait_for(asyncio.gather(*(compete(value) for value in contenders)), timeout=10)
+        self.assertEqual(len(set(poised)), 2); self.assertEqual(len(poised), 2)
         self.assertEqual(outcomes.count("success"), 1); self.assertEqual(outcomes.count("duplicate"), 1); self.assertEqual(outcomes.count("other"), 0)
-        after = await self.counts(); self.assertEqual(after, (before[0]+1, before[1]+1, before[2], before[3]))
+        after = await self.fingerprint(); self.assertEqual(len(after[0]), len(before[0])+1); self.assertEqual(len(after[1]), len(before[1])+1)
+        self.assertEqual(after[2:], before[2:]); self.assertEqual(sum(row[5] == source and row[6] not in {"REJECTED", "CANCELLED"} for row in after[0]), 1)
+        winner_receipts = {row[0] for row in after[0]} - {row[0] for row in before[0]}
+        winner_items = {row[0] for row in after[1]} - {row[0] for row in before[1]}
+        self.assertEqual(len(winner_receipts), 1); self.assertEqual(len(winner_items), 1)
+        loser = next(value for value in contenders if value.receipt_id not in winner_receipts); self.assertNotIn(loser.receipt_id, winner_receipts); self.assertNotIn(loser.items[0].receipt_item_id, winner_items)
 
-    async def test_candidate_privileges_and_public_exception_graph_are_bounded(self):
-        await self.apply(); source = "asset:bounded"; await self.repo.create_receipt_candidate(request(source))
+
+    async def test_candidate_identity_has_only_governed_candidate_privileges(self):
+        await self.apply(); await self.repo.create_receipt_candidate(request("asset:allowed"))
         runtime_url = conninfo.make_conninfo(host=self.target.host,port=self.target.port,dbname=self.target.dbname,user=CANDIDATE,password=CANDIDATE_PASSWORD,options=f"-csearch_path={self.schema}",sslmode="disable")
-        denied = ("CREATE INDEX forbidden ON material_receipts(supplier_name)", "CREATE TABLE forbidden(id int)", "ALTER SCHEMA " + self.schema + " OWNER TO " + CANDIDATE, "UPDATE material_stock SET stock_qty=1", "INSERT INTO inventory_movements DEFAULT VALUES")
+        denied = ("CREATE INDEX forbidden ON material_receipts(supplier_name)", "ALTER TABLE material_receipts ADD COLUMN forbidden integer", "DROP TABLE unrelated_records", "CREATE TABLE forbidden(id int)", "ALTER SCHEMA " + self.schema + " OWNER TO " + CANDIDATE, "UPDATE material_stock SET stock_qty=1", "INSERT INTO inventory_movements DEFAULT VALUES", "UPDATE unrelated_records SET id=1")
         for statement in denied:
             with self.subTest(statement=statement):
                 with self.assertRaises(psycopg.errors.InsufficientPrivilege):
                     async with await psycopg.AsyncConnection.connect(runtime_url, autocommit=True) as db: await db.execute(statement)
-        manifest_id = uuid.uuid4(); manifest = self.manifest_root / (str(manifest_id) + ".json"); manifest.write_text(json.dumps({"manifest_id": str(manifest_id), "represented_media_type": "text", "received_at": "2026-08-27T00:00:00Z", "manifest_status": "created", "metadata": {"media_type": "text", "character_count": 1}}), encoding="utf-8")
-        trusted = TrustedReceiptFacts("S", None, None, datetime.now(timezone.utc), (TrustedReceiptItemFacts(1,"Steel",None,None,None,None,1,Decimal("50"),Decimal("0"),Decimal("50"),"sheet"),))
-        evidence = IngestionResult(InputType.TEXT, InputType.TEXT, None, str(manifest), {}, "x", True, False, False, True)
-        # Seed the canonical path, then prove the outward terminal graph carries enums only.
-        with patch.object(MaterialReceiptRepository, "from_environment", return_value=self.repo): await create_review_candidate_from_ingestion(evidence, trusted)
+        async with await psycopg.AsyncConnection.connect(runtime_url) as db:
+            identity = await (await db.execute("SELECT current_user")).fetchone()
+            allowed = await (await db.execute("SELECT has_table_privilege(current_user,'material_receipts','SELECT'),has_column_privilege(current_user,'material_receipts','receipt_id','INSERT'),has_table_privilege(current_user,'material_receipt_items','SELECT'),has_column_privilege(current_user,'material_receipt_items','receipt_item_id','INSERT')")).fetchone()
+        self.assertEqual(identity, (CANDIDATE,)); self.assertEqual(allowed, (True, True, True, True))
+        async with await psycopg.AsyncConnection.connect(self.admin_url) as db:
+            attributes = await (await db.execute("SELECT r.rolsuper,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolbypassrls,d.datdba=r.oid,n.nspowner=r.oid FROM pg_roles r CROSS JOIN pg_database d CROSS JOIN pg_namespace n WHERE r.rolname=%s AND d.datname=current_database() AND n.nspname=%s", (CANDIDATE,self.schema))).fetchone()
+            memberships = await (await db.execute("SELECT parent.rolname,m.admin_option FROM pg_auth_members m JOIN pg_roles member ON member.oid=m.member JOIN pg_roles parent ON parent.oid=m.roleid WHERE member.rolname=%s", (CANDIDATE,))).fetchall()
+            prohibited = await (await db.execute("SELECT has_database_privilege(%s,current_database(),'CREATE'),has_schema_privilege(%s,%s,'CREATE'),has_table_privilege(%s,%s||'.inventory_movements','INSERT'),has_table_privilege(%s,%s||'.material_stock','UPDATE'),has_table_privilege(%s,%s||'.unrelated_records','UPDATE')", (CANDIDATE,CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema))).fetchone()
+            grant_options = await (await db.execute("SELECT has_table_privilege(%s,%s||'.material_receipts','SELECT WITH GRANT OPTION'),has_column_privilege(%s,%s||'.material_receipts','receipt_id','INSERT WITH GRANT OPTION'),has_table_privilege(%s,%s||'.material_receipt_items','SELECT WITH GRANT OPTION'),has_column_privilege(%s,%s||'.material_receipt_items','receipt_item_id','INSERT WITH GRANT OPTION')", (CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema,CANDIDATE,self.schema))).fetchone()
+        self.assertEqual(attributes, (False,False,False,False,False,False,False)); self.assertEqual(memberships, []); self.assertEqual(prohibited, (False,False,False,False,False)); self.assertEqual(grant_options, (False,False,False,False))
+        self.assertFalse(any("posting" in role for role, _ in memberships))
+        with self.assertRaises(ValueError): posting_repository.PostingDatabaseConfig(password="stage032-posting-identity-sentinel", host=self.target.host, port=self.target.port, dbname=self.target.dbname, username=CANDIDATE, search_path=self.schema)
+
+    async def test_public_duplicate_complete_exception_graph_is_bounded(self):
+        await self.apply(); _, evidence = self.retained_evidence(); trusted = self.trusted("Bounded")
+        await self.public_create(evidence, trusted)
+        async def capture(current_evidence, current_trusted):
+            try:
+                await create_review_candidate_from_ingestion(current_evidence, current_trusted)
+            except ReviewApplicationError as error:
+                return error
+            raise AssertionError("duplicate did not fail")
         with patch.object(MaterialReceiptRepository, "from_environment", return_value=self.repo):
-            with self.assertRaises(ReviewApplicationError) as caught: await create_review_candidate_from_ingestion(evidence, trusted)
-        self.assertIs(caught.exception.code, ReviewFailureCode.SOURCE_ACTIVE_RECEIPT_EXISTS)
-        seen=set(); stack=[caught.exception]
-        while stack:
-            value=stack.pop()
-            if id(value) in seen: continue
-            seen.add(id(value)); self.assertNotIsInstance(value, (psycopg.Error, MaterialReceiptRepository, review_use_cases.ReviewFacade, CandidateDatabaseConfig))
-            if isinstance(value, BaseException): stack.extend(x for x in (value.__cause__,value.__context__) if x is not None)
-        self.assertIsNone(caught.exception.__cause__); self.assertIsNone(caught.exception.__context__)
+            outward = await capture(evidence, trusted)
+        self.assertIs(outward.code, ReviewFailureCode.SOURCE_ACTIVE_RECEIPT_EXISTS); self.assertIsNone(outward.__cause__); self.assertIsNone(outward.__context__)
+        forbidden_types = (psycopg.Error, psycopg.AsyncConnection, MaterialReceiptRepository, review_use_cases.ReviewFacade, CandidateDatabaseConfig, posting_repository.InventoryPostingRepository, posting_repository.PostingDatabaseConfig)
+        for value in _reachable(outward):
+            self.assertNotIsInstance(value, forbidden_types)
+            if isinstance(value, str):
+                lowered = value.lower()
+                self.assertNotIn(CANDIDATE_PASSWORD, value); self.assertNotIn(INDEX, value); self.assertNotIn("23505", value)
+                self.assertNotIn("postgresql://", lowered); self.assertNotIn("password=", lowered); self.assertNotIn("insert into", lowered); self.assertNotIn("select ", lowered)
