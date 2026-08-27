@@ -186,10 +186,17 @@ def test_traversed_candidate_capability_cannot_bypass_retention(monkeypatch) -> 
 
 
 
-def test_review_package_has_no_posting_brain_telegram_or_ingestion_imports() -> None:
+def test_review_package_has_no_posting_brain_telegram_or_unauthorized_ingestion_imports() -> None:
     imports = set()
     for path in PACKAGE_ROOT.glob("*.py"):
-        imports.update(imported_modules(path))
+        path_imports = imported_modules(path)
+        if path.name == "candidate_input.py":
+            ingestion_imports = {
+                name for name in path_imports if name.startswith("core.ingestion")
+            }
+            assert ingestion_imports == {"core.ingestion.universal_ingestion"}
+            path_imports -= ingestion_imports
+        imports.update(path_imports)
     prohibited = (
         "core.inventory_posting",
         "core.brain",
