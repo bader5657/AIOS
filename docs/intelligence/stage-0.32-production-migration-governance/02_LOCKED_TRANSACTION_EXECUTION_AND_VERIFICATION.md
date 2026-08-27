@@ -21,6 +21,10 @@ Set transaction-local bounds before lock acquisition:
 ```sql
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '5min';
+SET LOCAL TIME ZONE 'UTC';
+SET LOCAL DateStyle = 'ISO, YMD';
+SET LOCAL IntervalStyle = 'iso_8601';
+SET LOCAL bytea_output = 'hex';
 ```
 
 Failure to acquire the lock within five seconds, or any statement timeout,
@@ -34,13 +38,15 @@ A later one-shot execution authority must preserve this order:
 1. verify the frozen source commit, migration hashes, container health/identity,
    fixed transport, PostgreSQL/database/user/schema, prerequisites, target-table
    identity, and pre-DDL index state;
-2. `BEGIN` and set the transaction-local timeouts;
+2. `BEGIN` and set the transaction-local timeouts and all four canonical
+   representation settings frozen in the read-only preservation contract;
 3. acquire `SHARE` on `public.material_receipts`;
 4. re-run the exact active-duplicate query under the lock;
 5. if any duplicate exists, `ROLLBACK` and STOP before mutation;
-6. capture inside-transaction before-state counts, deterministic fingerprints,
-   and bounded catalogs for indexes, roles, memberships, ownership, ACLs,
-   triggers, functions, and schemas;
+6. capture inside-transaction before-state counts and digests using exactly the
+   canonical query, empty-table encoding, and per-table primary-key order frozen
+   in the read-only preservation contract, plus bounded catalogs for indexes,
+   roles, memberships, ownership, ACLs, triggers, functions, and schemas;
 7. supply and execute the exact frozen 0004 UP SQL;
 8. run structural and preservation verification inside the same transaction;
 9. `COMMIT` only if every assertion passes.
@@ -68,12 +74,14 @@ DDL-message parsing. Any mismatch rolls back the transaction.
 
 ## Business-data preservation
 
-Immediately before and after index creation, compare the four row counts and
-the approved deterministic fingerprints for `material_receipts`,
-`material_receipt_items`, `inventory_movements`, and `material_stock`. All must
-be identical. The transaction is not authorized to issue a business-data
-INSERT, UPDATE, DELETE, cancellation, rejection, reconciliation, or winner
-selection.
+Immediately before and after index creation, use the unchanged transaction-local
+canonical settings and the exact frozen fingerprint procedure for
+`material_receipts`, `material_receipt_items`, `inventory_movements`, and
+`material_stock`. For every table, require `before_count = after_count` and
+`before_digest = after_digest`. Any mismatch or inability to apply the frozen
+procedure requires ROLLBACK, **PRESERVATION VERIFICATION INCONCLUSIVE — STOP**.
+The transaction is not authorized to issue a business-data INSERT, UPDATE,
+DELETE, cancellation, rejection, reconciliation, or winner selection.
 
 ## Attempt, rollback, and DOWN policy
 

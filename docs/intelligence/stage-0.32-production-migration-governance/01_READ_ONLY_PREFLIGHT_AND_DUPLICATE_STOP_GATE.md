@@ -63,9 +63,46 @@ details, receipt-item contents, source-document contents, or unrelated rows.
 
 ## Read-only preservation baseline
 
-Capture row counts for all four business tables. Where the baseline schema and
-size permit, compute a deterministic server-side fingerprint for each table as
-`md5(string_agg(row_to_json(t)::text, E'\n' ORDER BY <primary_key>))`, using:
+Every preservation capture uses its own explicit transaction and establishes
+the following canonical representation settings transaction-locally:
+
+```sql
+BEGIN READ ONLY;
+SET LOCAL TIME ZONE 'UTC';
+SET LOCAL DateStyle = 'ISO, YMD';
+SET LOCAL IntervalStyle = 'iso_8601';
+SET LOCAL bytea_output = 'hex';
+```
+
+Persistent `ALTER DATABASE`, `ALTER ROLE`, and `postgresql.conf` changes are
+prohibited. A digest produced without all four settings is not comparable and
+must be classified inconclusive.
+
+After setting them, capture each table with this one canonical procedure,
+substituting only the frozen table and primary-key names below:
+
+```sql
+SELECT
+    COUNT(*) AS row_count,
+    md5(
+        COALESCE(
+            string_agg(
+                row_to_json(t)::text,
+                E'\n'
+                ORDER BY <PRIMARY_KEY>
+            ),
+            ''
+        )
+    ) AS row_digest
+FROM <TABLE> AS t;
+```
+
+The transaction then runs the active-duplicate query and commits without
+mutation. The same exact settings and query shape are mandatory for the
+read-only preflight, the locked transaction's before- and after-DDL captures,
+and separate post-deployment verification.
+
+The frozen table and stable primary-key order substitutions are:
 
 | Table | Deterministic order |
 |---|---|
@@ -74,10 +111,34 @@ size permit, compute a deterministic server-side fingerprint for each table as
 | `public.inventory_movements` | `movement_id` |
 | `public.material_stock` | `material_id` |
 
-Only count and digest leave PostgreSQL. If a bounded fingerprint cannot be
-computed safely, record that fact and require exact row-count preservation plus
-an approved alternative before migration authority. Do not install an extension
-or expose business rows to obtain a fingerprint.
+No unordered aggregate, `ctid`, insertion order, timestamp order, or
+planner-dependent order is permitted. `row_to_json` encodes each complete row;
+SQL NULL becomes JSON `null` and remains distinct from an empty string, the
+string `"null"`, zero, and false. Business columns must not be individually
+coalesced. Only the aggregate NULL for an empty table is converted to `''`, so
+the frozen empty-table result is `row_count = 0` and `row_digest = md5('')`.
+
+The row JSON also escapes control characters and newlines within business
+values, while the separator between complete JSON rows is exactly `E'\n'`.
+Raw column concatenation such as `col1 || '|' || col2` is prohibited. Current
+governed tables contain `TIMESTAMPTZ` values, which are serialized only after
+`TimeZone = UTC`, and `material_receipts` contains `DATE` values, serialized
+only with `DateStyle = 'ISO, YMD'`. Thus the procedure does not depend on host,
+operator, role, database, or session defaults.
+
+Only table name, count, and digest leave PostgreSQL; serialized rows and
+business values never do. If the settings cannot be established, the query
+differs, stable primary-key ordering is unavailable, calculation fails, or the
+before/after algorithms differ, classify **PRESERVATION VERIFICATION
+INCONCLUSIVE — STOP**. Fingerprint verification cannot be waived or replaced by
+row counts automatically, and no extension may be installed to obtain it.
+
+Before production authority, verifier readiness must be demonstrated against
+disposable PostgreSQL: sessions initially using `Asia/Jakarta`, `UTC`, and
+`America/New_York` must produce identical digests after applying the canonical
+transaction-local settings. Differing initial `DateStyle` values must likewise
+be tested where practical. This adversarial readiness proof is not a production
+query and is not executed by this governance package.
 
 ## Preflight classifications
 
