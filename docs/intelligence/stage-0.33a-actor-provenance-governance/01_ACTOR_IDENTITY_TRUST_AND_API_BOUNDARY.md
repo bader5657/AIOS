@@ -77,16 +77,26 @@ Every governed candidate-creation boundary accepting an `ActorContext` must firs
 
 The candidate-specific policy distinguishes:
 
-- `ACTOR_INVALID`: the supplied identity is missing, malformed, noncanonical, prohibited-shaped, or fails generic structural/trust validation;
+- `ACTOR_REQUIRED`: no `ActorContext` or actor identity was supplied where candidate creation requires one;
+- `ACTOR_INVALID`: an actor input/object exists but fails generic structural/trust validity, including a forged or corrupted object, malformed or prohibited-shaped identity, invalid generic representation, or invalid exact DTO type where required;
 - `ACTOR_UNAUTHORIZED`: a structurally valid, trusted generic `ActorContext` is not permitted by the candidate-creation policy; and
 - authorized: exactly `operator:<canonical-lowercase-uuidv4>`.
 
-Thus `reviewer:<otherwise-valid-id>` is `ACTOR_UNAUTHORIZED`. A legacy `operator:<non-UUID-id>` is rejected as `ACTOR_UNAUTHORIZED` or `ACTOR_INVALID` according to the exact layer that detects the failure, but it can never authorize candidate creation. This operation-specific taxonomy does not redefine errors for unrelated generic `ActorContext` consumers.
+Thus a generic-valid `reviewer:<id>` and a generic-valid legacy `operator:<non-UUID-id>` both deterministically produce `ACTOR_UNAUTHORIZED` for candidate creation. Neither becomes `ACTOR_INVALID` merely because it fails the narrower candidate policy. This operation-specific taxonomy does not redefine errors for unrelated generic `ActorContext` consumers.
+
+The deterministic evaluation order is:
+
+1. actor presence: missing produces `ACTOR_REQUIRED`;
+2. generic `ActorContext` structural/trust revalidation: failure produces `ACTOR_INVALID`;
+3. candidate-specific authorization: a generic-valid but candidate-disallowed actor produces `ACTOR_UNAUTHORIZED`; and
+4. only an authorized candidate actor proceeds to mapper and candidate creation.
+
+All three bounded actor failures occur before candidate persistence and must produce zero unauthorized database mutation. The Migration 0005 PostgreSQL `CHECK` validates the persisted candidate actor format; it does not determine the public application error taxonomy. Application/trust boundaries classify failures before database mutation wherever required, and database `CHECK` failures must not all be mapped generically to `ACTOR_UNAUTHORIZED`.
 ## Validation and bounded errors
 
 Validation must reject, before mapper, capability, or database mutation:
 
-- a missing or blank actor;
+- a missing actor context (`ACTOR_REQUIRED`) or a supplied blank identity (`ACTOR_INVALID`);
 - an unknown actor prefix;
 - a noncanonical, non-v4, uppercase, or malformed UUID;
 - control characters or Unicode lookalikes;

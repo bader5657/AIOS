@@ -12,13 +12,20 @@ Tests must prove:
 - generic `ActorContext` retains its existing broader grammar and unrelated consumers remain unaffected;
 - candidate creation separately authorizes only the operator/canonical-lowercase-UUIDv4 form;
 - a structurally valid `reviewer:<id>` is rejected for candidate creation as `ACTOR_UNAUTHORIZED`;
-- malformed, noncanonical, or prohibited-shaped identity is rejected as `ACTOR_INVALID`, while a missing actor is `ACTOR_REQUIRED`;
+- a structurally valid legacy `operator:<non-UUID-id>` is rejected for candidate creation as `ACTOR_UNAUTHORIZED`;
+- no actor context, `None`, or otherwise missing required candidate actor is rejected as `ACTOR_REQUIRED`;
+- forged or corrupted `ActorContext` state, malformed generic identity, and invalid exact DTO type are rejected as `ACTOR_INVALID`;
+- blank, control-character, Unicode/lookalike, path-shaped, SQL-shaped, DSN-shaped, credential-shaped, and other prohibited generic-invalid identities are rejected as `ACTOR_INVALID`;
 - actor identity remains separate from `IngestionResult` and `TrustedReceiptFacts`;
 - application validation rejects blank, unknown prefixes, uppercase or non-v4 UUIDs, alternate UUID forms, control characters, Unicode lookalikes, path-shaped, SQL-shaped, DSN-shaped, credential-shaped, and overlength values;
 - no public raw string, dictionary, or JSON actor parameter is introduced; and
 - invalid actor state fails before mapper, candidate capability, repository construction/calls where the governed design permits, database connection, or database mutation.
 
 Expected zero-side-effect evidence is mapper calls `= 0`, candidate capability calls `= 0`, repository construction/calls `= 0` where the governed design permits, and database connections/mutations `= 0`.
+
+Tests must assert one exact outward result per input: `ACTOR_REQUIRED` for absence, `ACTOR_INVALID` for generic-invalid state, `ACTOR_UNAUTHORIZED` for a generic-valid candidate-disallowed actor, authorized candidate creation for canonical operator UUIDv4, and `SOURCE_ACTIVE_RECEIPT_EXISTS` for a same-source duplicate after valid actor authorization. No test may accept multiple public codes for the same input.
+
+Tests must prove the deterministic order: actor presence, generic structural/trust revalidation, candidate-specific authorization, then mapper/candidate creation. `ACTOR_REQUIRED`, `ACTOR_INVALID`, and `ACTOR_UNAUTHORIZED` must all fail before candidate persistence with zero unauthorized database mutation.
 
 ## Forged-object tests
 
