@@ -33,6 +33,7 @@ _ITEM_COLUMNS: Final = (
     "full_colly_count, qty_per_full_colly, partial_qty, total_qty, unit, status"
 )
 _CANDIDATE_RUNTIME_USER: Final = "aios_material_receipt_candidate_runtime"
+_SOURCE_ACTIVE_RECEIPT_INDEX: Final = "material_receipts_source_asset_active_uidx"
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +175,10 @@ class MaterialReceiptRepository:
             raise
         except psycopg.OperationalError as exc:
             raise MaterialReceiptError(Code.DATABASE_UNAVAILABLE) from exc
+        except psycopg.errors.UniqueViolation as exc:
+            if exc.diag.constraint_name == _SOURCE_ACTIVE_RECEIPT_INDEX:
+                raise MaterialReceiptError(Code.SOURCE_ACTIVE_RECEIPT_EXISTS) from exc
+            raise MaterialReceiptError(Code.DATA_INTEGRITY_ERROR) from exc
         except psycopg.Error as exc:
             raise MaterialReceiptError(Code.DATA_INTEGRITY_ERROR) from exc
 

@@ -7,7 +7,10 @@ from pathlib import PurePosixPath
 import re
 from uuid import UUID
 
-from core.material_receipts.errors import MaterialReceiptError
+from core.material_receipts.errors import (
+    MaterialReceiptError,
+    MaterialReceiptFailureCode,
+)
 from core.material_receipts.models import ReceiptCandidateRequest, ReceiptForReview
 
 from .ports import CandidateReviewPort, RetainedEvidenceVerifier
@@ -256,6 +259,11 @@ class ReviewFacade:
 
     @staticmethod
     def _candidate_error(exc: MaterialReceiptError) -> ReviewApplicationError:
+        if exc.code is MaterialReceiptFailureCode.SOURCE_ACTIVE_RECEIPT_EXISTS:
+            return ReviewApplicationError(
+                ReviewFailureCode.SOURCE_ACTIVE_RECEIPT_EXISTS,
+                candidate_code=exc.code,
+            )
         return ReviewApplicationError(
             ReviewFailureCode.CANDIDATE_OPERATION_FAILED,
             candidate_code=exc.code,

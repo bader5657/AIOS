@@ -1,0 +1,1 @@
+DROP INDEX material_receipts_source_asset_active_uidx;
