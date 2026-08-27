@@ -76,6 +76,25 @@ Recursive adversarial inspection of validation, capability, repository, and data
 
 Only bounded actor codes, existing bounded candidate codes, and explicitly safe values may escape.
 
+## Exported service-surface tests
+
+`tests/unit/material_receipts/test_service.py` must permanently prove:
+
+- `MaterialReceiptService` has no `create_receipt_candidate` method;
+- no `create`, `save`, `insert`, `execute`, `execute_sql`, `dispatch`, `invoke`, `run`, `handle`, or equivalent unrestricted candidate-create alias exists;
+- no exported service candidate method accepts raw `actor_reference`, `created_by_actor_reference`, dictionary/mapping/JSON actor, arbitrary actor kwargs, or `ActorContext`;
+- no repository getter, database URL getter, generic SQL, generic mutation, or delete surface exists;
+- existing revise, retrieve/review, confirmation, rejection, cancellation, and item-cancellation delegation remains unchanged where applicable; and
+- `MaterialReceiptService` remains exported without importing application-layer actor authorization.
+
+Creator-less/raw-actor bypass absence must also be corroborated by the Stage 0.33A composition and security graph tests. The canonical creator string may cross only internal typed persistence seams after candidate authorization.
+
+## Test-to-file mapping addition
+
+- Exported service create-surface elimination → `tests/unit/material_receipts/test_service.py`
+- Creator-less/raw-actor bypass absence → `tests/unit/material_receipts/test_service.py` plus Stage 0.33A composition/security tests
+- Existing service non-regression → `tests/unit/material_receipts/test_service.py`
+
 ## Regression gates
 
 The implementation PR must preserve and run the repository's relevant existing unit/integration suite plus mandatory new Stage 0.33A tests. Required regression evidence includes:
@@ -108,7 +127,12 @@ The one authorized implementation PR, once authority is active, must report:
 - Stage 0.32 index and behavior preservation;
 - lifecycle immutability and replacement evidence;
 - trust-boundary, forgery, non-exposure, and exception-graph evidence;
-- dependency diff; and
+- dependency diff;
+- `MaterialReceiptService` create surface reported `REMOVED`;
+- creator-less exported candidate paths reported `0`;
+- raw-actor exported candidate paths reported `0`;
+- governed ActorContext candidate-creation path reported `1`;
+- repository internal persistence create path reported `1 governed internal path`; and
 - confirmation that production PostgreSQL was not contacted.
 
 It must receive a separate independent implementation review before merge. The implementation PR must not deploy Migration 0005 or activate runtime traffic.
@@ -120,6 +144,8 @@ Stop implementation and return to governance if:
 - Migration `0005` is no longer free;
 - exact PostgreSQL UUIDv4 enforcement cannot be implemented;
 - the file allowlist is insufficient;
+- the caller audit finds a live path requiring an out-of-allowlist change;
+- any exported creator-less or raw-actor candidate-creation path would remain;
 - a new dependency is required;
 - production access would be needed;
 - a generic `ActorContext` consumer would regress;

@@ -27,6 +27,7 @@ After activation, this package permits one non-production branch and one impleme
 
 - candidate-specific actor authorization and exact bounded errors;
 - propagation through the existing typed candidate-creation API and capability chain;
+- removal of the exported creator-less `MaterialReceiptService.create_receipt_candidate` bypass while retaining the service class and its unrelated operations;
 - atomic receipt creator persistence;
 - Migration 0005 `UP` and disposable-test-only `DOWN` files;
 - the exact candidate-writer column-`INSERT` grant delta;
@@ -64,8 +65,9 @@ The approval preserves:
 5. immutable, atomic creator persistence;
 6. Stage 0.32 source idempotency and Migration 0004 closure;
 7. least-privilege candidate `INSERT` only and no creator `UPDATE`;
-8. no provenance read exposure; and
-9. no production authority.
+8. no provenance read exposure;
+9. exactly one governed externally reachable candidate-creation path and no raw-actor service bypass; and
+10. no production authority.
 
 ## Authority activation conditions
 

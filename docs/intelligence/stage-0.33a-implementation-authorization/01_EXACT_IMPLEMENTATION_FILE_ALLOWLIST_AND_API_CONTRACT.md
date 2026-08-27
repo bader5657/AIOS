@@ -4,6 +4,8 @@
 
 A future implementation may create or modify only the exact paths below. Directory-wide authority is not granted. Unrelated changes inside an allowed file are prohibited. If implementation evidence requires another path, stop and obtain an amended authorization before changing it.
 
+The amended allowlist contains exactly **22 paths**: nine application/support paths, two migration paths, six unit-test paths, and five integration-test paths.
+
 ## Application allowlist
 
 | Path | Authorized narrow purpose |
@@ -15,9 +17,12 @@ A future implementation may create or modify only the exact paths below. Directo
 | `core/app/material_receipts/composition.py` | Carry the creator through the stateless candidate operation into repository creation; no retained graph or runtime activation. |
 | `core/app/material_receipts/results.py` | Add only `ACTOR_REQUIRED`, `ACTOR_INVALID`, and `ACTOR_UNAUTHORIZED` to the bounded public review failure taxonomy. |
 | `core/material_receipts/repository.py` | Accept the canonical creator as a separate create argument and insert it in the existing receipt transaction; keep all reads and lifecycle updates free of provenance exposure/mutation. |
+| `core/material_receipts/service.py` | Remove only the exported creator-less `MaterialReceiptService.create_receipt_candidate` method; retain the class and unrelated operations unchanged, add no replacement create alias/raw-actor API, and import no application-layer actor module. |
 | `scripts/admin/bootstrap_material_writer_secrets.py` | Update only the hard-coded candidate receipt `INSERT` column matrix and matching ACL verification count/list for `created_by_actor_reference`; no credential, execution, role attribute, membership, ownership, posting, or runtime behavior change. |
 
 No change is authorized to `core/material_receipts/models.py`, public review result DTOs, ingestion DTOs, `TrustedReceiptFacts`, Telegram code, Universal Ingestion, posting code, stock code, or movement code. Creator provenance must not be added to unrelated read DTOs.
+
+`core/material_receipts/__init__.py` remains excluded: `MaterialReceiptService` stays exported, while removal of one method requires no package-export change. If implementation discovers an independently justified need to edit the initializer, it must stop and return to governance.
 
 ## Migration allowlist
 
@@ -37,6 +42,7 @@ No other migration file may be created or modified. Migration 0004 and `material
 | `tests/unit/app/material_receipts/test_review_use_cases.py` | Candidate-boundary revalidation and generic `ActorContext` non-regression. |
 | `tests/unit/app/material_receipts/test_composition_boundaries.py` | Narrow capability propagation and object/authority graph tests. |
 | `tests/unit/admin/test_bootstrap_material_writer_secrets.py` | Exact candidate `INSERT` column/ACL expectation delta and proof of no broader bootstrap change. |
+| `tests/unit/material_receipts/test_service.py` | Prove removal of the creator-less service method, absence of raw-actor/create aliases and generic mutation surfaces, and preservation of unrelated service delegation. |
 
 ## Integration-test allowlist
 
@@ -105,3 +111,40 @@ Only the canonical creator string returned by the candidate validator may cross 
 The repository must insert `created_by_actor_reference` directly with the receipt header inside the existing transaction. Receipt header, all items, and creator provenance commit together or roll back together. A post-insert provenance `UPDATE` is prohibited.
 
 All revision, review, confirmation, rejection, cancellation, and posting SQL must omit `created_by_actor_reference`. No generic update or getter is authorized.
+
+## Exported service create-surface decision
+
+`MaterialReceiptService` remains exported for its already-governed non-creation operations. Stage 0.33A requires removal of `MaterialReceiptService.create_receipt_candidate`; after implementation:
+
+```python
+hasattr(MaterialReceiptService, "create_receipt_candidate") is False
+```
+
+No replacement `create`, `save`, `insert`, `execute`, `execute_sql`, `dispatch`, `invoke`, `run`, `handle`, arbitrary-kwargs, or other alias may provide candidate creation. The service must accept neither `actor_reference: str`, `created_by_actor_reference: str`, dictionaries/mappings/JSON, nor `ActorContext` for candidate creation. It must not import `core.app.material_receipts.actor_provenance` or another higher application-layer identity/authorization module.
+
+The repository may require the already-authorized canonical creator as a separate internal create argument. That persistence seam is not authentication or authorization authority and is callable by the governed composition only with the validator-produced value. No new generic/public repository construction or raw-actor API is authorized.
+
+## Required caller audit
+
+Before removing the service method, implementation must perform a repository-wide static/call-site audit for `MaterialReceiptService.create_receipt_candidate` and equivalent imports/aliases.
+
+- If no live caller exists, remove the method and proceed.
+- If a caller is found, classify it as obsolete/dead, test-only, a legitimate governed application path, or an unauthorized bypass.
+- Do not automatically adapt any caller.
+- If adaptation requires a path outside this 22-path allowlist, stop and return to governance.
+
+No out-of-allowlist caller is automatically modifiable.
+
+## Single-path completion invariant
+
+Implementation completion requires:
+
+```text
+MaterialReceiptService create surface = REMOVED
+externally reachable creator-less candidate paths = 0
+externally reachable raw-actor candidate paths = 0
+governed ActorContext candidate-creation path = 1
+repository internal persistence create path = 1 governed internal path
+```
+
+More than one externally reachable candidate-creation path blocks implementation merge.
