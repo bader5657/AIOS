@@ -17,6 +17,20 @@ An accepted value must have all of these properties:
 
 The initial permitted actor-class set is exactly `{operator}`. Values using `reviewer:`, `system:`, `automation:`, `telegram:`, `admin:`, `migration:`, or `unknown:` are rejected. Uppercase UUID text, non-v4 UUIDs, malformed UUIDs, alternate UUID spellings, and any other actor prefix are rejected.
 
+This actor-class and representation rule is operation-specific to candidate creation. Stage 0.33A does not globally narrow or redefine the existing generic `ActorContext` contract. Generic `ActorContext` may continue to accept its already-governed broader grammar, including legitimate `operator:<id>` and `reviewer:<id>` values used by other operations.
+
+The required validation sequence is conceptually:
+
+```text
+validate_actor_context(...)
+→ generic ActorContext structural/trust validation
+
+authorize_candidate_creation_actor(...)
+→ Stage 0.33A operator/canonical-lowercase-UUIDv4 policy
+```
+
+Other `ActorContext` consumers remain unaffected unless separately governed.
+
 The actor reference is non-secret identity metadata. It must never contain or persist a password, API token, Telegram bot token, session secret, database credential, or DSN.
 
 ## Trusted identity source
@@ -59,8 +73,15 @@ create_review_candidate_from_ingestion(
 
 `ActorContext` remains a distinct argument and trust object. It must not be embedded in, accepted from, or conflated with `IngestionResult` or `TrustedReceiptFacts`. No public raw actor-string parameter is authorized.
 
-Every boundary accepting an `ActorContext` must fail closed and revalidate its exact governed values. Construction-time validation alone is insufficient: forged dataclass/object state, mutation, reconstruction, deserialization, and subclassing must not bypass validation. Where the governed DTO policy requires exact types, subclassed or otherwise forged DTOs are rejected.
+Every governed candidate-creation boundary accepting an `ActorContext` must first revalidate its current generic structural/trust state and then apply the separate candidate-creation authorization policy. Construction-time validation alone is insufficient: forged dataclass/object state, mutation, reconstruction, deserialization, and subclassing must not bypass validation. Where the governed DTO policy requires exact types, subclassed or otherwise forged DTOs are rejected.
 
+The candidate-specific policy distinguishes:
+
+- `ACTOR_INVALID`: the supplied identity is missing, malformed, noncanonical, prohibited-shaped, or fails generic structural/trust validation;
+- `ACTOR_UNAUTHORIZED`: a structurally valid, trusted generic `ActorContext` is not permitted by the candidate-creation policy; and
+- authorized: exactly `operator:<canonical-lowercase-uuidv4>`.
+
+Thus `reviewer:<otherwise-valid-id>` is `ACTOR_UNAUTHORIZED`. A legacy `operator:<non-UUID-id>` is rejected as `ACTOR_UNAUTHORIZED` or `ACTOR_INVALID` according to the exact layer that detects the failure, but it can never authorize candidate creation. This operation-specific taxonomy does not redefine errors for unrelated generic `ActorContext` consumers.
 ## Validation and bounded errors
 
 Validation must reject, before mapper, capability, or database mutation:
@@ -83,3 +104,17 @@ The frozen bounded actor errors are:
 Stage 0.32 duplicate behavior continues to use `SOURCE_ACTIVE_RECEIPT_EXISTS`. V1 does not introduce `ACTOR_PROVENANCE_CONFLICT`; that error requires later implementation evidence of a distinct governed state.
 
 Exceptions and logs must not leak credential or authentication internals. Duplicate responses must not disclose the creator of an existing receipt.
+
+## Provenance non-exposure
+
+Stage 0.33A authorizes no public provenance read API. `created_by_actor_reference` must not automatically propagate to:
+
+- Brain inputs or LLM prompts/context;
+- Telegram acknowledgements or replies;
+- Universal Ingestion results or metadata;
+- generic application logging or generic error output;
+- duplicate-source responses;
+- a generic provenance-query API; or
+- a generic repository getter outside an explicitly approved review use case.
+
+Future review or read exposure requires separate governance approval. Creator identity remains unavailable to OCR, Vision, LLM, Brain, Telegram, and Universal Ingestion both as an authority source and as an automatic output.

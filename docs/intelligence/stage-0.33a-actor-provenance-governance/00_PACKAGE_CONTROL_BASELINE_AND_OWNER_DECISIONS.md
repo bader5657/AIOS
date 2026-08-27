@@ -46,7 +46,18 @@ The Project Owner explicitly approves and freezes:
 5. no provenance read exposure in v1; and
 6. database-owner mutation remaining exceptional governance authority.
 
+The Project Owner also approves these clarifications of the same frozen design:
+
+7. the existing generic `ActorContext` contract remains broader and unchanged;
+8. candidate creation applies a separate, operation-specific authorization policy requiring `operator:<lowercase-uuidv4>`;
+9. production `DOWN` is prohibited without separately approved destructive rollback governance; and
+10. database UUIDv4 enforcement may not be weakened without an explicit governance decision.
+
+Items 7–10 clarify the application of the original six decisions. They do not expand the approved architecture or authorize implementation.
+
 This approval grants governance-publication authority only. It does **not** grant implementation, migration-file creation, database deployment, privilege modification, runtime activation, or production candidate-traffic authority.
+
+For avoidance of doubt, Stage 0.33A does not authorize Migration 0005 creation, production PostgreSQL contact, a Telegram identity resolver, runtime activation, or production candidate traffic.
 
 ## Open gates and non-authorized activity
 
