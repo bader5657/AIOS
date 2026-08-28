@@ -22,7 +22,7 @@ from .candidate_input import TrustedReceiptFacts, build_receipt_candidate_reques
 from .candidate_input_errors import CandidateInputError, CandidateInputFailureCode
 from .results import ReviewApplicationError, ReviewFailureCode
 from .review_use_cases import ActorContext, SourceContext
-from .actor_provenance import authorize_candidate_creation_actor
+from .actor_provenance import authorize_candidate_creation_actor_reference
 
 
 __all__ = ("create_review_candidate_from_ingestion",)
@@ -35,7 +35,7 @@ class _CreateCandidateCapability(Protocol):
         self,
         request: ReceiptCandidateRequest,
         source_context: SourceContext,
-        actor_context: ActorContext,
+        created_by_actor_reference: str,
     ) -> ReceiptForReview: ...
 
 
@@ -48,12 +48,12 @@ class _TerminalCreateCandidateCapability:
         self,
         request: ReceiptCandidateRequest,
         source_context: SourceContext,
-        actor_context: ActorContext,
+        created_by_actor_reference: str,
     ) -> ReceiptForReview:
         result, failure_code, candidate_code = await _execute_terminal_create(
             request,
             source_context,
-            actor_context,
+            created_by_actor_reference,
         )
         if failure_code is not None:
             raise ReviewApplicationError(
@@ -68,7 +68,7 @@ class _TerminalCreateCandidateCapability:
 async def _execute_terminal_create(
     request: ReceiptCandidateRequest,
     source_context: SourceContext,
-    actor_context: ActorContext,
+    created_by_actor_reference: str,
 ) -> tuple[
     ReceiptForReview | None,
     ReviewFailureCode | None,
@@ -80,7 +80,9 @@ async def _execute_terminal_create(
         from .composition import compose_review_application
 
         facade = compose_review_application().facade
-        result = await facade.create_candidate(request, source_context, actor_context)
+        result = await facade.create_candidate(
+            request, source_context, created_by_actor_reference
+        )
     except ReviewApplicationError as exc:
         try:
             failure_code = exc.code
@@ -160,6 +162,29 @@ def _source_context(request: ReceiptCandidateRequest) -> SourceContext | None:
         return None
 
 
+def _capture_candidate_creator(
+    actor_context: ActorContext | None,
+) -> tuple[str | None, ReviewFailureCode | None]:
+    if actor_context is None:
+        return None, ReviewFailureCode.ACTOR_REQUIRED
+    try:
+        validated_context = ActorContext.validate(actor_context)
+        validated_reference = validated_context.actor_reference
+    except (AttributeError, TypeError, ValueError):
+        return None, ReviewFailureCode.ACTOR_INVALID
+    try:
+        return (
+            authorize_candidate_creation_actor_reference(validated_reference),
+            None,
+        )
+    except ReviewApplicationError as exc:
+        return None, (
+            exc.code
+            if exc.code is ReviewFailureCode.ACTOR_UNAUTHORIZED
+            else ReviewFailureCode.INTERNAL_FAILURE
+        )
+
+
 async def create_review_candidate_from_ingestion(
     ingestion_result: IngestionResult,
     trusted_receipt_facts: TrustedReceiptFacts,
@@ -167,7 +192,12 @@ async def create_review_candidate_from_ingestion(
 ) -> ReceiptForReview:
     """Map verified evidence and perform exactly one candidate-create operation."""
 
-    authorize_candidate_creation_actor(actor_context)
+    created_by_actor_reference, actor_failure = _capture_candidate_creator(actor_context)
+    actor_context = None
+    if actor_failure is not None:
+        raise ReviewApplicationError(actor_failure) from None
+    if created_by_actor_reference is None:
+        raise ReviewApplicationError(ReviewFailureCode.INTERNAL_FAILURE) from None
     request, input_failure, internal_mapping_failure = _map_candidate_request(
         ingestion_result,
         trusted_receipt_facts,
@@ -179,7 +209,9 @@ async def create_review_candidate_from_ingestion(
     source_context = _source_context(request)
     if source_context is None:
         raise ReviewApplicationError(ReviewFailureCode.SOURCE_IDENTITY_INVALID)
-    result = await _candidate_capability().create_candidate(request, source_context, actor_context)
+    result = await _candidate_capability().create_candidate(
+        request, source_context, created_by_actor_reference
+    )
     safe_result = _review_safe_result(result)
     result = None
     if safe_result is None:

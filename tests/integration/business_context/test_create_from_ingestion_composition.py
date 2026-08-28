@@ -253,6 +253,41 @@ class CreateFromIngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result.confirmation_actor_reference)
         self.assertEqual(after, (before[0] + 1, before[1] + 2, before[2], before[3]))
 
+    async def test_untrusted_actor_shaped_content_cannot_override_stored_creator(self) -> None:
+        actor_b = "operator:6ba7b810-9dad-4d80-b000-000000000001"
+        path = self.retained_manifest()
+        untrusted_evidence = evidence(path)
+        object.__setattr__(
+            untrusted_evidence,
+            "metadata",
+            {
+                "telegram_text": actor_b,
+                "caption": actor_b,
+                "sender_id": actor_b,
+                "telegram_metadata": {"actor": actor_b},
+                "ocr": actor_b,
+                "vision": actor_b,
+                "llm": actor_b,
+                "brain": actor_b,
+                "json": {"actor": actor_b},
+                "database_login": actor_b,
+            },
+        )
+        object.__setattr__(untrusted_evidence, "text", actor_b)
+        untrusted_facts = facts()
+        object.__setattr__(untrusted_facts, "supplier_name", actor_b)
+        result = await self.create(path, untrusted_facts)
+
+        async with await psycopg.AsyncConnection.connect(self.admin_url) as admin:
+            stored = await (await admin.execute(
+                "SELECT created_by_actor_reference FROM material_receipts "
+                "WHERE receipt_id=%s",
+                (result.receipt_id,),
+            )).fetchone()
+        self.assertEqual(stored, (ACTOR.actor_reference,))
+        self.assertNotEqual(stored, (actor_b,))
+        self.assertNotIn(ACTOR.actor_reference, repr(result))
+
     async def test_candidate_identity_cannot_mutate_stock_or_movements(self) -> None:
         async with await psycopg.AsyncConnection.connect(self.runtime_url) as runtime:
             with self.assertRaises(psycopg.errors.InsufficientPrivilege):

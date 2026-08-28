@@ -20,6 +20,7 @@ import psycopg
 from psycopg import conninfo, sql
 
 from core.app.input_classifier import InputType
+from core.app.material_receipts import create_from_ingestion as create_module
 from core.app.material_receipts import review_use_cases
 from core.app.material_receipts.review_use_cases import ActorContext
 from core.app.material_receipts.candidate_input import TrustedReceiptFacts, TrustedReceiptItemFacts
@@ -124,6 +125,11 @@ class Stage032PostgresTests(unittest.IsolatedAsyncioTestCase):
         self.manifests.cleanup()
         async with await psycopg.AsyncConnection.connect(self.target.url, autocommit=True) as db:
             await db.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(self.schema)))
+            exists = await (await db.execute(
+                "SELECT 1 FROM pg_roles WHERE rolname=%s", (CANDIDATE,)
+            )).fetchone()
+            if exists:
+                await db.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(CANDIDATE)))
 
     async def _grant_candidate(self):
         async with await psycopg.AsyncConnection.connect(self.admin_url, autocommit=True) as db:
@@ -137,7 +143,7 @@ class Stage032PostgresTests(unittest.IsolatedAsyncioTestCase):
         async with await psycopg.AsyncConnection.connect(self.admin_url, autocommit=True) as db: await db.execute(STAGE_UP)
 
     async def create_candidate(self, request_value, actor=CREATOR_A):
-        return await self.repo.create_receipt_candidate(request_value, actor)
+        return await self.repo._create_receipt_candidate(request_value, actor)
 
     async def counts(self):
         async with await psycopg.AsyncConnection.connect(self.admin_url) as db:
@@ -337,6 +343,47 @@ class Stage032PostgresTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(unrelated_acl, (False,False,False,False,False,False)); self.assertEqual(unrelated_grants, (False,False,False)); self.assertNotEqual(unrelated_owner, (CANDIDATE,))
         self.assertFalse(any("posting" in role for role, _ in memberships))
         with self.assertRaises(ValueError): posting_repository.PostingDatabaseConfig(password="stage032-posting-identity-sentinel", host=self.target.host, port=self.target.port, dbname=self.target.dbname, username=CANDIDATE, search_path=self.schema)
+
+    async def test_real_db_check_failure_complete_exception_graph_is_bounded(self):
+        await self.apply()
+        _, evidence = self.retained_evidence()
+        invalid_variant = "operator:550e8400-e29b-41d4-7716-446655440000"
+
+        with patch.object(
+            create_module,
+            "authorize_candidate_creation_actor_reference",
+            return_value=invalid_variant,
+        ), patch.object(MaterialReceiptRepository, "from_environment", return_value=self.repo):
+            with self.assertRaises(ReviewApplicationError) as caught:
+                await create_review_candidate_from_ingestion(
+                    evidence, self.trusted("DB CHECK graph"), ActorContext(CREATOR_A)
+                )
+
+        outward = caught.exception
+        self.assertIs(outward.code, ReviewFailureCode.CANDIDATE_OPERATION_FAILED)
+        self.assertIs(
+            outward.candidate_code, MaterialReceiptFailureCode.DATA_INTEGRITY_ERROR
+        )
+        self.assertIsNone(outward.__cause__)
+        self.assertIsNone(outward.__context__)
+        self.assertEqual(await self.counts(), (0, 0, 0, 0))
+        forbidden_types = (
+            psycopg.Error, psycopg.AsyncConnection, MaterialReceiptRepository,
+            review_use_cases.ReviewFacade, CandidateDatabaseConfig,
+            posting_repository.InventoryPostingRepository,
+            posting_repository.PostingDatabaseConfig,
+        )
+        for value in _reachable(outward):
+            self.assertNotIsInstance(value, forbidden_types)
+            if isinstance(value, str):
+                lowered = value.lower()
+                self.assertNotIn(invalid_variant, value)
+                self.assertNotIn(CANDIDATE_PASSWORD, value)
+                self.assertNotIn("23514", value)
+                self.assertNotIn("postgresql://", lowered)
+                self.assertNotIn("password=", lowered)
+                self.assertNotIn("insert into", lowered)
+                self.assertNotIn("check constraint", lowered)
 
     async def test_public_duplicate_complete_exception_graph_is_bounded(self):
         await self.apply(); _, evidence = self.retained_evidence(); trusted = self.trusted("Bounded")

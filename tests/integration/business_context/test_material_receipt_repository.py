@@ -115,11 +115,8 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def create_candidate(self, request, actor=CREATOR):
-        return await self.repository.create_receipt_candidate(request, actor)
+        return await self.repository._create_receipt_candidate(request, actor)
 
-    async def creator(self, receipt_id):
-        async with await psycopg.AsyncConnection.connect(self.url) as con:
-            return (await (await con.execute("SELECT created_by_actor_reference FROM material_receipts WHERE receipt_id=%s", (receipt_id,))).fetchone())[0]
 
     async def creator(self, receipt_id):
         async with await psycopg.AsyncConnection.connect(self.url) as con:
@@ -232,21 +229,6 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.repository.confirm_receipt(created.receipt_id, 2, "operator:1")
         self.assertEqual(caught.exception.code, Code.INVALID_RECEIPT_STATE)
 
-    async def test_creator_is_immutable_through_lifecycle_operations(self):
-        material_id = await self.material()
-        request = candidate_request(candidate_item(material_id=material_id))
-        created = await self.create_candidate(request)
-        await self.repository.confirm_receipt(created.receipt_id, 1, "operator:review")
-        self.assertEqual(await self.creator(created.receipt_id), CREATOR)
-        revised_request = candidate_request(candidate_item(receipt_item_id=request.items[0].receipt_item_id, material_id=material_id), receipt_id=request.receipt_id)
-        await self.repository.revise_receipt_candidate(revised_request, 1)
-        self.assertEqual(await self.creator(created.receipt_id), CREATOR)
-        rejected = await self.create_candidate(candidate_request())
-        await self.repository.reject_receipt(rejected.receipt_id, 1, "operator:review")
-        self.assertEqual(await self.creator(rejected.receipt_id), CREATOR)
-        cancelled = await self.create_candidate(candidate_request())
-        await self.repository.cancel_receipt(cancelled.receipt_id, 1, "operator:review")
-        self.assertEqual(await self.creator(cancelled.receipt_id), CREATOR)
 
     async def test_creator_is_immutable_through_lifecycle_operations(self):
         material_id = await self.material()

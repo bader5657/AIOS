@@ -15,15 +15,10 @@ from core.material_receipts.service import MaterialReceiptService
 class CandidateServiceTests(unittest.IsolatedAsyncioTestCase):
     def test_creator_less_and_raw_actor_create_surfaces_are_absent(self):
         self.assertFalse(hasattr(MaterialReceiptService, "create_receipt_candidate"))
-        for name in ("create", "save", "insert", "execute", "execute_sql", "dispatch", "invoke", "run", "handle", "repository", "get_repository", "database_url", "delete"):
-            self.assertFalse(hasattr(MaterialReceiptService, name))
-        source = inspect.getsource(MaterialReceiptService)
-        self.assertNotIn("ActorContext", source)
-        self.assertNotIn("created_by_actor_reference", source)
-        self.assertNotIn("actor_provenance", source)
-
-    def test_creator_less_and_raw_actor_create_surfaces_are_absent(self):
-        self.assertFalse(hasattr(MaterialReceiptService, "create_receipt_candidate"))
+        self.assertFalse(hasattr(MaterialReceiptRepository, "create_receipt_candidate"))
+        public = {name for name in dir(MaterialReceiptRepository) if not name.startswith("_")}
+        self.assertFalse(public & {"create", "save", "insert", "execute", "dispatch", "run", "handle"})
+        self.assertTrue(hasattr(MaterialReceiptRepository, "_create_receipt_candidate"))
         for name in (
             "create", "save", "insert", "execute", "execute_sql", "dispatch",
             "invoke", "run", "handle", "repository", "get_repository",

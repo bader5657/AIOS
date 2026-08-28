@@ -176,21 +176,10 @@ async def test_invented_canonical_manifest_is_rejected_when_not_retained() -> No
 
     with pytest.raises(ReviewApplicationError) as caught:
         await facade.create_candidate(
-            request, SourceContext(request.source_asset_reference), CREATOR
+            request, SourceContext(request.source_asset_reference), CREATOR.actor_reference
         )
 
     assert caught.value.code is ReviewFailureCode.SOURCE_IDENTITY_INVALID
-    assert port.calls == []
-
-
-@async_test
-async def test_create_missing_actor_is_required_before_other_checks() -> None:
-    request = candidate_request()
-    port = RecordingCandidatePort(review_view(request))
-    facade = facade_for(port)
-    with pytest.raises(ReviewApplicationError) as caught:
-        await facade.create_candidate(request, SourceContext(request.source_asset_reference))
-    assert caught.value.code is ReviewFailureCode.ACTOR_REQUIRED
     assert port.calls == []
 
 
@@ -201,7 +190,7 @@ async def test_create_binds_exact_source_context_and_delegates() -> None:
     facade = facade_for(port)
 
     result = await facade.create_candidate(
-        request, SourceContext(request.source_asset_reference, registry_record_id=7), CREATOR
+        request, SourceContext(request.source_asset_reference, registry_record_id=7), CREATOR.actor_reference
     )
 
     assert result == port.current
@@ -215,7 +204,7 @@ async def test_create_rejects_conflicting_source_without_port_activity() -> None
     facade = facade_for(port)
 
     with pytest.raises(ReviewApplicationError) as caught:
-        await facade.create_candidate(request, SourceContext(manifest_reference()), CREATOR)
+        await facade.create_candidate(request, SourceContext(manifest_reference()), CREATOR.actor_reference)
 
     assert caught.value.code is ReviewFailureCode.SOURCE_IDENTITY_CONFLICT
     assert port.calls == []
@@ -391,7 +380,7 @@ async def test_candidate_and_unexpected_errors_are_sanitized() -> None:
 
     facade = facade_for(FailingPort(review_view(request)))
     with pytest.raises(ReviewApplicationError) as candidate:
-        await facade.create_candidate(request, SourceContext(request.source_asset_reference), CREATOR)
+        await facade.create_candidate(request, SourceContext(request.source_asset_reference), CREATOR.actor_reference)
     assert str(candidate.value) == "CANDIDATE_OPERATION_FAILED"
     assert candidate.value.candidate_code is MaterialReceiptFailureCode.DATA_INTEGRITY_ERROR
 

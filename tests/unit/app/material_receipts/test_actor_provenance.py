@@ -1,69 +1,61 @@
 from __future__ import annotations
 
+import importlib
+import sys
 from uuid import NAMESPACE_DNS, UUID, uuid1, uuid3, uuid4, uuid5
 
 import pytest
 
-from core.app.material_receipts.actor_provenance import authorize_candidate_creation_actor
 from core.app.material_receipts.results import ReviewApplicationError, ReviewFailureCode
-from core.app.material_receipts.review_use_cases import ActorContext
 
 
-def assert_code(value: object, code: ReviewFailureCode) -> None:
+def policy():
+    from core.app.material_receipts.actor_provenance import (
+        authorize_candidate_creation_actor_reference,
+    )
+    return authorize_candidate_creation_actor_reference
+
+
+def assert_unauthorized(value: str) -> None:
     with pytest.raises(ReviewApplicationError) as caught:
-        authorize_candidate_creation_actor(value)
-    assert caught.value.code is code
+        policy()(value)
+    assert caught.value.code is ReviewFailureCode.ACTOR_UNAUTHORIZED
+    assert caught.value.__cause__ is None
 
 
-def test_exact_taxonomy_and_authorized_uuidv4() -> None:
-    assert_code(None, ReviewFailureCode.ACTOR_REQUIRED)
-    assert_code(object(), ReviewFailureCode.ACTOR_INVALID)
-    assert_code(ActorContext("reviewer:review-7"), ReviewFailureCode.ACTOR_UNAUTHORIZED)
-    assert_code(ActorContext("operator:legacy-7"), ReviewFailureCode.ACTOR_UNAUTHORIZED)
-    actor = ActorContext(f"operator:{uuid4()}")
-    assert authorize_candidate_creation_actor(actor) == actor.actor_reference
-
-
-@pytest.mark.parametrize(
-    "suffix",
-    [
+def test_authorizes_only_exact_canonical_lowercase_rfc4122_uuidv4() -> None:
+    reference = f"operator:{uuid4()}"
+    assert policy()(reference) == reference
+    for suffix in (
         str(uuid4()).upper(),
         str(uuid1()),
         str(uuid3(NAMESPACE_DNS, "aios")),
         str(uuid5(NAMESPACE_DNS, "aios")),
         str(UUID(int=0)),
+        "550e8400-e29b-41d4-7716-446655440000",
         "not-a-uuid",
         uuid4().hex,
-    ],
-)
-def test_generic_valid_operator_values_are_deterministically_unauthorized(suffix: str) -> None:
-    assert_code(ActorContext(f"operator:{suffix}"), ReviewFailureCode.ACTOR_UNAUTHORIZED)
+        "{" + str(uuid4()) + "}",
+    ):
+        assert_unauthorized(f"operator:{suffix}")
+    for reference in ("reviewer:review-7", "operator:legacy-7", "system:actor", ""):
+        assert_unauthorized(reference)
 
 
-def test_forged_corrupted_subclassed_and_reconstructed_objects_are_invalid() -> None:
-    forged = object.__new__(ActorContext)
-    assert_code(forged, ReviewFailureCode.ACTOR_INVALID)
+def test_import_order_reload_and_absent_mutable_authority_registry() -> None:
+    actor_name = "core.app.material_receipts.actor_provenance"
+    review_name = "core.app.material_receipts.review_use_cases"
+    actor_module = importlib.import_module(actor_name)
+    review_module = importlib.import_module(review_name)
+    original_type = review_module.ActorContext
 
-    corrupted = ActorContext(f"operator:{uuid4()}")
-    object.__setattr__(corrupted, "actor_reference", "password=secret")
-    assert_code(corrupted, ReviewFailureCode.ACTOR_INVALID)
+    assert not hasattr(actor_module, "_ACTOR_CONTEXT_TYPE")
+    assert not hasattr(actor_module, "_register_actor_context_type")
+    assert importlib.reload(actor_module) is actor_module
+    assert policy()(f"operator:{uuid4()}").startswith("operator:")
 
-    class Subclass(ActorContext):
-        pass
-
-    subclassed = object.__new__(Subclass)
-    object.__setattr__(subclassed, "actor_reference", f"operator:{uuid4()}")
-    assert_code(subclassed, ReviewFailureCode.ACTOR_INVALID)
-    assert_code({"actor_reference": f"operator:{uuid4()}"}, ReviewFailureCode.ACTOR_INVALID)
-
-
-@pytest.mark.parametrize(
-    "value",
-    ["", "operator:", "system:actor", "operator:bad\nvalue", "operator:../admin",
-     "operator:postgresql://user:password@host/db", "operator:SELECT * FROM secret",
-     "operator:\N{CYRILLIC SMALL LETTER A}", "operator:{uuid}", "operator: uuid", "operator:uuid "],
-)
-def test_generic_invalid_or_prohibited_shaped_states_are_invalid(value: str) -> None:
-    forged = object.__new__(ActorContext)
-    object.__setattr__(forged, "actor_reference", value)
-    assert_code(forged, ReviewFailureCode.ACTOR_INVALID)
+    sys.modules.pop(actor_name, None)
+    imported_actor_first = importlib.import_module(actor_name)
+    assert not hasattr(imported_actor_first, "_ACTOR_CONTEXT_TYPE")
+    assert importlib.import_module(review_name).ActorContext is original_type
+    assert importlib.reload(imported_actor_first) is imported_actor_first

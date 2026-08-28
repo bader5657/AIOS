@@ -134,7 +134,7 @@ class MaterialReceiptRepository:
             )
         return cls(CandidateDatabaseConfig(password=password))
 
-    async def create_receipt_candidate(
+    async def _create_receipt_candidate(
         self, request: ReceiptCandidateRequest, created_by_actor_reference: str
     ) -> ReceiptForReview:
         try:

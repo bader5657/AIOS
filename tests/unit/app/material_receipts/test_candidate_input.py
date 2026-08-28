@@ -779,7 +779,7 @@ def test_invalid_input_has_zero_operational_capability(
         InventoryPostingRepository, "__init__", forbidden("posting_repository")
     )
     monkeypatch.setattr(
-        MaterialReceiptRepository, "create_receipt_candidate", forbidden("persist")
+        MaterialReceiptRepository, "_create_receipt_candidate", forbidden("persist")
     )
     monkeypatch.setattr(
         MaterialReceiptService, "confirm_receipt", forbidden("confirm")

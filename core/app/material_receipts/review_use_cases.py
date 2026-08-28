@@ -15,10 +15,6 @@ from core.material_receipts.models import ReceiptCandidateRequest, ReceiptForRev
 
 from .ports import CandidateReviewPort, RetainedEvidenceVerifier
 from .results import ReviewApplicationError, ReviewFailureCode
-from .actor_provenance import (
-    _register_actor_context_type,
-    authorize_candidate_creation_actor,
-)
 
 
 _MANIFEST_ROOT = PurePosixPath("/opt/aios/data/documents/manifests")
@@ -123,8 +119,6 @@ class ActorContext:
         return value
 
 
-_register_actor_context_type(ActorContext)
-
 
 class ReviewFacade:
     """Expose exactly candidate create, revise, and retrieval orchestration."""
@@ -141,9 +135,8 @@ class ReviewFacade:
 
     async def create_candidate(
         self, request: ReceiptCandidateRequest, source_context: SourceContext,
-        actor_context: ActorContext | None = None,
+        created_by_actor_reference: str,
     ) -> ReceiptForReview:
-        created_by_actor_reference = authorize_candidate_creation_actor(actor_context)
         self._require_request(request)
         self._require_source_context(source_context)
         if request.source_asset_reference != source_context.manifest_reference:
