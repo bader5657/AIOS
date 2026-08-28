@@ -56,15 +56,18 @@ stock/movement privilege, or unrelated ACL. Migration 0004 and
 
 ## Authority sequence
 
-The minimum safe separation is:
+Every Stage 0.33B control uses this one canonical sequence, without omission or
+shortcut:
 
-1. **0.33B-G** — this governance package, independent review, and merge;
-2. **0.33B-P** — separately authorized bounded read-only production preflight;
-3. **0.33B-A** — a separate one-shot execution authorization bound to fresh
-   passing preflight evidence, current clean main, and the frozen UP hash;
-4. **0.33B-D** — exactly one controlled execution attempt under active 0.33B-A;
-5. **0.33B-V** — separately authorized new-session read-only post-deployment
-   verification and operational-gate closure decision.
+1. **0.33B-G** — governance review and merge;
+2. **0.33B-P** — separately authorized production READ-ONLY preflight;
+3. **0.33B-A** — separately reviewed and merged one-shot Migration 0005
+   execution authorization, bound to fresh passing preflight evidence, current
+   clean main, and the frozen UP hash;
+4. **0.33B-D** — exactly one controlled production Migration 0005 execution
+   attempt under active 0.33B-A; and
+5. **0.33B-V** — separately authorized new-session READ-ONLY post-deployment
+   verification.
 
 The execution attempt need not be fragmented into another documentation PR
 after 0.33B-A is reviewed and merged; it is the controlled consumption of that

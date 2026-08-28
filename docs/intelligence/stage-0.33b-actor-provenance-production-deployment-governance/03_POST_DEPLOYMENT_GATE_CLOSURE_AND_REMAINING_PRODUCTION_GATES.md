@@ -2,11 +2,33 @@
 
 ## Separate read-only verification
 
+The canonical sequence is **0.33B-G → 0.33B-P → 0.33B-A → 0.33B-D →
+0.33B-V**: governance review and merge; separately authorized production
+READ-ONLY preflight; separately reviewed and merged one-shot Migration 0005
+execution authorization; exactly one controlled production Migration 0005
+execution attempt; and separately authorized new-session READ-ONLY
+post-deployment verification. No stage may be omitted, and a preflight PASS
+cannot skip 0.33B-A.
+
 After a successful COMMIT, 0.33B-V must separately authorize one bounded
-read-only verification from a new PostgreSQL session/transaction. It must not
-rerun Migration 0005 or perform repair. Using the same fixed target, transport,
-canonical representation settings, snapshot queries, and minimized evidence,
-it must reverify:
+read-only verification from a new PostgreSQL session independent from both the
+0.33B-P preflight and 0.33B-D execution sessions. Reusing the execution
+transaction/session as final proof is prohibited; the verifier must observe
+already committed state. It must literally begin and configure the transaction:
+
+```sql
+BEGIN READ ONLY;
+SET LOCAL TIME ZONE 'UTC';
+SET LOCAL DateStyle = 'ISO, YMD';
+SET LOCAL IntervalStyle = 'iso_8601';
+SET LOCAL bytea_output = 'hex';
+```
+
+It may perform only SELECT, catalog reads, and bounded health/status inspection.
+DDL, DML, `LOCK TABLE`, GRANT, REVOKE, repair, migration rerun, DOWN, and
+activation are prohibited. Using the same fixed target, transport, canonical
+representation settings, snapshot queries, and minimized evidence, it must
+reverify:
 
 - production container/PostgreSQL/database/schema health and identity;
 - creator column, `text`, NOT NULL, no default, and exact named CHECK;
@@ -24,20 +46,26 @@ it must reverify:
 - unchanged Telegram, Universal Ingestion, confirmation/posting, OCR/Vision/
   LLM/Brain, and production activation state.
 
+The harmless read-only transaction is then closed with `COMMIT;` or `ROLLBACK;`.
+Neither close path may mutate production.
+
 A mismatch is BLOCKED or INCONCLUSIVE and keeps the operational gate open. It
 does not authorize mutation, retry, repair, DOWN, restart, credential rotation,
 or activation.
 
 ## Actor-provenance operational gate
 
-The gate closes only after all five stages are recorded:
+The gate closes only after all six requirements are recorded:
 
 1. Stage 0.33A merged and verified;
 2. 0.33B-G independently reviewed and merged;
 3. 0.33B-P zero-row production preflight PASS;
-4. 0.33B-D one-shot Migration 0005 deployment committed with every
+4. 0.33B-A separately reviewed, merged, and ACTIVE;
+5. 0.33B-D one-shot Migration 0005 deployment committed with every
    pre-COMMIT verifier PASS; and
-5. 0.33B-V new-session post-deployment verification PASS.
+6. 0.33B-V new-session READ-ONLY post-deployment verification PASS.
+
+A 0.33B-P → 0.33B-D shortcut is prohibited.
 
 Only then may governance classify:
 

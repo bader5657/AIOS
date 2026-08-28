@@ -2,6 +2,13 @@
 
 ## Separate, bounded authority
 
+The canonical sequence is **0.33B-G → 0.33B-P → 0.33B-A → 0.33B-D →
+0.33B-V**: governance review and merge; separately authorized production
+READ-ONLY preflight; separately reviewed and merged one-shot Migration 0005
+execution authorization; exactly one controlled production Migration 0005
+execution attempt; and separately authorized new-session READ-ONLY
+post-deployment verification. No stage may be omitted or combined.
+
 After 0.33B-G is independently reviewed and merged, 0.33B-P may authorize one
 bounded production read-only preflight session. Governance publication itself
 does not authorize that session. A PASS makes a one-shot authorization request

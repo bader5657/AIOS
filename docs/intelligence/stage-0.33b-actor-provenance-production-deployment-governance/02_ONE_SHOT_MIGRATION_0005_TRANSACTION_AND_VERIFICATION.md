@@ -2,6 +2,13 @@
 
 ## Activation and consumption
 
+The canonical sequence is **0.33B-G → 0.33B-P → 0.33B-A → 0.33B-D →
+0.33B-V**: governance review and merge; separately authorized production
+READ-ONLY preflight; separately reviewed and merged one-shot Migration 0005
+execution authorization; exactly one controlled production Migration 0005
+execution attempt; and separately authorized new-session READ-ONLY
+post-deployment verification. There is no 0.33B-P → 0.33B-D shortcut.
+
 0.33B-A requires merged 0.33B-G governance, a fresh 0.33B-P PASS, zero receipt
 rows, absent creator column/CHECK, healthy Stage 0.32 index, synchronized clean
 main, exact UP hash, production health, captured preservation and role/ACL
@@ -38,15 +45,27 @@ timeout causes ROLLBACK/STOP with no retry under the consumed authority.
 
 ## Locked immediate recheck
 
-After the lock and before DDL, recheck in structured form:
+After the lock and before DDL, recheck in this exact order:
 
-1. receipt row count is exactly zero;
-2. creator column and named constraint remain absent;
-3. Stage 0.32 index remains present, valid, ready, unique, sole-keyed on
+1. production target identity: expected container/control-plane context,
+   database `aios`, current user/administrative role `aios`, schema `public`,
+   relation `public.material_receipts`, and expected owner identity;
+2. creator column remains absent;
+3. named creator constraint remains absent;
+4. Stage 0.32 index remains present, valid, ready, unique, sole-keyed on
    `source_asset_reference`, with unchanged predicate;
-4. target/database/schema/owner identity remains exact; and
-5. critical data and security/object baselines remain consistent with the
-   preflight.
+5. `public.material_receipts` row count is exactly zero;
+6. critical four-table counts and canonical digests match preflight;
+7. relevant security/object/ACL baseline matches preflight; and
+8. immediately before execution, the exact committed Migration 0005 UP artifact
+   hash is
+   `7de76e82cb26863cd3c14abc4394cb036936ed0f1c6c64819f03094cf9069293`.
+
+Only after all eight rechecks pass may the exact artifact execute. Target
+identity comes first because the executor must prove it is inspecting the
+intended production database, schema, and relation before interpreting any row
+count or schema state. A zero-row result from the wrong target is invalid
+evidence. Any target mismatch requires ROLLBACK and STOP before DDL.
 
 Any drift stops before DDL. Ordinary reads may be blocked briefly by ACCESS
 EXCLUSIVE; production candidate traffic must remain unauthorized and absent.
@@ -93,3 +112,48 @@ STOP. Transaction rollback is the recovery for pre-COMMIT failure.
 Production DOWN is not authorized. A post-COMMIT problem requires separate
 destructive rollback governance; it does not revive or extend the consumed
 one-shot authority.
+
+Migration 0005 performs its transactional `ALTER TABLE` and `GRANT` inside the
+same PostgreSQL transaction. If any failure occurs before COMMIT, PostgreSQL
+ROLLBACK must revert both the schema changes—the
+`created_by_actor_reference` column and creator CHECK—and the privilege change,
+`INSERT (created_by_actor_reference)` for the candidate writer. No partial grant
+may commit, and no cleanup GRANT/REVOKE script is required after a successful
+transaction rollback.
+
+The failed-attempt report must verify after rollback that the creator column is
+absent, the creator constraint is absent, and candidate creator-column INSERT
+privilege is absent. Any persistent partial state is **BLOCKED — RETURN TO
+GOVERNANCE**. There is no retry and no production DOWN.
+
+## Frozen execution health contract
+
+After Migration 0005 and its structural/security verification, but before
+COMMIT, bounded health evidence must prove all of the following:
+
+- PostgreSQL responds normally; the expected production container remains
+  running and healthy, with container identity, start identity/start time, and
+  restart count unchanged from the execution/preflight baseline;
+- the PostgreSQL process/service did not restart;
+- database `aios`, schema `public`, and the fixed control-plane/administrative
+  identity remain unchanged;
+- `aios.service` remains in its original pre-stage state and was neither
+  restarted nor activated by Stage 0.33B;
+- `runtime.env` remains unchanged; and
+- no candidate production traffic was activated.
+
+Any mismatch before COMMIT requires ROLLBACK and STOP.
+
+After a successful COMMIT, but before classifying 0.33B-D successful, bounded
+operational evidence must prove the same container identity is running and
+healthy, restart count is unchanged, and PostgreSQL responds normally using a
+fresh bounded query/session if the execution contract requires it. It must also
+prove that `aios.service` retains the same PID/start identity where applicable
+and was not restarted by Stage 0.33B; `runtime.env`, Telegram, and Universal
+Ingestion remain unchanged; and candidate production activation remains absent.
+This immediate completion check is not the final 0.33B-V proof.
+
+If COMMIT succeeds but this immediate post-COMMIT health check fails or is
+inconclusive, classify **POST-COMMIT HEALTH VERIFICATION FAILED / INCONCLUSIVE
+— RETURN TO GOVERNANCE**. Do not rerun Migration 0005 or execute DOWN; the
+one-shot authority remains consumed.
