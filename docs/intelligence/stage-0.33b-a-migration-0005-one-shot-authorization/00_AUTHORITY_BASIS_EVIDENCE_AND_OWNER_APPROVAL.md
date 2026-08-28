@@ -17,6 +17,41 @@ blockers, merge unchanged, continuing Project Owner approval, and every immediat
 activation gate in this package passing. The authority is transactional,
 fail-closed, one-shot, and permits no retry, DOWN, repair, or runtime activation.
 
+The one-shot Migration 0005 authority is permanently consumed at the first
+attempt to launch the exact governed production control-plane process, not when
+`BEGIN;` is submitted. A Docker failure, failure to start `psql`, rejected
+connection, stdin failure, connection loss before `BEGIN;`, or failed `BEGIN;`
+still consumes it. No production PostgreSQL connection test, `SELECT 1`, test
+connection, manual or alternate Docker/`psql` launch, credential-bearing DSN
+probe, or alternate `pg_isready` connection session may precede that launch.
+Non-database container and process metadata remain eligible only within the
+bounded activation gates.
+
+This authorization also contains a distinct, narrow pre-execution filesystem
+sub-authority. After independent PASS and merge unchanged, it permits only the
+operations needed to provision and write Stage 0.33B-D execution evidence below
+`/opt/aios/runtime/intelligence/production-execution-evidence/stage-0.33b-d`.
+Those filesystem operations do not consume the Migration 0005 authority and
+grant no PostgreSQL, business-data, application-code, `runtime.env`, restart,
+Telegram, Universal Ingestion, or candidate-activation authority. The exact
+filesystem limits and durability contract are frozen in this package; no
+production filesystem operation is performed by this publication.
+
+The frozen root is a real non-symlink directory owned by
+`aiosadmin:aiosadmin`, mode `0750`. Each exclusively created session uses
+`stage-0.33b-d-migration-0005-YYYYMMDDTHHMMSSffffffZ-<canonical-lowercase-UUIDv4>`,
+is mode `0750`, and exclusively creates only `execution.jsonl` (`0640` while
+executing) and final `manifest.json`. UTF-8 JSONL records are bounded, sanitized,
+flushed and fsynced at critical phases; finalization includes a prohibited-secret
+scan, JSONL SHA/size/count, an exclusively created bounded manifest, file and
+directory fsync, final file modes `0440`, and a SHA-256 of the complete final
+manifest bytes reported externally. Existing paths/files are hard stops; no
+overwrite, cleanup, symlink following, or broad filesystem authority exists.
+Provisioning failure before launch blocks activation with migration authority
+UNCONSUMED; any post-launch evidence failure leaves it CONSUMED and requires
+fail-closed rollback if still pre-COMMIT, with no retry. Stage 0.33B-V remains
+separate.
+
 ## Repository and reviewed-evidence basis
 
 Publication is based on clean synchronized
@@ -65,6 +100,7 @@ The frozen control plane is `/usr/bin/docker exec -i aios-postgres
 /usr/local/bin/psql -X -v ON_ERROR_STOP=1 -U aios -d aios`, with governed SQL
 and the exact migration artifact supplied through stdin. Alternate container,
 database, user, endpoint, client, argv substitution, or fallback is prohibited.
+The first attempt to launch precisely this argv consumes the one-shot authority.
 
 The reviewed preflight proved creator column
 `created_by_actor_reference` ABSENT and named CHECK
@@ -92,7 +128,12 @@ ACLs, no non-internal governed-table triggers or associated functions, six
 frozen roles, two governed runtime-to-writer memberships with ADMIN OPTION false
 for both, 36 table-privilege rows, and 335 column-privilege rows. Deployment
 must compare against the stronger structured evidence in PR #248, not counts
-alone, and must freshly recheck every fingerprint.
+alone, and must freshly recheck every fingerprint after all four frozen locks are
+held. The immutable lock order is `material_receipts` ACCESS EXCLUSIVE,
+`material_receipt_items` SHARE, `inventory_movements` SHARE, then
+`material_stock` SHARE, all under the same transaction-local five-second lock
+timeout. The same locks remain held through the post-DDL fingerprint comparison
+and COMMIT or ROLLBACK.
 
 ## Project Owner approval
 

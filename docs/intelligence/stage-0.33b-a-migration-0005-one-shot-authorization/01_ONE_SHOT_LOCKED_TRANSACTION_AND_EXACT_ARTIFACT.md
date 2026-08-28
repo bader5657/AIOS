@@ -27,45 +27,83 @@ trigger, function, table, owner/role/membership/ADMIN OPTION change, posting
 privilege expansion, creator UPDATE privilege, reader write, stock/movement
 privilege expansion, Stage 0.32 index change, or runtime activation may persist.
 
-## One-shot authority and consumption boundary
+## One-shot authority and launch-attempt consumption boundary
 
 After activation this authority permits exactly one governed production
-Migration 0005 UP attempt. It is consumed when the future deployment controller
-first submits the governed `BEGIN;` into the correctly launched production
-PostgreSQL session. This is the sensitive execution boundary. A source,
-authorization, evidence, artifact, target, retention-provisioning, or connection
-failure before that first governed SQL submission leaves authority unconsumed.
+Migration 0005 UP attempt. It is permanently consumed at the first attempt to
+launch exactly:
 
-Once that boundary is crossed, success, rollback, failure, connection loss,
-lock timeout, verifier failure, or an inconclusive result permanently consumes
-the authority. There is no automatic or manual retry, “try again,” second
-execution, rerun after a connection error/lock timeout/verifier failure, or
-automatic DOWN. Any later attempt requires fresh governance.
+```text
+/usr/bin/docker exec -i aios-postgres \
+  /usr/local/bin/psql \
+  -X \
+  -v ON_ERROR_STOP=1 \
+  -U aios \
+  -d aios
+```
 
-## Immediate activation gates
+The launch attempt—not submission of `BEGIN;`—is the sensitive boundary. A
+`docker exec` failure, failure to start `psql`, PostgreSQL connection rejection,
+stdin failure, connection closure before `BEGIN;`, `BEGIN;` failure, or network/
+control-plane failure permanently consumes authority. There is no automatic or
+manual retry, second launch or execution, rerun after connection error, lock
+timeout, verifier failure, or automatic DOWN. Any later attempt requires fresh
+governance.
 
-Before the production session may materially start, require all of the
-following:
+Before this single launch, no production `psql` connection test, `SELECT 1`, test
+connection, manual `psql` probe, alternate Docker/`psql` launch, DSN probe, or
+`pg_isready` through an alternate connection that creates a separate database
+session is permitted. Non-database container/process metadata may be inspected
+only under bounded activation checks. Repeated pre-`BEGIN` production probes are
+therefore prohibited.
+
+## Immediate pre-launch activation gates
+
+Before the exact production control-plane launch attempt, require all of:
 
 1. independent Stage 0.33B-A review PASS with zero blockers;
 2. this authorization PR merged unchanged and Project Owner approval applicable;
 3. `HEAD == main == origin/main` and a clean worktree;
-4. the reviewed authorization head, merge commit, and current main recorded;
-5. merged Stage 0.33B-PE package present unchanged and all evidence hashes exact;
+4. reviewed authorization head, merge commit, and current main recorded;
+5. merged Stage 0.33B-PE package present unchanged and evidence hashes exact;
 6. Migration 0005 UP and DOWN hashes exact;
-7. frozen target and exact control plane unchanged;
-8. no newer governance revocation or incompatible supersession; and
-9. a validated immutable, bounded, secret-safe Stage 0.33B-D execution-evidence
-   retention destination provisioned before connection.
+7. container identity and running/health metadata pass, and frozen target and
+   exact control-plane argv are validated unchanged;
+8. no newer governance revocation or incompatible supersession;
+9. exact evidence root and one session safely provisioned and validated; and
+10. `execution.jsonl` exclusively created, with initialization and
+    `production_control_plane_launch_attempt` / `ATTEMPTING` records flushed and
+    fsynced immediately before invoking the control plane.
 
-Any failure means DO NOT CONNECT / DO NOT EXECUTE, STOP, with authority
-unconsumed. No pull, merge, reset, repair, restart, fallback target, or argument
-substitution is implicitly authorized.
+Any failure before launch means DO NOT CONNECT / DO NOT EXECUTE, STOP, authority
+UNCONSUMED. No pull, merge, reset, repair, restart, fallback target, or argument
+substitution is implicitly authorized. An evidence session already created is
+finalized as activation-blocked where practical and retained; a later separately
+authorized launch uses a new session ID.
 
-## Single explicit transaction
+The exact evidence root is
+`/opt/aios/runtime/intelligence/production-execution-evidence/stage-0.33b-d`, a
+real non-symlink directory owned by `aiosadmin:aiosadmin`, mode `0750`, under the
+narrow filesystem-only sub-authority. The exclusively created mode-`0750`
+session ID is
+`stage-0.33b-d-migration-0005-YYYYMMDDTHHMMSSffffffZ-<canonical-lowercase-UUIDv4>`.
+It contains only exclusively created `execution.jsonl` (UTF-8 JSON Lines, bounded
+required events, mode `0640` during execution) and the exclusively created final
+`manifest.json`. Critical records are flushed and fsynced; finalization performs
+the prohibited-secret scan, records JSONL SHA/size/count in the bounded manifest,
+fsyncs file/directory state, changes both files to `0440`, and reports the SHA-256
+of the complete final manifest bytes externally. Owner/group remains
+`aiosadmin:aiosadmin`; existing paths/files, symlinks, overwrite, cleanup, and
+broad filesystem operations are prohibited. Provisioning failure before launch
+blocks activation with authority UNCONSUMED. Post-launch evidence failure leaves
+authority CONSUMED, requires fail-closed ROLLBACK if pre-COMMIT, and permits no
+retry. Evidence finalization is not Stage 0.33B-V; that stage remains separately
+authorized.
+
+## Single explicit transaction and deterministic four-table locks
 
 The future deployment must use exactly one explicit PostgreSQL transaction at
-READ COMMITTED isolation:
+READ COMMITTED isolation and submit the locks exactly as follows:
 
 ```sql
 BEGIN;
@@ -76,14 +114,35 @@ SET LOCAL DateStyle = 'ISO, YMD';
 SET LOCAL IntervalStyle = 'iso_8601';
 SET LOCAL bytea_output = 'hex';
 LOCK TABLE public.material_receipts IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE public.material_receipt_items IN SHARE MODE;
+LOCK TABLE public.inventory_movements IN SHARE MODE;
+LOCK TABLE public.material_stock IN SHARE MODE;
 ```
 
-If ACCESS EXCLUSIVE lock acquisition exceeds five seconds: ROLLBACK, STOP, no
-retry, no DOWN. Because `BEGIN;` was already submitted, authority is consumed.
+These are L01 through L04. The immutable order is `material_receipts` →
+`material_receipt_items` → `inventory_movements` → `material_stock`. Do not
+dynamically sort, reorder, parallelize, substitute, omit, add, escalate, or
+conditionally acquire a lock.
+
+`public.material_receipts` requires ACCESS EXCLUSIVE because Migration 0005
+performs `ALTER TABLE` on it. The other three tables are not schema targets;
+SHARE blocks ordinary concurrent writer transactions taking ROW EXCLUSIVE-level
+table locks while allowing bounded read/catalog verification. This grants no DDL
+authority against those three tables, and they must not be altered.
+
+Every lock operates under the same transaction-local `lock_timeout = '5s'`. No
+lock receives an independent retry. If L01, L02, L03, or L04 fails or times out,
+or the exact sequence cannot execute: ROLLBACK, STOP, no retry, no DOWN.
+Authority remains CONSUMED because production launch already occurred.
+
+All four locks must be successfully held before the locked fingerprint recheck
+and remain continuously held through locked baseline verification, Migration
+0005 execution, pre-COMMIT fingerprint/security/object verification, and COMMIT
+or ROLLBACK. No release or intermediate commit is permitted.
 
 ## Locked pre-DDL gates
 
-After lock acquisition and before DDL, all checks must pass in this order:
+After L01-L04 and before DDL, all checks must pass in this exact order:
 
 1. target identity equals database/owner/user `aios`/`aios`/`aios`, schema/owner
    `public`/`pg_database_owner`, and relation/kind/owner
@@ -95,14 +154,16 @@ After lock acquisition and before DDL, all checks must pass in this order:
 4. exact `COUNT(*)` on `public.material_receipts` is zero; a positive count
    classifies EXISTING MATERIAL RECEIPTS REQUIRE HISTORICAL PROVENANCE
    GOVERNANCE;
-5. all four exact governed fingerprints freshly equal the reviewed zero/digest
-   baseline; and
+5. the exact governed canonical fingerprint procedure yields
+   `0 / d41d8cd98f00b204e9800998ecf8427e` for each of
+   `public.material_receipts`, `public.material_receipt_items`,
+   `public.inventory_movements`, and `public.material_stock`; and
 6. owners, roles/attributes, memberships, ADMIN OPTION, ACLs, table/column
    privileges, triggers/functions, relations, schema/extensions, and Stage 0.32
    indexes equal the reviewed structured evidence with no unexplained drift.
 
-Any mismatch requires ROLLBACK and STOP before DDL. No synthetic actor,
-backfill, repair, or state normalization is authorized.
+Any mismatch requires ROLLBACK and STOP before DDL. No synthetic actor, backfill,
+repair, or state normalization is authorized.
 
 Immediately before sending the artifact to PostgreSQL, recalculate the UP hash
 and require
@@ -110,4 +171,3 @@ and require
 A mismatch requires ROLLBACK and STOP. Only after every locked gate passes may
 the executor send the exact committed UP file without reconstruction. DOWN must
 not execute.
-
