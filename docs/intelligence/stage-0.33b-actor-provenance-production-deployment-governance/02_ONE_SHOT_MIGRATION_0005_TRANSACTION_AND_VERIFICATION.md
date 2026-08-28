@@ -48,8 +48,10 @@ timeout causes ROLLBACK/STOP with no retry under the consumed authority.
 After the lock and before DDL, recheck in this exact order:
 
 1. production target identity: expected container/control-plane context,
-   database `aios`, current user/administrative role `aios`, schema `public`,
-   relation `public.material_receipts`, and expected owner identity;
+   database `aios` owned by `aios`, current user/administrative role `aios`,
+   schema `public` owned by `pg_database_owner`, relation
+   `public.material_receipts` of kind `r` owned by `aios`; any other tuple
+   requires ROLLBACK and return to governance;
 2. creator column remains absent;
 3. named creator constraint remains absent;
 4. Stage 0.32 index remains present, valid, ready, unique, sole-keyed on

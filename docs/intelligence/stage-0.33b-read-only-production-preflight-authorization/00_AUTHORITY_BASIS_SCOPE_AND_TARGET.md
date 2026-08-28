@@ -30,6 +30,14 @@ executed again. The frozen Migration 0005 artifacts are:
 Any source or hash drift blocks publication. These hashes must be reconfirmed
 again as an activation condition; this package does not execute either file.
 
+## Consumed historical authority
+
+The one Stage 0.33B-P session authorized through PR `#244` materially started,
+was BLOCKED under the then-frozen owner expectation, and is permanently
+consumed. Correcting the owner interpretation in this document does not
+reactivate or replace that authority. A new, separately reviewed and merged
+Stage 0.33B-P authorization is required before any full preflight rerun.
+
 ## Exact future authority
 
 After every activation condition below is satisfied, the Project Owner approves
@@ -61,7 +69,16 @@ P and A must not be combined or skipped.
 | Session user | `aios` |
 | Schema | `public` |
 | Primary relation | `public.material_receipts` |
-| Expected database/schema/table owner | `aios` |
+| Expected database owner | `aios` |
+| Expected `public` schema owner | `pg_database_owner` |
+| Expected primary-relation owner | `aios` |
+| Expected primary-relation kind | `r` (ordinary table) |
+
+This exact tuple is target-specific and fail-closed. PostgreSQL predefined role
+`pg_database_owner` owns the governed `public` schema and represents the current
+database owner through PostgreSQL's predefined-role semantics. Its literal role
+name need not equal the database owner's role name. No other owner tuple is
+accepted, and no ownership mutation is authorized.
 
 The only authorized control plane is this fixed argv shape:
 

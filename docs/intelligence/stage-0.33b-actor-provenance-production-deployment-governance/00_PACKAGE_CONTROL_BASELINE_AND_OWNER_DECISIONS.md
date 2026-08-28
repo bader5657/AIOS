@@ -94,6 +94,14 @@ The Project Owner approves this safe design and records all of the following:
 12. candidate activation remains unauthorized until the runtime-secret and
     explicit production safety-review gates separately close.
 
+The Project Owner also accepts the diagnostically verified production identity:
+database owner `aios`, `public` schema owner `pg_database_owner`, and
+`public.material_receipts` owner `aios` with relation kind `r`. Governance is
+corrected to this exact tuple. The Project Owner does not authorize changing
+production ownership, reusing either consumed authority, running a fresh full
+preflight under this correction, executing Migration 0005, or activating the
+production candidate.
+
 These decisions approve governance architecture only. They are not production
 preflight, DDL, DOWN, repair, retry, credential, restart, or activation
 authority.
