@@ -47,11 +47,27 @@ PostgreSQL. Migration authority remains UNCONSUMED.
 
 ## Bounded provisioning record
 
-Retain only bounded, secret-free facts: governed parent and root paths;
-owner/group/mode and symlink checks; `/usr/bin/sudo` and `/usr/bin/install`
-identities; whether each creation was required; whether each exact operator
-operation succeeded; probe result; and provisioning classification. Never retain
-a password, sudo conversation, or broad sudo policy dump.
+Provisioning records may contain only bounded, secret-free facts: governed paths;
+owner/group/mode and symlink results; `/usr/bin/sudo` and `/usr/bin/install`
+identities; whether Command A or Command B was required; bounded command success
+or failure status; write-probe PASS/BLOCKED; and final provisioning
+classification.
+
+Provisioning records must not contain a sudo password, password-prompt response,
+terminal password input, credential-bearing shell history, environment contents,
+environment-variable dumps, `runtime.env` contents, `DATABASE_URL`, database
+password, credential-bearing DSN, token, bot token, API key, private key, PRIVATE
+KEY material, SSH private key, arbitrary environment/configuration dump, raw
+business data, sudo conversation, or broad sudo policy dump. Command stdout,
+stderr, environment, and shell state are not captured without bounded
+sanitization.
+
+On failure, retain only bounded sanitized information such as operation
+identifier, safe failure class, safe exit/result state, and path identifier. Do
+not retain a complete environment, sudo conversation, authentication input,
+credential-bearing stderr, or secret-bearing shell state. If an error message
+unexpectedly contains secret material, do not copy that material into any
+governance, provisioning, audit, verification, or operator record.
 
 ## Handoff and activation order
 

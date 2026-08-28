@@ -17,7 +17,7 @@ Command A is authorized if and only if
 `/opt/aios/runtime/intelligence/production-execution-evidence` is ABSENT:
 
 ```text
-sudo /usr/bin/install \
+/usr/bin/sudo /usr/bin/install \
   -d \
   -o root \
   -g root \
@@ -30,7 +30,7 @@ Command B is authorized if and only if
 ABSENT:
 
 ```text
-sudo /usr/bin/install \
+/usr/bin/sudo /usr/bin/install \
   -d \
   -o aiosadmin \
   -g aiosadmin \
