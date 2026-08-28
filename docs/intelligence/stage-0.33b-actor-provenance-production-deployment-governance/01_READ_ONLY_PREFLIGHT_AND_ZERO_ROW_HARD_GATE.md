@@ -22,6 +22,9 @@ transaction. It verifies:
 - running/healthy `aios-postgres`, expected image/storage identity, PostgreSQL
   17.x, database/user `aios`, schema `public`, and fixed container-local control
   plane;
+- exact target ownership: database owner `aios`, `public` schema owner
+  `pg_database_owner`, and `public.material_receipts` owner `aios`, with
+  relation kind `r`; any other tuple blocks and returns to governance;
 - Migration 0005 has not already been applied: creator column and named CHECK
   are both absent;
 - `public.material_receipts_source_asset_active_uidx` exists, is valid, ready,
@@ -101,8 +104,8 @@ Capture structured, deterministically ordered non-secret snapshots/digests for:
 
 - all indexes, columns, and constraints on the four governed tables;
 - non-internal triggers and relevant `public` functions;
-- database/schema/table owners, `public` schema and extensions, and relevant
-  relations;
+- the exact database/schema/table owner tuple above, `public` schema and
+  extensions, and relevant relations;
 - relevant role attributes for candidate runtime/writer, posting
   runtime/writer, material-stock reader, and directly governed `aios` roles;
 - memberships with ADMIN OPTION and relevant ACL/column-privilege rows.

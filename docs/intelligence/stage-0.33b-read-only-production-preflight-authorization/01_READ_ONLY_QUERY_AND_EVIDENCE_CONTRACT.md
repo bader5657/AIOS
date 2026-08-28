@@ -104,8 +104,9 @@ interpreted:
 - `current_schema() = 'public'` and the active
   schema context;
 - `public.material_receipts` exists as the intended relation;
-- the database, `public` schema, and target relation have the frozen expected
-  owner `aios`;
+- the database owner is `aios`, the `public` schema owner is
+  `pg_database_owner`, and the target relation owner is `aios`;
+- the target relation kind is `r`, an ordinary table;
 - PostgreSQL is expected version `17.x`; and
 - the session uses the frozen `aios-postgres` container/control plane.
 
@@ -465,9 +466,11 @@ ORDER BY p.grantee, p.table_name, p.column_name, p.privilege_type;
 COMMIT;
 ```
 
-Only `current_setting('server_version')` is permitted. Required owners are
-`aios`, relation kind is `r`, and version is 17.x. M01 and M02 must both return
-zero rows. O06 only reads metadata for functions attached to non-internal
+Only `current_setting('server_version')` is permitted. The required exact owner
+tuple is database owner `aios`, `public` schema owner `pg_database_owner`, and
+relation owner `aios`; relation kind is `r`, and version is 17.x. I02 must retain
+all owner values exactly and any other tuple is BLOCKED. M01 and M02 must both
+return zero rows. O06 only reads metadata for functions attached to non-internal
 triggers on the exact tables; it never executes a function.
 
 No password/verifier field is selected. No privilege function with arbitrary

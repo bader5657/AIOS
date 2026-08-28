@@ -1,5 +1,12 @@
 # Stage 0.33B-P Classification, Consumption, and Next Stage
 
+## Historical status and future applicability
+
+The PR `#244` Stage 0.33B-P authority is permanently consumed and its execution
+remains historically BLOCKED. The classifications below govern only a future
+full preflight under a new, separately reviewed and merged authorization; this
+corrected interpretation grants no rerun or production session.
+
 ## PASS
 
 The sole SQL execution order is: prefix → target identity → Migration 0005
@@ -11,7 +18,9 @@ PASS requires every item below:
 
 1. clean synchronized repository source and exact Migration 0005 hashes;
 2. exact production container, control-plane, database, user, schema, relation,
-   owner, and PostgreSQL version identity;
+   PostgreSQL version, and target-specific owner identity: database owner
+   `aios`, `public` schema owner `pg_database_owner`, relation owner `aios`, and
+   relation kind `r`;
 3. bounded production health PASS;
 4. Migration 0005 creator column and named constraint absent;
 5. Stage 0.32 index exact, present, valid, ready, unique, sole-keyed, and with
@@ -67,6 +76,9 @@ completion, or failure. There is no automatic repeat. A second production
 preflight requires fresh authority.
 
 Pre-session validation failure before connection does not consume authority.
+
+The session authorized by PR `#244` did materially start and consumed that
+authority permanently. No repeat is authorized by this corrected document.
 
 ## Next stage and continuing prohibitions
 
