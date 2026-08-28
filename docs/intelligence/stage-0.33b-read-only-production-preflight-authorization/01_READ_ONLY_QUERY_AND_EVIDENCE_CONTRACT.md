@@ -3,8 +3,8 @@
 ## Closed exact governed statement model
 
 Stage 0.33B-P uses only the **EXACT GOVERNED PREFLIGHT QUERY BUNDLE** frozen in
-this document: the literal prefix, exact ordered queries, and one harmless close
-(`COMMIT;` or `ROLLBACK;`). No SQL may be invented, extended, substituted,
+this document: the literal prefix, exact ordered queries, and the one harmless close
+(`COMMIT;`). No SQL may be invented, extended, substituted,
 reordered, or added interactively.
 
 Exploratory or diagnostic ad-hoc SQL, “one more query,” manual inspection,
@@ -13,10 +13,10 @@ arbitrary SELECT expressions, arbitrary functions, and arbitrary catalog joins
 are prohibited. If the bundle cannot prove a fact: INCONCLUSIVE, STOP, and do
 not expand the surface.
 
-Exact order is: prefix; target identity; Migration 0005 absence; Stage 0.32
-index; receipt count; four fingerprints; schema/object snapshot;
-role/membership/ACL snapshot; separately governed non-SQL health evidence;
-secret scan/classification; COMMIT or ROLLBACK.
+Exact SQL order is: prefix; target identity; Migration 0005 absence; Stage 0.32
+index; zero-row count; four fingerprints; structural/schema/object snapshot;
+role/membership/ACL snapshot; transaction close. Separately governed non-SQL
+health evidence and the secret scan/classification do not alter that SQL order.
 
 ### Function allowlist and SELECT safety
 
@@ -59,25 +59,25 @@ this ban.
 
 ### Pre-session mechanical validation
 
-Before connecting, compare the constructed stdin bundle to the frozen ordered
-list. Reject any line-leading backslash; statement outside the list;
-non-allowlisted function; DDL/DML/LOCK/GRANT/REVOKE/COPY/DO/CALL/EXECUTE/PREPARE;
-or unknown statement. If exact compliance is unprovable, do not start production
-and authority remains unconsumed. The controller may stop after a failed gate,
-but may not generate a branch or query. If a repository artifact is later
-created, record and verify its exact-byte SHA-256; until then this list controls.
+Before connecting, parse the constructed stdin bundle into its numbered
+statements and require `actual_statement_sequence == frozen_statement_sequence`
+exactly. Validation is sequence-based, not allowlist-membership-based. Reject a
+missing, additional, duplicate, reordered, or unknown statement; any
+line-leading backslash; any non-allowlisted function; and any
+DDL/DML/LOCK/GRANT/REVOKE/COPY/DO/CALL/EXECUTE/PREPARE. If exact compliance is
+unprovable, do not start production and authority remains unconsumed. The controller must fail fast after identity mismatch, Migration 0005 object
+presence, Stage 0.32 drift, or a positive zero-row count. The controller may
+stop after a failed gate, but the only valid transmitted
+subsequences are prefixes of the frozen sequence; it may not generate a branch,
+alternate order, runtime addition, or replacement query. If a repository
+artifact is later created, record and verify its exact-byte SHA-256; until then
+the numbered sequence below controls.
 
 ## Transaction and allowed operations
 
-The single authorized PostgreSQL transaction must literally begin:
-
-```sql
-BEGIN READ ONLY;
-SET LOCAL TIME ZONE 'UTC';
-SET LOCAL DateStyle = 'ISO, YMD';
-SET LOCAL IntervalStyle = 'iso_8601';
-SET LOCAL bytea_output = 'hex';
-```
+The single authorized PostgreSQL transaction must literally begin with P01
+through P05 in the canonical executable bundle below. No substantive SELECT
+may precede that prefix.
 
 Only the exact frozen queries below are authorized. Non-SQL health evidence is
 separately limited to non-mutating container inspection, service property reads,
@@ -90,8 +90,9 @@ COPY TO/FROM external files, SET ROLE, `LOCK TABLE`, migration execution, and
 stored-function invocation capable of mutation. Temporary mutation and “test
 write then rollback” are prohibited. Migration 0004 must not be executed.
 
-After all authorized reads, `COMMIT;` or `ROLLBACK;` may harmlessly close the
-READ ONLY transaction. Neither path may persist a change.
+After all authorized reads, C01 in the canonical executable bundle harmlessly
+closes the READ ONLY transaction. No alternate close example is executable or
+authorized. The close cannot persist a change.
 
 ## Target identity must be first
 
@@ -141,12 +142,9 @@ Any mismatch blocks. Migration 0004 must not be rerun.
 
 ## Zero-row hard gate and historical-row policy
 
-Only after target identity passes, execute exactly:
-
-```sql
-SELECT COUNT(*) AS material_receipts_count
-FROM public.material_receipts;
-```
+Only after target identity, Migration 0005 absence, and Stage 0.32 index
+verification pass, execute Z01 exactly as frozen in the canonical executable
+bundle.
 
 Only exact result `0` passes. Any positive result requires:
 
@@ -171,29 +169,8 @@ Capture only table name, row count, and deterministic digest for:
 | `public.inventory_movements` | `movement_id` |
 | `public.material_stock` | `material_id` |
 
-Use exactly these four statements; runtime table/key substitution is forbidden:
-
-```sql
-SELECT COUNT(*) AS row_count,
-       md5(COALESCE(string_agg(row_to_json(t)::text, E'\n'
-                               ORDER BY receipt_id), '')) AS row_digest
-FROM public.material_receipts AS t;
-
-SELECT COUNT(*) AS row_count,
-       md5(COALESCE(string_agg(row_to_json(t)::text, E'\n'
-                               ORDER BY receipt_item_id), '')) AS row_digest
-FROM public.material_receipt_items AS t;
-
-SELECT COUNT(*) AS row_count,
-       md5(COALESCE(string_agg(row_to_json(t)::text, E'\n'
-                               ORDER BY movement_id), '')) AS row_digest
-FROM public.inventory_movements AS t;
-
-SELECT COUNT(*) AS row_count,
-       md5(COALESCE(string_agg(row_to_json(t)::text, E'\n'
-                               ORDER BY material_id), '')) AS row_digest
-FROM public.material_stock AS t;
-```
+Use exactly F01 through F04 in the canonical executable bundle, in that order;
+runtime table/key substitution is forbidden.
 
 Serialized rows must not leave PostgreSQL. For an empty table, require
 `row_count = 0` and `row_digest = md5('')`; NULL or a missing digest is not
@@ -226,19 +203,36 @@ delta is candidate writer `INSERT(created_by_actor_reference)`; no role,
 membership, ownership, ADMIN OPTION, unrelated ACL, creator UPDATE, posting
 creator UPDATE, or reader-write change is expected.
 
-## Exact frozen catalog query set
+## CANONICAL EXECUTABLE PREFLIGHT SQL BUNDLE
 
-The narrative requirements above are implemented only by the following exact
-statements at their frozen positions. No broad catalog dump is authorized.
-
-### Target identity statements
+This is the one and only authoritative executable SQL sequence. The labels are
+deterministic statement identifiers; every statement must remain at its frozen
+position. All other SQL references in this package are NON-EXECUTABLE
+EXPLANATION. No broad catalog dump is authorized.
 
 ```sql
+-- P01 BEGIN READ ONLY
+BEGIN READ ONLY;
+
+-- P02 SET LOCAL TIME ZONE
+SET LOCAL TIME ZONE 'UTC';
+
+-- P03 SET LOCAL DateStyle
+SET LOCAL DateStyle = 'ISO, YMD';
+
+-- P04 SET LOCAL IntervalStyle
+SET LOCAL IntervalStyle = 'iso_8601';
+
+-- P05 SET LOCAL bytea_output
+SET LOCAL bytea_output = 'hex';
+
+-- I01 target identity and PostgreSQL version
 SELECT current_database() AS database_name,
        current_user AS session_user,
        current_schema() AS schema_name,
        current_setting('server_version') AS server_version;
 
+-- I02 database, schema, and relation identity and ownership
 SELECT d.datname AS database_name, dr.rolname AS database_owner,
        n.nspname AS schema_name, nr.rolname AS schema_owner,
        c.relname AS relation_name, c.relkind AS relation_kind,
@@ -252,16 +246,8 @@ JOIN pg_catalog.pg_class AS c
 JOIN pg_catalog.pg_roles AS cr ON cr.oid = c.relowner
 WHERE d.datname = current_database()
 ORDER BY d.datname, n.nspname, c.relname;
-```
 
-Only `current_setting('server_version')` is permitted. Required owners are
-`aios`, relation kind is `r`, and version is 17.x.
-
-### Migration 0005 absence statements
-
-Both return zero rows:
-
-```sql
+-- M01 Migration 0005 creator-column absence
 SELECT a.attname AS column_name
 FROM pg_catalog.pg_attribute AS a
 JOIN pg_catalog.pg_class AS c ON c.oid = a.attrelid
@@ -272,6 +258,7 @@ WHERE n.nspname = 'public'
   AND a.attnum > 0 AND NOT a.attisdropped
 ORDER BY a.attname;
 
+-- M02 Migration 0005 creator-constraint absence
 SELECT con.conname AS constraint_name
 FROM pg_catalog.pg_constraint AS con
 JOIN pg_catalog.pg_class AS c ON c.oid = con.conrelid
@@ -280,11 +267,8 @@ WHERE n.nspname = 'public'
   AND c.relname = 'material_receipts'
   AND con.conname = 'material_receipts_created_by_actor_reference_valid'
 ORDER BY con.conname;
-```
 
-### Stage 0.32 exact-index statement
-
-```sql
+-- S01 Stage 0.32 exact index
 SELECT ci.relname AS index_name, i.indisvalid, i.indisready, i.indisunique,
        i.indnkeyatts,
        pg_catalog.pg_get_indexdef(i.indexrelid, 1, false) AS first_key_definition,
@@ -297,11 +281,36 @@ WHERE n.nspname = 'public'
   AND ct.relname = 'material_receipts'
   AND ci.relname = 'material_receipts_source_asset_active_uidx'
 ORDER BY ci.relname;
-```
 
-### Four-table structural statements
+-- Z01 zero-row hard gate
+SELECT COUNT(*) AS material_receipts_count
+FROM public.material_receipts;
 
-```sql
+-- F01 material_receipts fingerprint
+SELECT COUNT(*) AS row_count,
+       md5(COALESCE(string_agg(row_to_json(t)::text, E'\n'
+                               ORDER BY receipt_id), '')) AS row_digest
+FROM public.material_receipts AS t;
+
+-- F02 material_receipt_items fingerprint
+SELECT COUNT(*) AS row_count,
+       md5(COALESCE(string_agg(row_to_json(t)::text, E'\n'
+                               ORDER BY receipt_item_id), '')) AS row_digest
+FROM public.material_receipt_items AS t;
+
+-- F03 inventory_movements fingerprint
+SELECT COUNT(*) AS row_count,
+       md5(COALESCE(string_agg(row_to_json(t)::text, E'\n'
+                               ORDER BY movement_id), '')) AS row_digest
+FROM public.inventory_movements AS t;
+
+-- F04 material_stock fingerprint
+SELECT COUNT(*) AS row_count,
+       md5(COALESCE(string_agg(row_to_json(t)::text, E'\n'
+                               ORDER BY material_id), '')) AS row_digest
+FROM public.material_stock AS t;
+
+-- O01 four-table columns, types, nullability, and defaults
 SELECT c.relname AS table_name, a.attnum AS ordinal_position,
        a.attname AS column_name,
        pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
@@ -318,6 +327,7 @@ WHERE n.nspname = 'public'
   AND a.attnum > 0 AND NOT a.attisdropped
 ORDER BY c.relname, a.attnum;
 
+-- O02 four-table constraints
 SELECT c.relname AS table_name, con.conname AS constraint_name,
        con.contype AS constraint_type,
        pg_catalog.pg_get_constraintdef(con.oid, false) AS constraint_definition
@@ -329,6 +339,7 @@ WHERE n.nspname = 'public'
                     'inventory_movements', 'material_stock')
 ORDER BY c.relname, con.conname;
 
+-- O03 four-table indexes
 SELECT ct.relname AS table_name, ci.relname AS index_name,
        i.indisvalid, i.indisready, i.indisunique,
        pg_catalog.pg_get_indexdef(i.indexrelid) AS index_definition,
@@ -342,6 +353,7 @@ WHERE n.nspname = 'public'
                      'inventory_movements', 'material_stock')
 ORDER BY ct.relname, ci.relname;
 
+-- O04 four-table owners and ACLs
 SELECT c.relname AS table_name, r.rolname AS table_owner, c.relacl AS table_acl
 FROM pg_catalog.pg_class AS c
 JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
@@ -351,6 +363,7 @@ WHERE n.nspname = 'public'
                     'inventory_movements', 'material_stock')
 ORDER BY c.relname;
 
+-- O05 four-table non-internal triggers
 SELECT c.relname AS table_name, t.tgname AS trigger_name,
        pg_catalog.pg_get_triggerdef(t.oid, false) AS trigger_definition
 FROM pg_catalog.pg_trigger AS t
@@ -362,6 +375,7 @@ WHERE n.nspname = 'public'
   AND NOT t.tgisinternal
 ORDER BY c.relname, t.tgname;
 
+-- O06 relevant trigger functions
 SELECT c.relname AS table_name, t.tgname AS trigger_name,
        pn.nspname AS function_schema, p.proname AS function_name,
        pg_catalog.pg_get_functiondef(p.oid) AS function_definition
@@ -376,6 +390,7 @@ WHERE n.nspname = 'public'
   AND NOT t.tgisinternal
 ORDER BY c.relname, t.tgname, pn.nspname, p.proname;
 
+-- O07 public schema owner and ACL
 SELECT n.nspname AS schema_name, r.rolname AS schema_owner,
        n.nspacl AS schema_acl
 FROM pg_catalog.pg_namespace AS n
@@ -383,19 +398,14 @@ JOIN pg_catalog.pg_roles AS r ON r.oid = n.nspowner
 WHERE n.nspname = 'public'
 ORDER BY n.nspname;
 
+-- O08 extensions
 SELECT e.extname AS extension_name, e.extversion AS extension_version,
        n.nspname AS extension_schema
 FROM pg_catalog.pg_extension AS e
 JOIN pg_catalog.pg_namespace AS n ON n.oid = e.extnamespace
 ORDER BY e.extname;
-```
 
-The function-definition statement only reads metadata for functions attached to
-non-internal triggers on the exact tables; it never executes a function.
-
-### Exact role/membership/privilege statements
-
-```sql
+-- R01 frozen role attributes
 SELECT r.rolname, r.rolsuper, r.rolinherit, r.rolcreaterole,
        r.rolcreatedb, r.rolcanlogin, r.rolreplication, r.rolbypassrls
 FROM pg_catalog.pg_roles AS r
@@ -406,6 +416,7 @@ WHERE r.rolname IN (
  'aios_material_inventory_posting_writer', 'aios_material_stock_reader')
 ORDER BY r.rolname;
 
+-- R02 frozen role memberships and ADMIN OPTION
 SELECT mr.rolname AS member_name, gr.rolname AS granted_role_name, m.admin_option
 FROM pg_catalog.pg_auth_members AS m
 JOIN pg_catalog.pg_roles AS gr ON gr.oid = m.roleid
@@ -422,6 +433,7 @@ WHERE mr.rolname IN (
  'aios_material_inventory_posting_writer', 'aios_material_stock_reader')
 ORDER BY mr.rolname, gr.rolname;
 
+-- R03 frozen role table privileges
 SELECT g.grantee, g.table_schema, g.table_name,
        g.privilege_type, g.is_grantable
 FROM information_schema.role_table_grants AS g
@@ -435,6 +447,7 @@ WHERE g.grantee IN (
                        'inventory_movements', 'material_stock')
 ORDER BY g.grantee, g.table_name, g.privilege_type;
 
+-- R04 frozen role column privileges
 SELECT p.grantee, p.table_schema, p.table_name, p.column_name,
        p.privilege_type, p.is_grantable
 FROM information_schema.column_privileges AS p
@@ -447,7 +460,15 @@ WHERE p.grantee IN (
   AND p.table_name IN ('material_receipts', 'material_receipt_items',
                        'inventory_movements', 'material_stock')
 ORDER BY p.grantee, p.table_name, p.column_name, p.privilege_type;
+
+-- C01 transaction close
+COMMIT;
 ```
+
+Only `current_setting('server_version')` is permitted. Required owners are
+`aios`, relation kind is `r`, and version is 17.x. M01 and M02 must both return
+zero rows. O06 only reads metadata for functions attached to non-internal
+triggers on the exact tables; it never executes a function.
 
 No password/verifier field is selected. No privilege function with arbitrary
 role/table/column arguments is authorized.

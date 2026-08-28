@@ -38,9 +38,15 @@ is to determine whether production is eligible to request the separately
 reviewed Stage 0.33B-A one-shot Migration 0005 execution authorization.
 
 The session is READ ONLY and must make zero persistent changes. A PASS grants no
-DDL or migration authority. The canonical sequence remains:
+DDL or migration authority. The canonical stage sequence remains:
 
 **0.33B-G → 0.33B-P → 0.33B-A → 0.33B-D → 0.33B-V**.
+
+The one canonical SQL bundle has this exact physical and declared order:
+prefix → target identity → Migration 0005 absence → Stage 0.32 index → zero-row
+→ four fingerprints → structural/schema/object snapshot → role/membership/ACL
+snapshot → transaction close. No alternate ordering or runtime addition is
+authorized.
 
 P and A must not be combined or skipped.
 

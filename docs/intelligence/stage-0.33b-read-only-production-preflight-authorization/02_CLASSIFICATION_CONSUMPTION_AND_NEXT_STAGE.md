@@ -2,6 +2,11 @@
 
 ## PASS
 
+The sole SQL execution order is: prefix → target identity → Migration 0005
+absence → Stage 0.32 index → zero-row → four fingerprints →
+structural/schema/object snapshot → role/membership/ACL snapshot → transaction
+close. Physical bundle order and declared order must be identical.
+
 PASS requires every item below:
 
 1. clean synchronized repository source and exact Migration 0005 hashes;
@@ -9,17 +14,19 @@ PASS requires every item below:
    owner, and PostgreSQL version identity;
 3. bounded production health PASS;
 4. Migration 0005 creator column and named constraint absent;
-5. `public.material_receipts` count exactly zero;
-6. Stage 0.32 index exact, present, valid, ready, unique, sole-keyed, and with
+5. Stage 0.32 index exact, present, valid, ready, unique, sole-keyed, and with
    the expected predicate;
+6. `public.material_receipts` count exactly zero;
 7. all four canonical table fingerprints captured and comparable;
 8. schema/object and role/membership/ACL baselines captured only by the exact
    frozen catalog query set;
 9. runtime/service baseline captured with candidate activation absent;
 10. evidence minimization and secret scan PASS; and
-11. pre-session validation proved the exact closed bundle had no added
-    statement, psql meta-command, dynamic SQL, or non-allowlisted function, and
-    the READ ONLY transaction was harmlessly closed.
+11. pre-session validation proved the actual numbered statement sequence exactly
+    equaled the frozen statement sequence, with no missing, additional,
+    duplicate, reordered, or unknown statement, psql meta-command, dynamic SQL,
+    or non-allowlisted function, and the READ ONLY transaction was harmlessly
+    closed.
 
 Only then classify:
 
