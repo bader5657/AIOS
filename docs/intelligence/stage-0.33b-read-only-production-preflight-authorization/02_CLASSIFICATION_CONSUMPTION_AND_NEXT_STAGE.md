@@ -13,10 +13,13 @@ PASS requires every item below:
 6. Stage 0.32 index exact, present, valid, ready, unique, sole-keyed, and with
    the expected predicate;
 7. all four canonical table fingerprints captured and comparable;
-8. schema/object and role/membership/ACL baselines captured;
+8. schema/object and role/membership/ACL baselines captured only by the exact
+   frozen catalog query set;
 9. runtime/service baseline captured with candidate activation absent;
 10. evidence minimization and secret scan PASS; and
-11. the one transaction remained READ ONLY and was harmlessly closed.
+11. pre-session validation proved the exact closed bundle had no added
+    statement, psql meta-command, dynamic SQL, or non-allowlisted function, and
+    the READ ONLY transaction was harmlessly closed.
 
 Only then classify:
 
@@ -44,6 +47,10 @@ unclear container identity, unsafe evidence minimization, or inability to prove
 the read-only guarantee. INCONCLUSIVE is not PASS and creates no execution
 authorization eligibility.
 
+The executor must not add exploratory/ad-hoc SQL to resolve BLOCKED or
+INCONCLUSIVE evidence. Every psql backslash command, side-effect SELECT,
+user-defined function execution, and dynamic SQL remains prohibited.
+
 ## Conservative authority consumption
 
 This authorization permits exactly one bounded READ-ONLY production preflight
@@ -51,6 +58,8 @@ session after activation. Authority is consumed once the authorized PostgreSQL
 session materially starts, regardless of PASS, BLOCKED, INCONCLUSIVE, session
 completion, or failure. There is no automatic repeat. A second production
 preflight requires fresh authority.
+
+Pre-session validation failure before connection does not consume authority.
 
 ## Next stage and continuing prohibitions
 

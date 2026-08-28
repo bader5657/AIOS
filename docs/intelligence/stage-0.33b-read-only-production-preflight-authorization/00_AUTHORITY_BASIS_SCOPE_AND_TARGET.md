@@ -64,10 +64,14 @@ The only authorized control plane is this fixed argv shape:
     -X -v ON_ERROR_STOP=1 -U aios -d aios
 ```
 
-SQL must be supplied through stdin only. Host PostgreSQL or host `psql`
-fallback, credential-bearing URI/DSN, external endpoint, arbitrary container,
-database, or user is prohibited. Credentials, connection strings, and secret
-environment values must not appear in argv, logs, or evidence.
+Only the exact ordered governed query bundle frozen in this package may be
+supplied through stdin. Ad-hoc/exploratory SQL, runtime additions, arbitrary
+SELECT/function calls, non-allowlisted functions, and dynamic SQL are prohibited.
+Every psql backslash/meta-command is prohibited, including `\gexec`, `\copy`,
+and `\!`; the bundle has zero line-leading backslash commands. Host PostgreSQL
+or host `psql` fallback, credential-bearing URI/DSN, external endpoint, arbitrary
+container, database, or user is prohibited. Credentials, connection strings,
+and secrets must not appear in argv, logs, or evidence.
 
 ## Activation conditions
 
