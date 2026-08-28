@@ -24,6 +24,8 @@ from core.app.material_receipts.review_use_cases import (
     ReviewFacade,
     SourceContext,
 )
+
+CREATOR = ActorContext("operator:550e8400-e29b-41d4-a716-446655440000")
 from core.material_receipts.repository import (
     CandidateDatabaseConfig,
     MaterialReceiptRepository,
@@ -180,7 +182,7 @@ def test_traversed_candidate_capability_cannot_bypass_retention(monkeypatch) -> 
     port = graph.facade._ReviewFacade__candidate_port
 
     with pytest.raises(ReviewApplicationError) as caught:
-        asyncio.run(port.create_candidate(request))
+        asyncio.run(port.create_candidate(request, CREATOR.actor_reference))
 
     assert caught.value.code is ReviewFailureCode.SOURCE_IDENTITY_INVALID
 
@@ -299,6 +301,7 @@ def test_forged_contexts_cause_zero_verifier_or_repository_construction(
             graph.facade.create_candidate(
                 invalid_source_request,
                 forged_source_context("/etc/passwd"),
+                CREATOR,
             )
         )
     assert source_error.value.code is ReviewFailureCode.INVALID_REVIEW_REQUEST

@@ -1017,3 +1017,15 @@ def test_post_commit_nonascii_gateway_failure_is_compensated(fixture_policy):
         "preflight", "preflight", "provision", "revalidate", "compensate",
     ]
     assert fixture_policy.env_file.read_bytes() == original
+
+
+def test_stage033a_creator_changes_only_candidate_insert_acl_literals():
+    program = helper.provisioning_sql(
+        helper.Secret(b"A" * 43), helper.Secret(b"B" * 43)
+    )
+    assert b"created_by_actor_reference" in program
+    assert b"GRANT INSERT (created_by_actor_reference) ON public.material_receipts" in program
+    assert b"column_name='created_by_actor_reference'" in program
+    assert b"UPDATE (created_by_actor_reference" not in program
+    assert b"created_by_actor_reference) ON public.material_receipts TO aios_material_inventory_posting_writer" not in program
+    assert b"<> (59 + (SELECT count(*)" in program

@@ -44,13 +44,15 @@ class _CandidateReviewOperations:
             raise ReviewApplicationError(ReviewFailureCode.SOURCE_IDENTITY_INVALID)
 
     async def create_candidate(
-        self, request: ReceiptCandidateRequest
+        self, request: ReceiptCandidateRequest, created_by_actor_reference: str
     ) -> ReceiptForReview:
         self._require_retained(request.source_asset_reference)
         from core.material_receipts.repository import MaterialReceiptRepository
 
         repository = MaterialReceiptRepository.from_environment()
-        result = await repository.create_receipt_candidate(request)
+        result = await repository._create_receipt_candidate(
+            request, created_by_actor_reference
+        )
         self._require_retained(result.source_asset_reference)
         if result.source_asset_reference != request.source_asset_reference:
             raise ReviewApplicationError(ReviewFailureCode.SOURCE_IDENTITY_CONFLICT)

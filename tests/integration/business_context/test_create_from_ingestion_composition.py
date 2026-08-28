@@ -24,6 +24,7 @@ from core.app.material_receipts.candidate_input import (
 from core.app.material_receipts.create_from_ingestion import (
     create_review_candidate_from_ingestion,
 )
+from core.app.material_receipts.review_use_cases import ActorContext
 from core.app.material_receipts.results import ReviewApplicationError, ReviewFailureCode
 from core.ingestion.universal_ingestion import IngestionResult
 from core.material_receipts.models import ReceiptStatus
@@ -39,6 +40,7 @@ from tests.integration.business_context.disposable_postgres import (
 
 TEST_URL = os.environ.get("AIOS_MATERIAL_TEST_DATABASE_URL")
 ROOT = Path(__file__).resolve().parents[3]
+ACTOR = ActorContext("operator:550e8400-e29b-41d4-a716-446655440000")
 STOCK_SQL = (ROOT / "migrations/postgres/0002_create_material_stock.up.sql").read_text()
 RECEIPT_SQL = (
     ROOT / "migrations/postgres/0003_create_material_receipt_inventory_movement.up.sql"
@@ -131,6 +133,7 @@ class CreateFromIngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
         ) as admin:
             await admin.execute(STOCK_SQL)
             await admin.execute(RECEIPT_SQL)
+            await admin.execute("ALTER TABLE material_receipts ADD COLUMN created_by_actor_reference TEXT NOT NULL, ADD CONSTRAINT material_receipts_created_by_actor_reference_valid CHECK (created_by_actor_reference ~ '^operator:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')")
             role = sql.Identifier(self.runtime_user)
             schema = sql.Identifier(self.schema)
             await admin.execute(
@@ -145,7 +148,8 @@ class CreateFromIngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await admin.execute(
                 sql.SQL(
                     "GRANT INSERT (receipt_id,supplier_name,document_number,"
-                    "document_date,received_at,source_asset_reference), UPDATE "
+                    "document_date,received_at,source_asset_reference,"
+                    "created_by_actor_reference), UPDATE "
                     "(supplier_name,document_number,document_date,received_at,"
                     "source_asset_reference,status,version,confirmed_version,"
                     "confirmed_at,confirmation_actor_reference,updated_at) ON "
@@ -221,7 +225,7 @@ class CreateFromIngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
             return_value=self.repository,
         ) as factory:
             result = await create_review_candidate_from_ingestion(
-                evidence(path), trusted
+                evidence(path), trusted, ACTOR
             )
         self.assertEqual(factory.call_count, 1)
         return result
@@ -248,6 +252,41 @@ class CreateFromIngestionIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result.confirmed_at)
         self.assertIsNone(result.confirmation_actor_reference)
         self.assertEqual(after, (before[0] + 1, before[1] + 2, before[2], before[3]))
+
+    async def test_untrusted_actor_shaped_content_cannot_override_stored_creator(self) -> None:
+        actor_b = "operator:6ba7b810-9dad-4d80-b000-000000000001"
+        path = self.retained_manifest()
+        untrusted_evidence = evidence(path)
+        object.__setattr__(
+            untrusted_evidence,
+            "metadata",
+            {
+                "telegram_text": actor_b,
+                "caption": actor_b,
+                "sender_id": actor_b,
+                "telegram_metadata": {"actor": actor_b},
+                "ocr": actor_b,
+                "vision": actor_b,
+                "llm": actor_b,
+                "brain": actor_b,
+                "json": {"actor": actor_b},
+                "database_login": actor_b,
+            },
+        )
+        object.__setattr__(untrusted_evidence, "text", actor_b)
+        untrusted_facts = facts()
+        object.__setattr__(untrusted_facts, "supplier_name", actor_b)
+        result = await self.create(path, untrusted_facts)
+
+        async with await psycopg.AsyncConnection.connect(self.admin_url) as admin:
+            stored = await (await admin.execute(
+                "SELECT created_by_actor_reference FROM material_receipts "
+                "WHERE receipt_id=%s",
+                (result.receipt_id,),
+            )).fetchone()
+        self.assertEqual(stored, (ACTOR.actor_reference,))
+        self.assertNotEqual(stored, (actor_b,))
+        self.assertNotIn(ACTOR.actor_reference, repr(result))
 
     async def test_candidate_identity_cannot_mutate_stock_or_movements(self) -> None:
         async with await psycopg.AsyncConnection.connect(self.runtime_url) as runtime:

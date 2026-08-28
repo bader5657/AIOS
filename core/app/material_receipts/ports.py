@@ -11,7 +11,7 @@ class CandidateReviewPort(Protocol):
     """The only candidate operations visible to review use cases."""
 
     async def create_candidate(
-        self, request: ReceiptCandidateRequest
+        self, request: ReceiptCandidateRequest, created_by_actor_reference: str
     ) -> ReceiptForReview: ...
 
     async def revise_candidate(

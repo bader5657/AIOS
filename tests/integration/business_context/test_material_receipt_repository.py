@@ -24,6 +24,8 @@ TEST_URL = os.environ.get("AIOS_MATERIAL_TEST_DATABASE_URL")
 ROOT = Path(__file__).resolve().parents[3]
 STOCK_SQL = (ROOT / "migrations/postgres/0002_create_material_stock.up.sql").read_text()
 RECEIPT_SQL = (ROOT / "migrations/postgres/0003_create_material_receipt_inventory_movement.up.sql").read_text()
+CREATOR = "operator:550e8400-e29b-41d4-a716-446655440000"
+PROVENANCE_SQL = """ALTER TABLE material_receipts ADD COLUMN created_by_actor_reference TEXT NOT NULL, ADD CONSTRAINT material_receipts_created_by_actor_reference_valid CHECK (created_by_actor_reference ~ '^operator:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"""
 
 
 def candidate_item(line=1, **overrides):
@@ -75,6 +77,7 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
         async with await psycopg.AsyncConnection.connect(self.url, autocommit=True) as con:
             await con.execute(STOCK_SQL)
             await con.execute(RECEIPT_SQL)
+            await con.execute(PROVENANCE_SQL)
             role = sql.Identifier(self.runtime_user)
             schema = sql.Identifier(self.schema)
             await con.execute(
@@ -86,7 +89,7 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
             ).format(role))
             await con.execute(sql.SQL(
                 "GRANT INSERT (receipt_id,supplier_name,document_number,document_date,"
-                "received_at,source_asset_reference), UPDATE (supplier_name,"
+                "received_at,source_asset_reference,created_by_actor_reference), UPDATE (supplier_name,"
                 "document_number,document_date,received_at,source_asset_reference,"
                 "status,version,confirmed_version,confirmed_at,"
                 "confirmation_actor_reference,updated_at) ON material_receipts TO {}"
@@ -110,6 +113,17 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 search_path=self.schema,
             )
         )
+
+    async def create_candidate(self, request, actor=CREATOR):
+        return await self.repository._create_receipt_candidate(request, actor)
+
+
+    async def creator(self, receipt_id):
+        async with await psycopg.AsyncConnection.connect(self.url) as con:
+            return (await (await con.execute(
+                "SELECT created_by_actor_reference FROM material_receipts WHERE receipt_id=%s",
+                (receipt_id,),
+            )).fetchone())[0]
 
     async def asyncTearDown(self):
         async with await psycopg.AsyncConnection.connect(
@@ -135,14 +149,14 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
             candidate_item(2, full_colly_count=62, partial_qty=Decimal("38"),
                            total_qty=Decimal("3138")),
         )
-        result = await self.repository.create_receipt_candidate(request)
+        result = await self.create_candidate(request)
         self.assertEqual(result.status, ReceiptStatus.NEEDS_REVIEW)
         self.assertEqual(result.version, 1)
         self.assertEqual([item.total_qty for item in result.items],
                          [Decimal("6250"), Decimal("3138")])
 
     async def test_unresolved_allowed_but_confirmation_requires_resolution(self):
-        result = await self.repository.create_receipt_candidate(candidate_request())
+        result = await self.create_candidate(candidate_request())
         with self.assertRaises(MaterialReceiptError) as caught:
             await self.repository.confirm_receipt(result.receipt_id, 1, "operator:1")
         self.assertEqual(caught.exception.code, Code.MATERIAL_UNRESOLVED)
@@ -150,7 +164,7 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_revision_increments_version_and_confirmation_then_edit_invalidates(self):
         material_id = await self.material()
         request = candidate_request(candidate_item(material_id=material_id))
-        created = await self.repository.create_receipt_candidate(request)
+        created = await self.create_candidate(request)
         confirmed = await self.repository.confirm_receipt(created.receipt_id, 1, "operator:1")
         self.assertEqual(confirmed.confirmed_version, 1)
         revised_request = candidate_request(
@@ -168,14 +182,14 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_confirmation_rejects_inactive_and_unit_mismatch(self):
         inactive = await self.material(active=False)
-        first = await self.repository.create_receipt_candidate(
+        first = await self.create_candidate(
             candidate_request(candidate_item(material_id=inactive))
         )
         with self.assertRaises(MaterialReceiptError) as caught:
             await self.repository.confirm_receipt(first.receipt_id, 1, "operator:1")
         self.assertEqual(caught.exception.code, Code.MATERIAL_INACTIVE)
         kg = await self.material(unit="kg")
-        second = await self.repository.create_receipt_candidate(
+        second = await self.create_candidate(
             candidate_request(candidate_item(material_id=kg))
         )
         with self.assertRaises(MaterialReceiptError) as caught:
@@ -189,7 +203,7 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
             candidate_item(2, material_id=None, full_colly_count=1,
                            total_qty=Decimal("50")),
         )
-        created = await self.repository.create_receipt_candidate(request)
+        created = await self.create_candidate(request)
         cancelled = await self.repository.cancel_receipt_item(
             created.receipt_id, request.items[1].receipt_item_id, 1, "operator:1"
         )
@@ -209,11 +223,35 @@ class CandidateRepositoryIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(hasattr(self.repository, "delete"))
 
     async def test_invalid_transition_after_terminal(self):
-        created = await self.repository.create_receipt_candidate(candidate_request())
+        created = await self.create_candidate(candidate_request())
         await self.repository.cancel_receipt(created.receipt_id, 1, "operator:1")
         with self.assertRaises(MaterialReceiptError) as caught:
             await self.repository.confirm_receipt(created.receipt_id, 2, "operator:1")
         self.assertEqual(caught.exception.code, Code.INVALID_RECEIPT_STATE)
+
+
+    async def test_creator_is_immutable_through_lifecycle_operations(self):
+        material_id = await self.material()
+        request = candidate_request(candidate_item(material_id=material_id))
+        created = await self.create_candidate(request)
+        self.assertEqual(await self.creator(created.receipt_id), CREATOR)
+        await self.repository.confirm_receipt(created.receipt_id, 1, "operator:review")
+        self.assertEqual(await self.creator(created.receipt_id), CREATOR)
+
+        revised_request = candidate_request(
+            candidate_item(receipt_item_id=request.items[0].receipt_item_id, material_id=material_id),
+            receipt_id=request.receipt_id,
+        )
+        await self.repository.revise_receipt_candidate(revised_request, 1)
+        self.assertEqual(await self.creator(created.receipt_id), CREATOR)
+
+        rejected = await self.create_candidate(candidate_request())
+        await self.repository.reject_receipt(rejected.receipt_id, 1, "operator:review")
+        self.assertEqual(await self.creator(rejected.receipt_id), CREATOR)
+
+        cancelled = await self.create_candidate(candidate_request())
+        await self.repository.cancel_receipt(cancelled.receipt_id, 1, "operator:review")
+        self.assertEqual(await self.creator(cancelled.receipt_id), CREATOR)
 
 
 if __name__ == "__main__":

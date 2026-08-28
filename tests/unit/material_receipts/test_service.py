@@ -13,6 +13,23 @@ from core.material_receipts.service import MaterialReceiptService
 
 
 class CandidateServiceTests(unittest.IsolatedAsyncioTestCase):
+    def test_creator_less_and_raw_actor_create_surfaces_are_absent(self):
+        self.assertFalse(hasattr(MaterialReceiptService, "create_receipt_candidate"))
+        self.assertFalse(hasattr(MaterialReceiptRepository, "create_receipt_candidate"))
+        public = {name for name in dir(MaterialReceiptRepository) if not name.startswith("_")}
+        self.assertFalse(public & {"create", "save", "insert", "execute", "dispatch", "run", "handle"})
+        self.assertTrue(hasattr(MaterialReceiptRepository, "_create_receipt_candidate"))
+        for name in (
+            "create", "save", "insert", "execute", "execute_sql", "dispatch",
+            "invoke", "run", "handle", "repository", "get_repository",
+            "database_url", "delete",
+        ):
+            self.assertFalse(hasattr(MaterialReceiptService, name))
+        source = inspect.getsource(MaterialReceiptService)
+        self.assertNotIn("ActorContext", source)
+        self.assertNotIn("created_by_actor_reference", source)
+        self.assertNotIn("actor_provenance", source)
+
     async def test_explicit_operations_delegate_exactly(self):
         repository = AsyncMock(spec=MaterialReceiptRepository)
         service = MaterialReceiptService(repository)
@@ -25,6 +42,14 @@ class CandidateServiceTests(unittest.IsolatedAsyncioTestCase):
         repository.cancel_receipt_item.assert_awaited_once_with(
             receipt_id, item_id, 2, "operator:1"
         )
+        for name in ("revise_receipt_candidate", "get_receipt_for_review", "confirm_receipt", "reject_receipt", "cancel_receipt", "cancel_receipt_item"):
+            self.assertTrue(hasattr(service, name))
+        self.assertTrue(hasattr(service, "revise_receipt_candidate"))
+        self.assertTrue(hasattr(service, "get_receipt_for_review"))
+        self.assertTrue(hasattr(service, "confirm_receipt"))
+        self.assertTrue(hasattr(service, "reject_receipt"))
+        self.assertTrue(hasattr(service, "cancel_receipt"))
+        self.assertTrue(hasattr(service, "cancel_receipt_item"))
 
     def test_no_generic_or_delete_surface(self):
         for name in ("patch", "delete", "delete_item", "execute_sql", "save"):

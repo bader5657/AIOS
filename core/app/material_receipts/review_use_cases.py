@@ -119,6 +119,7 @@ class ActorContext:
         return value
 
 
+
 class ReviewFacade:
     """Expose exactly candidate create, revise, and retrieval orchestration."""
 
@@ -133,7 +134,8 @@ class ReviewFacade:
         self.__evidence_verifier = evidence_verifier
 
     async def create_candidate(
-        self, request: ReceiptCandidateRequest, source_context: SourceContext
+        self, request: ReceiptCandidateRequest, source_context: SourceContext,
+        created_by_actor_reference: str,
     ) -> ReceiptForReview:
         self._require_request(request)
         self._require_source_context(source_context)
@@ -144,7 +146,7 @@ class ReviewFacade:
             request, source_asset_reference=source_context.manifest_reference
         )
         try:
-            result = await self.__candidate_port.create_candidate(bound_request)
+            result = await self.__candidate_port.create_candidate(bound_request, created_by_actor_reference)
         except ReviewApplicationError:
             raise
         except MaterialReceiptError as exc:
