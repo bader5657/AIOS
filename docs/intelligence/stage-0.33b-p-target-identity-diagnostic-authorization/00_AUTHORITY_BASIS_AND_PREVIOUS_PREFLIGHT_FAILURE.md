@@ -69,9 +69,51 @@ container, database, user, endpoint, or control plane is prohibited.
 ## Activation and Project Owner approval
 
 The Project Owner approves exactly one future bounded READ-ONLY target-identity
-diagnostic session using only D01 and D02 after this package receives independent
-review PASS and is merged unchanged. Before those conditions, authority is
-inactive.
+diagnostic session using only D01 and D02. The authority becomes ACTIVE only
+when every condition below is proved immediately before the session:
+
+1. PR `#245` received independent review PASS with zero blocking findings;
+2. PR `#245` was merged unchanged;
+3. Project Owner approval recorded here remains applicable;
+4. `HEAD == main == origin/main` and the worktree is clean;
+5. the exact reviewed PR head and authorization merge commit are recorded, and
+   current `main` contains that reviewed authorization content unchanged;
+6. the frozen production target is unchanged;
+7. the frozen control-plane argv and stdin-only SQL transport are unchanged;
+8. the previous Stage 0.33B-P authority remains recorded as consumed; and
+9. no newer governance has revoked or incompatibly superseded this authority.
+
+The executor must perform this fresh source, authorization-content, target, and
+control-plane gate immediately before production connection, not merely during
+publication. Before all conditions pass, authority is inactive and unconsumed.
+
+Source proof requires the expected branch with `HEAD == main`,
+`main == origin/main`, therefore `HEAD == main == origin/main`, and no modified,
+staged, untracked, or otherwise uncommitted worktree content. Record the reviewed
+PR head, authorization merge commit, and current-main commit before the session.
+
+The target/control-plane gate may inspect only bounded, non-secret, non-mutating
+metadata sufficient to prove that `aios-postgres` exists and is running, its
+image remains in the `postgres:17-alpine` family, the fixed binary paths remain
+expected, and no container, database, user, or argv parameter was substituted.
+Do not contact PostgreSQL for this gate when the facts can be established
+without doing so. D01 remains the first database-side identity verification.
+
+If source identity cannot be proved, the worktree is dirty, an unexpected branch
+is checked out, `origin/main` advanced, authorization content drifted, or newer
+governance superseded the authority: do not connect, authority remains
+unconsumed, STOP, and return to governance/operator control. Do not automatically
+pull, merge, rebase, reset, clean, or resolve conflicts to make the gate pass.
+
+If any frozen target or control-plane value differs, do not connect and classify:
+
+```text
+STAGE 0.33B-PD AUTHORITY ACTIVATION BLOCKED
+— FROZEN PRODUCTION TARGET OR CONTROL-PLANE CONTRACT DRIFT
+```
+
+Authority remains unconsumed. No alternate target, fallback, container/image or
+database recreation, service restart, or automatic repair is authorized.
 
 The Project Owner does not authorize a full preflight rerun, Migration 0005 or
 0004, DDL, DML, locks, ownership changes, role/grant/membership changes, repair,

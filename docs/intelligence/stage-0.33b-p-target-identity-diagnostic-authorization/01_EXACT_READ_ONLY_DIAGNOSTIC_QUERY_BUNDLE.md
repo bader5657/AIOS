@@ -1,5 +1,22 @@
 # Stage 0.33B-PD Exact Read-Only Diagnostic Query Bundle
 
+## Immediate pre-session activation gate
+
+Immediately before production connection, require `HEAD == main == origin/main`,
+a clean worktree, the exact reviewed authorization content on current `main`,
+and the unchanged frozen production target and control-plane contract. Record
+the reviewed PR head, authorization merge commit, and current-main commit. The
+previous Stage 0.33B-P authority must remain recorded as consumed, and no newer
+governance may have revoked or incompatibly superseded this authority.
+
+Failure of any source, content, target, or control-plane check before connection
+means the diagnostic authority is inactive and unconsumed: STOP without opening
+PostgreSQL. Do not auto-pull, merge, rebase, reset, clean, recreate, replace,
+restart, repair, fall back, or substitute an alternate target/control plane.
+D01 remains the first database-side identity verification after material session
+start. The authority remains exactly one future diagnostic session; it does not
+authorize a full Stage 0.33B-P rerun, Migration 0005, or Migration 0004.
+
 ## Closed query surface
 
 Only the single canonical executable bundle below is authorized. No statement

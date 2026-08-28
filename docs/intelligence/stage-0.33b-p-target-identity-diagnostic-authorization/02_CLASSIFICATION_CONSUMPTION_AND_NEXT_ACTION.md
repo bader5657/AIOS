@@ -43,10 +43,24 @@ It must never be retroactively classified PASS.
 
 ## Authority consumption
 
-This authority permits exactly one future diagnostic PostgreSQL session after
-activation. It is consumed when that session materially starts, regardless of
-PASS, BLOCKED, INCONCLUSIVE, connection/query failure after material start, or
-session completion. There is no automatic retry or rerun.
+This authority permits exactly one future diagnostic PostgreSQL session only
+after the immediate activation gate proves independent review PASS with zero
+blockers, unchanged merge, applicable Project Owner approval,
+`HEAD == main == origin/main`, a clean worktree, reviewed authorization content
+on current `main`, unchanged frozen target and control plane, the previous
+Stage 0.33B-P authority still consumed, and no revoking or incompatible newer
+governance.
+
+Source, authorization-content, target, or control-plane failure before
+production connection leaves this authority inactive and unconsumed. Stop and
+return to governance/operator control. Do not automatically pull, merge, rebase,
+reset, clean, repair, recreate, replace, restart, fall back, or substitute an
+alternate target or control plane.
+
+After all activation conditions pass, the authority is consumed when the one
+diagnostic session materially starts, regardless of PASS, BLOCKED,
+INCONCLUSIVE, connection/query failure after material start, or session
+completion. There is no automatic retry or rerun.
 
 The former PR `#244` Stage 0.33B-P authority remains permanently consumed. This
 diagnostic authority neither revives it nor grants full-preflight authority.
@@ -58,7 +72,8 @@ OWNER`, `ALTER SCHEMA ... OWNER`, `ALTER TABLE ... OWNER`, ownership
 normalization, role creation/deletion, GRANT or REVOKE membership, any role,
 membership, grant, ACL, or ownership mutation, DDL, DML, table locks, Migration
 0005, Migration 0004, runtime.env mutation, service/container restart, Telegram
-or Universal Ingestion changes, and candidate activation.
+or Universal Ingestion changes, and candidate activation. It also prohibits
+automatic source-state repair and target/control-plane repair or replacement.
 
 ## Next action after diagnosis
 
