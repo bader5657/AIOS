@@ -42,33 +42,21 @@ partial acceptance, warning-as-PASS, retry, or inferred evidence.
 
 ## Mandatory execution-evidence retention
 
-Stage 0.33B-D must not launch its production control plane until the following
-immutable, bounded, secret-safe contract is provisioned and its initial records
-durably written. Evidence is captured during execution, never reconstructed
-afterward.
+Stage 0.33B-D must not launch its production control plane until the immutable, bounded, secret-safe evidence contract is initialized beneath the already-provisioned root and its initial records are durably written. Evidence is captured during execution, never reconstructed afterward.
 
-### Narrow filesystem sub-authority and exact root
+### Merged provisioning dependency and persistent exact root
 
-After this PR receives independent PASS and is merged unchanged, but before any
-production PostgreSQL launch, the pre-execution filesystem sub-authority permits
-only provisioning and writing Stage 0.33B-D evidence at:
+Stage 0.33B-FP governance PR `#250` is merged and verified at merge commit `677640c269dad3101c6156a425f5f46ee3d1dd56`. Under that governance, the authenticated human operator provisioned the Stage 0.33B-D evidence root and Codex independently verified it. This is historical provisioning evidence: operator provisioning performed, post-provision verification PASS, root persistent. The privileged commands from PR `#250` are not part of Migration execution authority.
 
-`/opt/aios/runtime/intelligence/production-execution-evidence/stage-0.33b-d`
+The verified existing parent `/opt/aios/runtime/intelligence` is a real non-symlink directory owned by `root:root`, mode `0755`. The intermediate `/opt/aios/runtime/intelligence/production-execution-evidence` is a real non-symlink directory owned by `root:root`, mode `0755`. The Stage root `/opt/aios/runtime/intelligence/production-execution-evidence/stage-0.33b-d` is a real non-symlink directory owned by `aiosadmin:aiosadmin`, mode `0750`.
 
-The path must be a real, non-symbolic-link directory owned by
-`aiosadmin:aiosadmin` with mode `0750`. It may be created if absent and its exact
-owner/mode set or verified. Missing directories strictly required in this exact
-root chain may be created only where already-governed parent ownership permits;
-no other parent may be modified. If permission, ownership, or path safety cannot
-be established: STOP, DO NOT CONNECT, authority UNCONSUMED.
+Stage 0.33B-FP write-capability verification passed exclusive probe creation, mode `0600`, owner/group `aiosadmin:aiosadmin`, exact bounded content, flush, fsync, exact probe cleanup, and absence afterward. No additional provisioning probe is required or authorized.
 
-This sub-authority grants no production PostgreSQL or business-data authority,
-application-code or `runtime.env` modification, service restart, Telegram,
-Universal Ingestion, or candidate activation. It permits no recursive `chown` or
-`chmod` outside the exact root, deletion/movement/overwrite of prior evidence,
-unrelated or repository writes, secret writes, or arbitrary directory creation.
-It is limited to the exact root and one new session directory. Evidence creation
-does not consume Migration 0005 authority.
+Immediately before any evidence session is initialized, bounded non-mutating `lstat`/`stat` inspection must verify the intermediate is a real non-symlink `root:root` mode-`0755` directory and the Stage root is a real non-symlink `aiosadmin:aiosadmin` mode-`0750` directory. If either is absent, a symlink, the wrong type, owner, group, or mode, classify `STAGE 0.33B-D ACTIVATION BLOCKED — VERIFIED EVIDENCE ROOT DRIFT`; do not repair, execute `sudo`, or contact PostgreSQL, and leave Migration authority UNCONSUMED.
+
+Stage 0.33B-D requires no sudo, `/usr/bin/install`, root-owned directory creation, privileged `chmod`, privileged `chown`, operator provisioning, or other root filesystem mutation. It may perform only non-privileged operations as `aiosadmin` beneath the verified Stage root. Drift authorizes no recreate, delete, replace, move, `chmod`, or `chown`; return to governance/operator remediation.
+
+The Stage root is persistent governed infrastructure and must not be deleted after PASS, BLOCKED, FAILED, INCONCLUSIVE, ROLLBACK, or COMMIT. Each future separately authorized attempt, if any, creates a new session directory beneath it. Root verification, session initialization, and evidence-file creation do not consume Migration 0005 authority.
 
 ### Session identity and exclusive creation
 
@@ -220,24 +208,38 @@ that SHA in the final operator/Codex report, not inside the manifest where it
 would self-reference. The final report must also carry the required
 `execution.jsonl` SHA recorded by the manifest.
 
-If provisioning fails before launch, classify `STAGE 0.33B-D ACTIVATION BLOCKED
-— EXECUTION EVIDENCE RETENTION NOT PROVISIONED`, DO NOT CONNECT, and leave
-Migration 0005 authority UNCONSUMED. If a session was created but a later
-pre-launch gate blocks launch, do not delete or rewrite it; finalize an
-activation-blocked record where practical. A later separately authorized launch
-uses a new session ID.
+If root verification or non-privileged evidence initialization fails before
+launch, DO NOT CONNECT and leave Migration 0005 authority UNCONSUMED. Root drift
+uses the exact drift classification above and grants no repair authority. If a
+session was created but a later pre-launch gate blocks launch, do not delete or
+rewrite it; finalize an activation-blocked record where practical. A later
+separately authorized launch uses a new session ID.
 
 ## Frozen Stage 0.33B-D execution order
 
 No reordering is authorized:
 
-A. all pre-launch repository, source, authorization, evidence-package/hash,
-   migration-hash, non-PostgreSQL container metadata, and control-plane argv gates;
-B. provision and validate the exact evidence root and session;
-C. durably record the launch-attempt event;
-D. first exact production control-plane launch attempt—authority CONSUMED;
-E. `BEGIN`;
-F. transaction-local controls;
+1. active merged Stage 0.33B-A authorization;
+2. `HEAD == main == origin/main`;
+3. clean worktree;
+4. evidence-package hash verification;
+5. Migration artifact hash verification;
+6. non-database target and control-plane verification;
+7. non-mutating verification of the already-provisioned evidence root;
+8. create one unique non-privileged evidence session directory;
+9. exclusively create `execution.jsonl`;
+10. write, flush, and fsync initial evidence records;
+11. write, flush, and fsync
+    `production_control_plane_launch_attempt` / `ATTEMPTING`; and
+12. make the first exact production Docker/`psql` launch—Migration authority
+    CONSUMED.
+
+There is no privileged provisioning step in this sequence.
+
+After launch, the frozen database sequence continues:
+
+F. `BEGIN`;
+F1. transaction-local controls;
 G. L01 `material_receipts` ACCESS EXCLUSIVE, L02 `material_receipt_items` SHARE,
    L03 `inventory_movements` SHARE, L04 `material_stock` SHARE;
 H. locked target identity;
@@ -288,7 +290,8 @@ governed and unauthorized.
 |---|---|
 | Production PostgreSQL contacted / SELECT | NO / NO |
 | Production mutation | NONE |
-| Production evidence root created | NO |
+| Filesystem / provisioned-root mutation during remediation | NONE |
+| Migration 0005 authority | UNCONSUMED |
 | Migration 0005 / Migration 0004 / DOWN | NOT EXECUTED |
 | Ownership / roles / grants / memberships | UNCHANGED |
 | Runtime / `runtime.env` | UNCHANGED |
@@ -299,9 +302,11 @@ governed and unauthorized.
 STAGE 0.33B-A MIGRATION 0005 ONE-SHOT EXECUTION AUTHORIZATION PUBLISHED
 — REVIEWED STAGE 0.33B-PE EVIDENCE BOUND
 — FOUR-TABLE PRESERVATION LOCKING FROZEN
+— STAGE 0.33B-FP PROVISIONING PASS BOUND
+— PRE-PROVISIONED PERSISTENT EVIDENCE ROOT FROZEN
+— NO DEPLOYMENT-TIME SUDO OR PRIVILEGED PROVISIONING
 — AUTHORITY CONSUMPTION AT FIRST PRODUCTION LAUNCH ATTEMPT
-— EXECUTION-EVIDENCE FILESYSTEM RETENTION CONTRACT FROZEN
-— READY FOR INDEPENDENT AUTHORIZATION REVIEW
+— READY FOR FRESH INDEPENDENT AUTHORIZATION REVIEW
 — MIGRATION 0005 NOT YET AUTHORIZED TO EXECUTE
 — PRODUCTION CANDIDATE ACTIVATION NOT AUTHORIZED
 ```

@@ -27,18 +27,35 @@ probe, or alternate `pg_isready` connection session may precede that launch.
 Non-database container and process metadata remain eligible only within the
 bounded activation gates.
 
-This authorization also contains a distinct, narrow pre-execution filesystem
-sub-authority. After independent PASS and merge unchanged, it permits only the
-operations needed to provision and write Stage 0.33B-D execution evidence below
-`/opt/aios/runtime/intelligence/production-execution-evidence/stage-0.33b-d`.
-Those filesystem operations do not consume the Migration 0005 authority and
-grant no PostgreSQL, business-data, application-code, `runtime.env`, restart,
-Telegram, Universal Ingestion, or candidate-activation authority. The exact
-filesystem limits and durability contract are frozen in this package; no
-production filesystem operation is performed by this publication.
+The Stage 0.33B-D evidence root is already provisioned persistent governed
+infrastructure. Its governing dependency is Stage 0.33B-FP PR `#250`, merged and
+verified at merge commit `677640c269dad3101c6156a425f5f46ee3d1dd56`. Under
+that governance, the authenticated human operator provisioned the root and
+Codex independently completed the bounded post-provision verification with
+PASS. PR `#250`'s privileged operator provisioning authority is historical and
+must not be incorporated into this Migration execution authority.
 
-The frozen root is a real non-symlink directory owned by
-`aiosadmin:aiosadmin`, mode `0750`. Each exclusively created session uses
+The verified chain is `/opt/aios/runtime/intelligence`, a real non-symlink
+directory owned by `root:root`, mode `0755`;
+`/opt/aios/runtime/intelligence/production-execution-evidence`, a real
+non-symlink directory owned by `root:root`, mode `0755`; and
+`/opt/aios/runtime/intelligence/production-execution-evidence/stage-0.33b-d`, a
+real non-symlink directory owned by `aiosadmin:aiosadmin`, mode `0750`.
+Stage 0.33B-FP also verified a single exclusive mode-`0600`
+`aiosadmin:aiosadmin` probe with the exact bounded content, flush, fsync, exact
+cleanup, and absence afterward all PASS. No repeat provisioning probe is
+required or authorized by this remediation.
+
+Immediately before any evidence session is initialized, Stage 0.33B-D must
+non-mutatingly verify with `lstat`/`stat` that the intermediate and Stage roots
+retain those exact type, non-symlink, owner/group, and mode properties. Any
+absence, symlink, wrong type, owner, group, or mode classifies `STAGE 0.33B-D
+ACTIVATION BLOCKED — VERIFIED EVIDENCE ROOT DRIFT`: do not repair, execute
+`sudo`, or contact PostgreSQL, and leave Migration authority UNCONSUMED.
+Stage 0.33B-D has no sudo or root-filesystem-mutation authority; it may perform
+only non-privileged `aiosadmin` operations beneath the verified Stage root.
+
+Each exclusively created non-privileged session uses
 `stage-0.33b-d-migration-0005-YYYYMMDDTHHMMSSffffffZ-<canonical-lowercase-UUIDv4>`,
 is mode `0750`, and exclusively creates only `execution.jsonl` (`0640` while
 executing) and final `manifest.json`. UTF-8 JSONL records are bounded, sanitized,
@@ -46,17 +63,21 @@ flushed and fsynced at critical phases; finalization includes a prohibited-secre
 scan, JSONL SHA/size/count, an exclusively created bounded manifest, file and
 directory fsync, final file modes `0440`, and a SHA-256 of the complete final
 manifest bytes reported externally. Existing paths/files are hard stops; no
-overwrite, cleanup, symlink following, or broad filesystem authority exists.
-Provisioning failure before launch blocks activation with migration authority
-UNCONSUMED; any post-launch evidence failure leaves it CONSUMED and requires
-fail-closed rollback if still pre-COMMIT, with no retry. Stage 0.33B-V remains
-separate.
+overwrite, root deletion, symlink following, or broad filesystem authority
+exists. The persistent Stage root is never deleted after any terminal outcome;
+each future separately authorized attempt uses a new session directory. Root
+verification or session initialization does not consume Migration authority.
+Any pre-launch evidence failure leaves authority UNCONSUMED; any post-launch
+evidence failure leaves it CONSUMED and requires fail-closed rollback if still
+pre-COMMIT, with no retry. Stage 0.33B-V remains separate.
 
 ## Repository and reviewed-evidence basis
 
-Publication is based on clean synchronized
-`HEAD == main == origin/main == a6facdfb573d4dce406d0541b7317ffb9d235f9e`.
-That commit is the merge of evidence PR `#248`, whose reviewed head was
+Publication was originally based on clean synchronized main at
+`a6facdfb573d4dce406d0541b7317ffb9d235f9e`, the merge of evidence PR `#248`.
+This provisioned-root remediation is synchronized onto current main
+`677640c269dad3101c6156a425f5f46ee3d1dd56`, the merge of Stage 0.33B-FP PR
+`#250`. PR `#248`'s reviewed head was
 `35c75da03b519efdc523b4c1adc0d6d9047c1846`. The controlling reviewed package is:
 
 `docs/intelligence/stage-0.33b-p-preflight-execution-evidence/`

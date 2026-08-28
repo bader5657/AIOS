@@ -70,7 +70,8 @@ Before the exact production control-plane launch attempt, require all of:
 7. container identity and running/health metadata pass, and frozen target and
    exact control-plane argv are validated unchanged;
 8. no newer governance revocation or incompatible supersession;
-9. exact evidence root and one session safely provisioned and validated; and
+9. the already-provisioned evidence root non-mutatingly verified and one new
+   non-privileged session exclusively initialized beneath it; and
 10. `execution.jsonl` exclusively created, with initialization and
     `production_control_plane_launch_attempt` / `ATTEMPTING` records flushed and
     fsynced immediately before invoking the control plane.
@@ -81,24 +82,46 @@ substitution is implicitly authorized. An evidence session already created is
 finalized as activation-blocked where practical and retained; a later separately
 authorized launch uses a new session ID.
 
-The exact evidence root is
+The exact evidence root is already-provisioned persistent governed
+infrastructure at
 `/opt/aios/runtime/intelligence/production-execution-evidence/stage-0.33b-d`, a
-real non-symlink directory owned by `aiosadmin:aiosadmin`, mode `0750`, under the
-narrow filesystem-only sub-authority. The exclusively created mode-`0750`
-session ID is
+real non-symlink directory owned by `aiosadmin:aiosadmin`, mode `0750`. Its
+intermediate parent
+`/opt/aios/runtime/intelligence/production-execution-evidence` is a real
+non-symlink directory owned by `root:root`, mode `0755`. Stage 0.33B-FP PR
+`#250`, merged and verified at
+`677640c269dad3101c6156a425f5f46ee3d1dd56`, governed the human provisioning.
+The subsequent Codex post-provision check passed exclusive creation, mode
+`0600`, owner/group `aiosadmin:aiosadmin`, exact bounded content, flush,
+fsync, exact cleanup, and absence afterward. That provisioning authority is
+historical and no repeat probe is required.
+
+Immediately before session initialization, non-mutating `lstat`/`stat` checks
+must require those exact intermediate and Stage-root properties. Absence,
+symlink, wrong type, owner, group, or mode means `STAGE 0.33B-D ACTIVATION
+BLOCKED — VERIFIED EVIDENCE ROOT DRIFT`: do not repair, use `sudo`, mutate root
+filesystem state, or contact PostgreSQL; Migration authority remains
+UNCONSUMED. Only after PASS may `aiosadmin`, without privilege escalation,
+exclusively create the mode-`0750` session ID
 `stage-0.33b-d-migration-0005-YYYYMMDDTHHMMSSffffffZ-<canonical-lowercase-UUIDv4>`.
-It contains only exclusively created `execution.jsonl` (UTF-8 JSON Lines, bounded
-required events, mode `0640` during execution) and the exclusively created final
-`manifest.json`. Critical records are flushed and fsynced; finalization performs
-the prohibited-secret scan, records JSONL SHA/size/count in the bounded manifest,
-fsyncs file/directory state, changes both files to `0440`, and reports the SHA-256
-of the complete final manifest bytes externally. Owner/group remains
-`aiosadmin:aiosadmin`; existing paths/files, symlinks, overwrite, cleanup, and
-broad filesystem operations are prohibited. Provisioning failure before launch
-blocks activation with authority UNCONSUMED. Post-launch evidence failure leaves
-authority CONSUMED, requires fail-closed ROLLBACK if pre-COMMIT, and permits no
-retry. Evidence finalization is not Stage 0.33B-V; that stage remains separately
-authorized.
+
+The session contains only exclusively created `execution.jsonl` (UTF-8 JSON
+Lines, bounded required events, mode `0640` during execution) and the
+exclusively created final `manifest.json`. Critical records are flushed and
+fsynced; finalization performs the prohibited-secret scan, records JSONL
+SHA/size/count in the bounded manifest, fsyncs file/directory state, changes both
+files to `0440`, and reports the SHA-256 of the complete final manifest bytes
+externally. Owner/group remains `aiosadmin:aiosadmin`; existing paths/files,
+symlinks, overwrite, cleanup, and broad filesystem operations are prohibited.
+
+The persistent Stage root is never deleted after PASS, BLOCKED, FAILED,
+INCONCLUSIVE, ROLLBACK, or COMMIT. Root drift grants no `sudo`, `chmod`,
+`chown`, recreate, delete, replace, or move authority and must return to
+governance/operator remediation. Pre-launch root, session, or evidence-file
+failure blocks activation with authority UNCONSUMED. Post-launch evidence
+failure leaves authority CONSUMED, requires fail-closed ROLLBACK if pre-COMMIT,
+and permits no retry. Evidence finalization is not Stage 0.33B-V; that stage
+remains separately authorized.
 
 ## Single explicit transaction and deterministic four-table locks
 
