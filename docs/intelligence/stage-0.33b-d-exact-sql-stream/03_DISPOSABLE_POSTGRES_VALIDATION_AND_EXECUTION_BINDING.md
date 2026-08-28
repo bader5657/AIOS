@@ -102,6 +102,10 @@ STAGE 0.33B-DS EXACT PRODUCTION SQL STREAM GOVERNANCE PUBLISHED
 — PRODUCTION CANDIDATE ACTIVATION NOT AUTHORIZED
 ```
 
+## Attribution width consistency
+
+The authoritative template was mechanically rechecked: V01 emits 4 fields and exactly 1 row; V02 emits 3 fields and exactly 1 row; V03 emits 2 fields and exactly 0 rows; V04 emits 7 fields and exactly 1 row; V05 emits 6 fields and exactly 1 row. Parsed disposable records and zero-row schema handling match these widths.
+
 ## Remediation validation record
 
 Disposable PostgreSQL 17.10 validation used the exact argv, raw UTF-8 stdout/stderr separation, and strict `csv.reader` contract. All 49 frames were received exactly once and in order; every result was attributed to its preceding statement ID, including multiline `pg_get_functiondef` CSV fields. M01/M02 produced zero records followed by their frames; Z01's scalar was attributed correctly; O/R and V multi-row results were attributed correctly. Missing/duplicate/out-of-order/wrong-nonce/wrong-section/unexpected-record, malformed CSV, and truncated quoted multiline harness inputs all failed.

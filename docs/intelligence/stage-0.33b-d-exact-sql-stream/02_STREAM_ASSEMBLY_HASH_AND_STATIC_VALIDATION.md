@@ -56,7 +56,7 @@ Mechanical audit of the assembled candidate returned:
 
 | Control | Result |
 |---|---:|
-| Statements | `57` |
+| Semantic statements | `57` |
 | `BEGIN` | `1` |
 | success `COMMIT` | `1` |
 | governed locks | `4` |
