@@ -77,3 +77,25 @@ the still-unconsumed authority to the reviewed template SHA, Migration UP SHA,
 assembled-stream SHA, unique-marker assembly method, and incremental same-session
 gate procedure. Production execution remains blocked until that amendment is
 independently reviewed and merged.
+
+## PR #251 remediation: exact result framing
+
+FRAME_NONCE is permanently frozen as `a3e1a015-c078-44b4-a618-f6c7f49831f7` (canonical lowercase UUIDv4; never runtime-generated). Exact argv: `/usr/bin/docker exec -i aios-postgres /usr/local/bin/psql -X -v ON_ERROR_STOP=1 --csv -t -q -P pager=off -U aios -d aios`. stdout is CSV only; stderr is separate bounded diagnostics and never parsed. Python `csv.reader` parses raw UTF-8 with `newline=''`, delimiter `,`, quotechar `"`, `doublequote=True`, strict malformed-record failure.
+
+Frames are exact three-field records `["AIOS_FRAME", SECTION_ID, FRAME_NONCE]`. The 49 unique frames occur once in frozen order: `T01-T07,L01,L02,L03,L04,I01,I02,M01,M02,S01,Z01,F01,F02,F03,F04,O01,O02,O03,O04,O05,O06,O07,O08,R01,R02,R03,R04,X01,V01,V02,V03,V04,V05,PF01,PF02,PF03,PF04,PO01,PO02,PO03,PO04,PO05,PO06,PO07,PO08,PR01,PR02,PR03,PR04`. Missing, duplicate, unexpected, out-of-order, wrong-nonce, malformed, or unattributed records fail.
+
+Production sends 49 incremental chunks (T01-T07 is one prefix chunk), waiting for each frame and semantic gate before the next; bulk send is forbidden. Zero data records plus a matching frame proves an executed zero-row result; no frame does not. COMMIT is final SQL. Semantic mismatch sends exactly `ROLLBACK;` in the same live session; ON_ERROR_STOP termination permits no retry or second connection.
+
+## Exact field-level comparison manifest
+
+Results are ordered lists of complete CSV tuples. Exact unchanged pairs: `O03=PO03,O04=PO04,O05=PO05,O06=PO06,O07=PO07,O08=PO08,R01=PR01,R02=PR02,R03=PR03,F01=PF01,F02=PF02,F03=PF03,F04=PF04`.
+
+Frozen disposable PostgreSQL 17 tuples: PO01 `["material_receipts","14","created_by_actor_reference","text","t",""]`; PO02 `["material_receipts","material_receipts_created_by_actor_reference_valid","c","CHECK ((created_by_actor_reference ~ '^operator:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text))"]`; PR04 candidate `["aios_material_receipt_candidate_writer","public","material_receipts","created_by_actor_reference","INSERT","NO"]`; owner rows are the four `["aios","public","material_receipts","created_by_actor_reference", PRIV, "NO"]` tuples for PRIV=`INSERT`,`REFERENCES`,`SELECT`,`UPDATE`.
+
+PO01/PO02 require empty pre-only, exactly one post-only full-tuple match, remove one occurrence, then exact ordered equality. R04 requires empty pre-only and exactly the five frozen tuples (multiplicity one), remove them, then exact ordered equality. V01/V02/V05 cross-check the deltas. No wildcard or substring filtering.
+
+Updated identities: template SHA `bc9860db9bebb8be5dea5bea2c316d2e99cd3e5e1dccda6d6fd4adc3cbb42fb3`; assembled SHA `ce89b4c357e7b0bb52316b363163d8342afbf9cb1e3eaafb98fad8fca5a49799`; 26558 bytes; 57 semantic, 49 framing, 106 physical statements; 49 chunks. PR #249 remains ACTIVE / UNCONSUMED and requires a later explicit argv/protocol binding amendment.
+
+### Frozen statement/result attribution
+
+Every result is accepted only after its exact preceding frame and statement ID. The manifest is: I01(4,1), I02(7,1), M01/M02(1,0), S01(7,1), Z01(1,1), F01-F04(2,1 each), O01(6,list), O02(4,list), O03(7,list), O04(3,list), O05(3,list), O06(5,list), O07(3,list), O08(3,list), R01(8,list), R02(3,list), R03(5,list), R04(6,list), V01(6,1), V02(4,1), V03(1,0), V04(7,1), V05(3,1), PF01-PF04(2,1 each), PO01(6,list), PO02(4,list), PO03-PO08(equal O03-O08), PR01-PR03(equal R01-R03), PR04(6,list). Cardinality and semantic rules are frozen by the corresponding gate and exact tuple comparison above.

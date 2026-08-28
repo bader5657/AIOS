@@ -65,11 +65,11 @@ consume PR #249. Production launch remains blocked after this PR until a narrow
 follow-up authority amendment binds PR #249's still-unconsumed one-shot authority
 to all of:
 
-1. template SHA `53847f0bfb9b5e6595b25f83035726a2f10f0c3568baca2b863bea8f2961c693`;
+1. template SHA `bc9860db9bebb8be5dea5bea2c316d2e99cd3e5e1dccda6d6fd4adc3cbb42fb3`;
 2. Migration UP SHA `7de76e82cb26863cd3c14abc4394cb036936ed0f1c6c64819f03094cf9069293`;
-3. assembled SHA `bb11d884e9238fadb7537e32c18eb24df2e6ab1978b35e11af31dbbc2157c530`;
+3. assembled SHA `ce89b4c357e7b0bb52316b363163d8342afbf9cb1e3eaafb98fad8fca5a49799`;
 4. the single-marker raw-byte assembly method;
-5. the 57-statement frozen order; and
+5. the 106-statement physical SQL order; and
 6. incremental result validation and same-session fail-closed rollback.
 
 The future execution evidence must durably record those identities and assembly
@@ -101,3 +101,13 @@ STAGE 0.33B-DS EXACT PRODUCTION SQL STREAM GOVERNANCE PUBLISHED
 — MIGRATION 0005 NOT EXECUTED
 — PRODUCTION CANDIDATE ACTIVATION NOT AUTHORIZED
 ```
+
+## Remediation validation record
+
+Disposable PostgreSQL 17.10 validation used the exact argv, raw UTF-8 stdout/stderr separation, and strict `csv.reader` contract. All 49 frames were received exactly once and in order; every result was attributed to its preceding statement ID, including multiline `pg_get_functiondef` CSV fields. M01/M02 produced zero records followed by their frames; Z01's scalar was attributed correctly; O/R and V multi-row results were attributed correctly. Missing/duplicate/out-of-order/wrong-nonce/wrong-section/unexpected-record, malformed CSV, and truncated quoted multiline harness inputs all failed.
+
+The comparison harness records bounded counts and exact-match status for O01/PO01, O02/PO02, R04/PR04, and every unchanged pair. Synthetic adversarial records (wrong type, nullable/default/ordinal, altered CHECK or type, candidate grantability/privilege changes, extra/missing/duplicate owner rows, unexpected column/constraint, and any O/R field change) all failed exact tuple comparison.
+
+Success used incremental chunks and committed with C01 final. Semantic-failure validation sent exactly `ROLLBACK;` on the same live psql session and observed no migration objects afterward. SQL-error validation under ON_ERROR_STOP terminated psql; no retry or second connection was launched, and rollback was treated as fail-closed through termination.
+
+Evidence pre-launch requirements now include reviewed PR HEAD, exact argv, template/Migration/assembled hashes, byte size 26558, 57 semantic statements, 49 framing statements, 106 physical statements, 49 frames, 49 chunks, nonce, parser configuration, exact-delta manifest hash/version, framing PASS, and assembly PASS.
