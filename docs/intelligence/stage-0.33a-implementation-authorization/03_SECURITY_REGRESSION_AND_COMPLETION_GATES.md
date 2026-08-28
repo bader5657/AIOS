@@ -94,6 +94,10 @@ Creator-less/raw-actor bypass absence must also be corroborated by the Stage 0.3
 - Exported service create-surface elimination → `tests/unit/material_receipts/test_service.py`
 - Creator-less/raw-actor bypass absence → `tests/unit/material_receipts/test_service.py` plus Stage 0.33A composition/security tests
 - Existing service non-regression → `tests/unit/material_receipts/test_service.py`
+- Candidate-input zero-operational-capability non-regression → `tests/unit/app/material_receipts/test_candidate_input.py`
+- Stale repository-create monkeypatch migration → `tests/unit/app/material_receipts/test_candidate_input.py`
+
+The two candidate-input mappings are governed by `04_ALLOWLIST_AMENDMENT_CANDIDATE_INPUT_TEST.md`. No other mandatory requirement is moved to that file.
 
 ## Regression gates
 

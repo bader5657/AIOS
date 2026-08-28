@@ -4,7 +4,7 @@
 
 A future implementation may create or modify only the exact paths below. Directory-wide authority is not granted. Unrelated changes inside an allowed file are prohibited. If implementation evidence requires another path, stop and obtain an amended authorization before changing it.
 
-The amended allowlist contains exactly **22 paths**: nine application/support paths, two migration paths, six unit-test paths, and five integration-test paths.
+The amended allowlist contains exactly **23 paths**: nine application/support paths, two migration paths, seven unit-test paths, and five integration-test paths. The 23rd path is authorized only under the narrow conditions recorded in `04_ALLOWLIST_AMENDMENT_CANDIDATE_INPUT_TEST.md`.
 
 ## Application allowlist
 
@@ -41,6 +41,7 @@ No other migration file may be created or modified. Migration 0004 and `material
 | `tests/unit/app/material_receipts/test_create_from_ingestion.py` | API ordering, presence, zero-call, propagation, bounded exception, and non-exposure tests. |
 | `tests/unit/app/material_receipts/test_review_use_cases.py` | Candidate-boundary revalidation and generic `ActorContext` non-regression. |
 | `tests/unit/app/material_receipts/test_composition_boundaries.py` | Narrow capability propagation and object/authority graph tests. |
+| `tests/unit/app/material_receipts/test_candidate_input.py` | Repair only the stale public repository-create monkeypatch while preserving or strengthening the existing invalid-input zero-operational-capability security proof against the current private/internal persistence architecture; all unrelated tests in this file remain unchanged. |
 | `tests/unit/admin/test_bootstrap_material_writer_secrets.py` | Exact candidate `INSERT` column/ACL expectation delta and proof of no broader bootstrap change. |
 | `tests/unit/material_receipts/test_service.py` | Prove removal of the creator-less service method, absence of raw-actor/create aliases and generic mutation surfaces, and preservation of unrelated service delegation. |
 
@@ -122,7 +123,7 @@ hasattr(MaterialReceiptService, "create_receipt_candidate") is False
 
 No replacement `create`, `save`, `insert`, `execute`, `execute_sql`, `dispatch`, `invoke`, `run`, `handle`, arbitrary-kwargs, or other alias may provide candidate creation. The service must accept neither `actor_reference: str`, `created_by_actor_reference: str`, dictionaries/mappings/JSON, nor `ActorContext` for candidate creation. It must not import `core.app.material_receipts.actor_provenance` or another higher application-layer identity/authorization module.
 
-The repository may require the already-authorized canonical creator as a separate internal create argument. That persistence seam is not authentication or authorization authority and is callable by the governed composition only with the validator-produced value. No new generic/public repository construction or raw-actor API is authorized.
+The repository may require the already-authorized canonical creator as a separate internal create argument. That persistence seam is not authentication or authorization authority and is callable by the governed composition only with the validator-produced value. `MaterialReceiptRepository.create_receipt_candidate` must remain absent from the public repository surface. A private/internal seam such as `_create_receipt_candidate`, or the exact current implementation equivalent, may be used and narrowly sentineled by the amended candidate-input test when materially useful. No test-only public alias, generic/public repository construction, or raw-actor API is authorized.
 
 ## Required caller audit
 
@@ -131,7 +132,7 @@ Before removing the service method, implementation must perform a repository-wid
 - If no live caller exists, remove the method and proceed.
 - If a caller is found, classify it as obsolete/dead, test-only, a legitimate governed application path, or an unauthorized bypass.
 - Do not automatically adapt any caller.
-- If adaptation requires a path outside this 22-path allowlist, stop and return to governance.
+- If adaptation requires a path outside this 23-path allowlist, stop and return to governance.
 
 No out-of-allowlist caller is automatically modifiable.
 
