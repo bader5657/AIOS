@@ -9,6 +9,7 @@
 | Complete execution stdout from ordinal 1040 | `73c83cd8e22af2b22a6eac2636f06cf003ee00d845c32c0b4f7687bf5fe5b203` |
 | Authorized canonical SQL bundle | `64435ab0193ceb454569496f954a9c6788355f035834d7a6b095222b5154d6f3` |
 | Retained SQL transport stream | `0e196fc188498bc6b74dc191b33f8b74bbfe96d1ae7f7280c72d93c7fb82dafa` |
+| Complete exact file bytes of `docs/intelligence/stage-0.33b-p-preflight-execution-evidence/01_EXECUTION_RESULT_MANIFEST.md` | `c0bb9341fdbe489a78661fef3bc54308202281e14bf93c9bc09465ba3a008d04` |
 | Migration 0005 UP | `7de76e82cb26863cd3c14abc4394cb036936ed0f1c6c64819f03094cf9069293` |
 | Migration 0005 DOWN, identity only | `c210305a14399b4826abc46fad75c138bc8e698d9b85380eba893a01c1501b16` |
 
@@ -22,6 +23,23 @@ The relevant-record-set hash is over the complete original JSONL bytes of those
 records, including their terminating newlines, concatenated in ascending source
 order. The stdout hash is over the UTF-8 bytes of the ordinal `1040` `stdout`
 field after JSON decoding.
+
+The execution-manifest digest above is SHA-256 over the complete exact raw file
+bytes of
+`docs/intelligence/stage-0.33b-p-preflight-execution-evidence/01_EXECUTION_RESULT_MANIFEST.md`
+as stored in the Git worktree or blob-equivalent content at this reviewed PR
+state. Reproduction hashes that complete file directly. It performs no newline
+or whitespace normalization, Markdown rendering, character conversion after
+reading, field extraction, sorting, or concatenation with any other file.
+
+This digest is not the complete Codex JSONL SHA, bounded relevant-record-set
+SHA, execution-stdout SHA, canonical SQL bundle SHA, retained SQL transport SHA,
+a digest of all three evidence Markdown files, or a digest of normalized
+Markdown. It is recorded in this file rather than inside the hashed execution
+manifest because embedding the digest in
+`01_EXECUTION_RESULT_MANIFEST.md` would change that target's bytes and invalidate
+the independently reproduced digest. The target execution-manifest file remains
+unchanged.
 
 ## Secret-safe publication decision
 
