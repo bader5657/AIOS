@@ -66,4 +66,3 @@ canonical query bundle, subject to all activation conditions.
 The Project Owner does not authorize reuse of PR `#244` or PR `#245`, Migration
 0005 or 0004, DDL, DML, locks, ownership changes, role/grant/membership changes,
 repair, retry, runtime/service or integration changes, or candidate activation.
-

@@ -81,4 +81,3 @@ Any failure before connection means DO NOT CONNECT, STOP, and authority remains
 unconsumed. No automatic pull, merge, rebase, reset, clean, stash, repair,
 container/image replacement, restart, argument substitution, alternate target,
 or fallback is authorized.
-
