@@ -69,6 +69,58 @@ Semantic offline replay is **not possible**. Therefore I01/I02, M01/M02, S01,
 Z01, F/PF, O/PO, R/PR, V01-V05, and the exact-delta comparison are all
 **NOT ESTABLISHED FROM RETAINED SEMANTIC PAYLOAD**. Gaps are not backfilled.
 
+## Future executor semantic evidence retention hardening
+
+Status: **REQUIRED BEFORE ANY FUTURE GOVERNED PRODUCTION EXECUTOR MAY CLAIM
+COMPLETE SEMANTIC EXECUTION PROOF**.
+
+This is future governance and engineering debt. SQL statement completion,
+received frames, process exit zero, successful `COMMIT`, and emitted PASS labels
+are not sufficient to claim complete execution evidence. A future governed
+production executor must durably retain the actual semantic validator evidence
+used for every PASS decision. For each governed validator, it must retain either
+the bounded exact parsed semantic result payload used by the assertion, or a
+governance-approved bounded canonical representation with a cryptographic
+digest sufficient for independent replay and review of that assertion.
+
+Each retained item must be mechanically attributable to the execution session,
+statement or section ID, frame ID, validator contract and version,
+timestamp/order, result cardinality, and semantic assertion outcome. Coverage
+must include target identity, migration prestate, index state, zero-row gates,
+business-data fingerprints, schema/object snapshots, role/membership/ACL
+snapshots, post-migration structural and privilege validators, pre/post delta
+inputs, and the exact comparison outcome. A PASS/frame/status-only record is
+insufficient.
+
+The executor must durably write this evidence before advancing past its
+governed gate where practical, and in every case before `COMMIT` for all
+pre-commit semantic gates, using the governed flush/fsync contract. If it cannot
+durably retain the required evidence, it must fail closed under the active
+transaction and authority contract and must not claim complete execution proof.
+
+Retention must remain bounded and secret-safe. It must exclude passwords,
+tokens, API or private keys, `DATABASE_URL`, credential-bearing DSNs,
+`runtime.env` contents, environment dumps, unrestricted raw business data, and
+unbounded tracebacks. For sensitive semantic rows, governance may approve a
+bounded canonical projection or cryptographic digest only when it remains
+sufficient for independent verification.
+
+The retained evidence must let an independent reviewer establish, without
+contacting production again or substituting expected values for observations,
+what result was observed, which validator consumed it, which semantic rule was
+applied, and whether PASS or FAIL was justified.
+
+This debt applies only to future governed production executors. It does not
+alter Stage 0.33B-D history, rewrite either finalized artifact, invent or
+reconstruct missing production results, use PR #251 expectations as observed
+values, or convert the permanent defect into PASS. Migration 0005 remains
+COMMITTED; the defect is an executor/evidence-retention defect, not a Migration
+or PostgreSQL failure, proof of schema corruption, or authority to rerun.
+Stage 0.33B-V remains separate read-only verification of current committed
+state and cannot repair or reconstruct historical Stage 0.33B-D evidence. This
+future hardening debt does not block requesting Stage 0.33B-V after this
+disposition is independently reviewed and merged.
+
 ## Governance disposition
 
 Supplemental evidence quality is **C — ORIGINAL SEMANTIC PAYLOAD NOT
