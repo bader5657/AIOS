@@ -38,6 +38,21 @@ controlled alternate path is permitted.
 The absent state is expected and safe. No path was created or repaired by this
 publication.
 
+## Three-governance provenance chain
+
+All future provisioning and runtime-sync evidence must carry the complete,
+ordered governance chain:
+
+1. PR #266 — Runtime Source / Import Synchronization Governance;
+2. PR #267 — Runtime Sync One-Shot Execution Authority; and
+3. PR #268 — Runtime Sync Evidence-Root Provisioning Governance.
+
+Before this PR merges, its provenance is identified as PR #268, reviewed HEAD
+`7100e4ee4d65cae0d71362032659a981578b7fa6`, state `UNMERGED / REVIEWED`. No
+future merge SHA is guessed or placed in evidence. After merge, the exact PR #268
+merge commit must be captured and verified before provisioning or sync authority
+activation; if it cannot be established, STOP.
+
 ## Frozen root contract
 
 After separate approval and privileged provisioning, the evidence root itself

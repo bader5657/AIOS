@@ -35,3 +35,9 @@ contract. Future provisioning still requires fresh independent review and
 human operator execution of these exact commands. It does not approve runtime
 source synchronization, service restart, Step 2, candidate creation, or
 first-write authority.
+
+Provisioning evidence must bind PR #266 (governance source), PR #267 (one-shot
+sync authority), and PR #268 (this evidence-root governance), including PR #268's
+reviewed HEAD `7100e4ee4d65cae0d71362032659a981578b7fa6` and its exact merge
+commit after merge. Provisioning authority cannot be claimed from an unmerged
+PR #268 or from an invented merge identity.

@@ -22,14 +22,20 @@ prestate/authority evidence. After each critical stage it must durably record
 mutation result, import result, service health, and rollback state. File flush,
 file fsync, and session/parent-directory fsync are required where applicable.
 
-`execution.jsonl` must contain bounded authority/session identity, PR #266 and
-PR #267 identities, pre-sync and target SHAs, remote, prestate, consumption
-timestamp, exact mutation/result, imports and callable assertion, DB contact
-`NO`, service before/after identity, restart `NO`, worktree state, rollback
-`YES/NO`, secret exposure `NONE`, and Step 2 `NOT AUTHORIZED`. `manifest.json`
-must bind those files by SHA-256, byte length, record counts, result/rollback
-state, secret scan, and Step 1 handoff. Its own final SHA is computed only after
-bytes are immutable and is not self-written into the manifest.
+`execution.jsonl` must contain bounded authority/session identity, PR #266
+number/merge commit, PR #267 number/reviewed HEAD/merge commit, and PR #268
+number/reviewed HEAD/merge commit, plus pre-sync and target SHAs, remote,
+prestate, consumption timestamp, exact mutation/result, imports and callable
+assertion, DB contact `NO`, service before/after identity, restart `NO`, worktree
+state, rollback `YES/NO`, secret exposure `NONE`, and Step 2 `NOT AUTHORIZED`.
+Before PR #268 merges, only its exact reviewed HEAD
+`7100e4ee4d65cae0d71362032659a981578b7fa6` may be recorded; after merge, its
+exact merge commit must be captured and verified. No placeholder or guessed
+merge SHA is allowed. `manifest.json` must bind the complete three-PR identity
+chain and those files by SHA-256, byte length, record counts, result/rollback
+state, secret scan, Step 1 handoff, and Step 2 authorization state. Its own
+final SHA is computed only after bytes are immutable and is not self-written into
+the manifest.
 
 No runtime.env contents, password, database URL, token, private key, arbitrary
 stdout/stderr, source file, or raw Git object may enter evidence. Errors must be
@@ -41,6 +47,10 @@ Provisioning plus verification PASS changes PR #267's state to
 `ACTIVE / UNCONSUMED`; provisioning itself never consumes synchronization
 authority. If provisioning is absent or verification fails, the authority
 remains `MERGED / CONDITIONAL`, unconsumed, and unavailable for runtime mutation.
+
+PR #267 runtime-sync execution evidence must include the merged PR #268 identity
+because PR #268 governs the filesystem in which that evidence is stored. Missing
+PR #268 number, reviewed HEAD, or verified merge commit is an activation block.
 
 After activation, the separate sync execution authority still requires all
 prestate gates, consumes once immediately before checkout mutation, and permits
