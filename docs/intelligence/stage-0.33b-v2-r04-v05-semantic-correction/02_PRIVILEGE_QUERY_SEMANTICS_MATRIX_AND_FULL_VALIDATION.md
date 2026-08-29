@@ -45,6 +45,14 @@ grantee/table/column/privilege/grantability rows, unexpected PUBLIC or runtime
 rows, candidate/posting creator UPDATE, reader write, and any other unexpected
 non-owner write.
 
+Mechanical manifest tests derived exactly 342 distinct ordered tuples with
+counts `192/80/64/6`. Exact comparison against the disposable R04 output passed
+row-for-row. Mutations for a missing owner tuple, owner `YES` changed to `NO`,
+extra candidate privilege, missing posting SELECT, reader write, PUBLIC row,
+duplicate tuple, extra governed column, wrong order, wrong table, and wrong
+grantee each failed exact equality. All three V05 tuples occur exactly once in
+the derived R04 sequence.
+
 R04 SQL changed: **NO**. V05 SQL changed: **NO**. All 25 future semantic SQL
 bodies may remain byte-identical. This package grants zero production sessions,
 creates no Stage V2 authority, and does not change the historical failed Stage

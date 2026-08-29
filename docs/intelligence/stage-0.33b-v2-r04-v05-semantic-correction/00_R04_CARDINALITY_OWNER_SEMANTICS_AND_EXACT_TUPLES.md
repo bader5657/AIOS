@@ -30,10 +30,10 @@ representation, not direct ACL mutations.
 
 The exact 342-row set is frozen without wildcard acceptance as follows.
 
-The governed columns are the exact 48-column post-0005 schema: 14
-`material_receipts`, 16 `material_receipt_items`, 12 `inventory_movements`, and
-6 `material_stock` columns in O01 ordinal order. For each column, the four
-owner tuples above are required once.
+The companion `03_R04_EXACT_342_TUPLE_MANIFEST.json` explicitly enumerates all
+48 `public` table/column identities in R04 SQL sort order, with stable ordinals.
+It contains no external-reference placeholder. For every enumerated identity,
+the four owner tuples above are required once.
 
 Non-owner tuples are required once for each exact grant:
 
@@ -47,9 +47,19 @@ Non-owner tuples are required once for each exact grant:
   movement columns; UPDATE on `stock_qty,updated_at`; and
 - stock reader: table-derived SELECT on all six stock columns.
 
-The exact column lists are those frozen by the merged writer privilege matrix
-and schema migrations; ordering is the SQL ORDER BY, not grant order. The
-contract rejects any row not produced by these enumerations.
+The manifest explicitly lists every identity ordinal used by every candidate,
+posting, and reader generation rule. The contract rejects any row not produced
+by those self-contained enumerations.
+
+The canonical manifest is UTF-8, sorted-key compact JSON using separators
+`,` and `:`, with exactly one terminal LF. It is 7829 bytes and has SHA-256
+`4f10acdff3da6e127f221356ebed7df0415668aad63d92ab04c79ab1ed92b183`.
+Its derived sequence is a compact UTF-8 JSON array of ordered six-string arrays,
+the same separators, `ensure_ascii=false`, and one terminal LF. The exact
+342-row sequence SHA-256 is
+`d7948ce205298443c814d8c26faa9303492e019cef528da0940eba5616c3db3f`.
+Sequence order is exactly `grantee, table_name, column_name, privilege_type`,
+matching R04 SQL; schema and grantability remain compared fields.
 
 ## 340-to-342 defect
 
