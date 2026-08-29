@@ -84,13 +84,26 @@ approved safe representation, `source_evidence_sha256`, `correlation_id`, and
 `state` exactly `"CONSUMED"`. It contains no database URL/password, token, API
 or private key, `runtime.env`, raw business payload, or unrestricted source.
 
-Before DB capability, implementation must fully write and flush the record,
+Before DB capability, the winning caller must fully write and flush the record,
 `fsync` the file, close it safely, open and `fsync` the real consumed parent
-directory, and close that descriptor. A valid existing record returns
-`AUTHORIZATION_CONSUMED`. An existing symlink, directory, unexpected type, wrong
-owner/mode, malformed record, or otherwise invalid state returns
-`AUTHORIZATION_CONSUMPTION_STATE_INVALID`. Both fail before repository creation;
-neither state is overwritten, deleted, repaired, or broadly inspected.
+directory, and close that descriptor. This winner durability rule does not delay
+or weaken consumption at successful `O_EXCL` creation.
+
+When `O_EXCL` reports the exact path already exists, a losing caller performs
+only bounded non-following metadata validation. It must not open, read, or parse
+the record body. A safe regular non-symlink file at the governed path with the
+creation-time owner/group and mode `0600` returns `AUTHORIZATION_CONSUMED` even
+when zero-byte, partially written, or not yet fsynced. No post-create chmod or
+chown is allowed. A symlink, directory, socket, FIFO, device, unexpected type,
+wrong owner/mode, or unsafe path returns
+`AUTHORIZATION_CONSUMPTION_STATE_INVALID`. Neither result permits repository
+creation, overwrite, deletion, repair, wait, polling, takeover, or retry.
+
+Authorization state and evidence quality are distinct. Successful `O_EXCL` means
+`CONSUMED` permanently. Full JSON review may classify consumption evidence as
+`COMPLETE` or `INCOMPLETE`; incomplete evidence never means unconsumed and never
+permits execution. Full JSON validation is for offline audit, not second-caller
+authorization reuse decisions.
 
 ## Activation mechanism and ordering
 
@@ -202,12 +215,14 @@ Source identity is the exact retained `source_asset_reference`. The existing
 A duplicate returns bounded `SOURCE_ACTIVE_RECEIPT_EXISTS`; it does not return an
 existing candidate or create extra rows.
 
-Same-authorization concurrency is a control-plane test: two simultaneous callers
-using one authorization produce exactly one successful `O_EXCL` claim. Only the
-winner may proceed after durability; the loser receives
-`AUTHORIZATION_CONSUMED`, never constructs the repository, never connects or
-persists, and never retries. Filesystem state remains authoritative after crash
-or process restart.
+Same-authorization concurrency is a control-plane test: for arbitrary bounded N
+simultaneous callers using one authorization, exactly one wins `O_EXCL`; all
+N-1 losers validate safe metadata only and return `AUTHORIZATION_CONSUMED`. They
+do not read the payload, wait, poll, lock, take over, construct the repository,
+connect, persist, or retry. The winner may proceed only after durability.
+Filesystem existence remains authoritative after crash, service restart, or a
+new process even if the payload is empty, partial, complete-but-unfsynced, or
+classified `INCOMPLETE` for evidence review.
 
 Database duplicate/source concurrency is a separate persistence test. It uses
 the lower governed application/repository harness, or two independently valid

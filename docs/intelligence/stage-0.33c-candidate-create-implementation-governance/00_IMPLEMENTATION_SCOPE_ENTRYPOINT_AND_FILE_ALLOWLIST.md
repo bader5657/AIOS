@@ -114,6 +114,12 @@ no ninth source path and no existing-file change:
 
 > `EIGHT_PATH_ALLOWLIST_RETAINED = YES`
 
+The authorization implementation must treat successful `O_EXCL` path creation as
+irreversible consumption. Safe regular-file existence is sufficient for every
+losing caller; payload completeness is evidence quality only. No lock, wait,
+poll, takeover, or retry protocol is authorized. This rule and arbitrary bounded
+N-caller tests remain within the same authorization module and test file.
+
 ## Prohibited paths and capability expansion
 
 Explicitly prohibited are Migration 0001–0005; provenance schema; DB role/GRANT

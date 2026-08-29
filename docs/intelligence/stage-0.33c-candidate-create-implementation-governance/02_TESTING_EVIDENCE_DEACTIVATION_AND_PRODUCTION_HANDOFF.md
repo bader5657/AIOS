@@ -25,18 +25,27 @@ The three allowlisted unit files must prove:
 - no posting symbols (`InventoryPostingService.post_confirmed_receipt` or
   `InventoryPostingRepository.post_confirmed_receipt`) are constructed/called;
 - no inventory or stock mutation path, event, task, or retry is invoked;
-- successful authorization uses `O_EXCL | O_NOFOLLOW`, writes the bounded record,
-  flushes, file-fsyncs, and parent-directory-fsyncs before DB capability;
-- a valid pre-existing claim returns `AUTHORIZATION_CONSUMED` before repository
-  construction or connection and is never overwritten or deleted;
-- symlink, directory, unexpected type, malformed, wrong-owner, or wrong-mode
-  state returns `AUTHORIZATION_CONSUMPTION_STATE_INVALID` before DB;
-- two concurrent same-authorization calls yield exactly one claim winner and one
-  `AUTHORIZATION_CONSUMED` loser whose repository factory and DB connector are
-  never invoked;
-- post-claim failure, including either fsync failure, remains consumed, starts no
-  DB connection when durability is incomplete, and permits no retry;
-- process restart observes durable consumed state, not process-local memory;
+- successful authorization uses `O_EXCL | O_NOFOLLOW`; exact file creation is
+  irreversible consumption before payload serialization or durability;
+- the winner writes bounded JSON, flushes, file-fsyncs, and parent-directory-
+  fsyncs before DB capability, with no post-create chmod/chown;
+- a pre-existing safe regular file with governed owner/group and mode `0600`
+  returns `AUTHORIZATION_CONSUMED` from metadata only, without content parsing;
+- zero-byte, partial, or unfsynced safe records remain authorization `CONSUMED`
+  while evidence quality may be `INCOMPLETE`;
+- symlink, directory, socket, FIFO, device, unexpected type, wrong-owner, or
+  wrong-mode state returns `AUTHORIZATION_CONSUMPTION_STATE_INVALID` before DB;
+- a deterministic paused-winner test stops A after `O_EXCL` and before its first
+  write; B must return `AUTHORIZATION_CONSUMED` with zero repository, connection,
+  persistence, wait, and retry calls before A resumes;
+- arbitrary bounded N same-authorization callers yield one winner and N-1
+  metadata-only `AUTHORIZATION_CONSUMED` losers;
+- a crash-after-claim test leaves an empty/partial marker; B and a simulated new
+  process still classify authority consumed with DB connection zero;
+- write, file-fsync, or parent-fsync failure after claim leaves the object, keeps
+  authority consumed, starts no DB connection, and makes subsequent B consumed;
+- no file lock, polling, wait, timeout takeover, stale-lock recovery, marker
+  deletion, or retry exists;
 - authorization disablement prevents new unclaimed calls while historical
   consumed records remain;
 - evidence is bounded, sanitized, durably written before advance, and failure to
