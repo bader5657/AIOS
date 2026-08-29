@@ -85,7 +85,7 @@ No wildcard or implied supporting file is authorized. Every path below is
 
 | Path | Disposition | Narrow purpose |
 |---|---|---|
-| `core/app/material_receipts/candidate_create_authorization.py` | `NEW / CREATE` | Validate the one fixed authorization artifact, activation state, identity, expiry, one-request limit, and source/facts bindings before operational capability. |
+| `core/app/material_receipts/candidate_create_authorization.py` | `NEW / CREATE` | Validate the fixed authorization artifact and atomically/durably claim its authorization-ID-bound consumption record before operational capability. |
 | `core/app/material_receipts/candidate_create_evidence.py` | `NEW / CREATE` | Emit bounded, secret-safe implementation/runtime semantic evidence through an injected durable sink contract; no production root creation or activation. |
 
 ### C. Tests
@@ -93,7 +93,7 @@ No wildcard or implied supporting file is authorized. Every path below is
 | Path | Disposition | Narrow purpose |
 |---|---|---|
 | `tests/unit/app/material_receipts/test_controlled_candidate_create.py` | `NEW / CREATE` | Entrypoint ordering, exact DTOs, actor propagation, zero capability, non-escalation, and deactivation. |
-| `tests/unit/app/material_receipts/test_candidate_create_authorization.py` | `NEW / CREATE` | Fixed-path artifact identity, owner/mode/symlink/schema/hash/expiry/binding validation and fail-closed behavior. |
+| `tests/unit/app/material_receipts/test_candidate_create_authorization.py` | `NEW / CREATE` | Artifact validation plus `O_EXCL` claim, durability, same-authorization contention, restart, metadata, and fail-closed consumption-state proofs. |
 | `tests/unit/app/material_receipts/test_candidate_create_evidence.py` | `NEW / CREATE` | Bounded schema, durability contract, secret/payload exclusion, and failure-before-advance behavior. |
 | `tests/integration/business_context/test_stage033c_controlled_candidate_create_postgres.py` | `NEW / CREATE` | Isolated PostgreSQL 17 atomic effects, privileges, duplicate/concurrency, rollback, and forbidden side effects. |
 
@@ -107,6 +107,12 @@ The allowlist is exactly eight paths. If implementation needs any initializer,
 existing application module, repository, migration, helper, fixture, service,
 script, runtime configuration, or additional document, it must stop and return
 to governance before that path changes.
+
+Atomic durable consumption is implemented wholly inside the allowlisted new
+`candidate_create_authorization.py` and its already allowlisted tests. It needs
+no ninth source path and no existing-file change:
+
+> `EIGHT_PATH_ALLOWLIST_RETAINED = YES`
 
 ## Prohibited paths and capability expansion
 

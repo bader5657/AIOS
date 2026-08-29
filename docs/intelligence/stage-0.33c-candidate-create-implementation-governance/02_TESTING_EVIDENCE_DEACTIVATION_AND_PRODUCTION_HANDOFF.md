@@ -25,7 +25,20 @@ The three allowlisted unit files must prove:
 - no posting symbols (`InventoryPostingService.post_confirmed_receipt` or
   `InventoryPostingRepository.post_confirmed_receipt`) are constructed/called;
 - no inventory or stock mutation path, event, task, or retry is invoked;
-- authorization disablement immediately prevents new calls;
+- successful authorization uses `O_EXCL | O_NOFOLLOW`, writes the bounded record,
+  flushes, file-fsyncs, and parent-directory-fsyncs before DB capability;
+- a valid pre-existing claim returns `AUTHORIZATION_CONSUMED` before repository
+  construction or connection and is never overwritten or deleted;
+- symlink, directory, unexpected type, malformed, wrong-owner, or wrong-mode
+  state returns `AUTHORIZATION_CONSUMPTION_STATE_INVALID` before DB;
+- two concurrent same-authorization calls yield exactly one claim winner and one
+  `AUTHORIZATION_CONSUMED` loser whose repository factory and DB connector are
+  never invoked;
+- post-claim failure, including either fsync failure, remains consumed, starts no
+  DB connection when durability is incomplete, and permits no retry;
+- process restart observes durable consumed state, not process-local memory;
+- authorization disablement prevents new unclaimed calls while historical
+  consumed records remain;
 - evidence is bounded, sanitized, durably written before advance, and failure to
   initialize/write/flush/fsync evidence prevents or fails the operation safely;
   and
@@ -45,9 +58,10 @@ and prove with real constraints and privileges:
    replaced by caller or downstream data;
 4. a failure on a later item rolls back the receipt and every earlier item;
 5. repeated active-source creation returns `SOURCE_ACTIVE_RECEIPT_EXISTS` with
-   no extra row;
-6. two concurrent same-source requests yield exactly one success and one bounded
-   duplicate result;
+   no extra row using the lower governed persistence harness or independently
+   valid test authorization identities, never one consumed authorization twice;
+6. source-race testing yields one DB success and one bounded duplicate
+   independently of the same-authorization `O_EXCL` contention test;
 7. confirmation/posting state is unchanged and inventory/stock row counts and
    bounded fingerprints are unchanged;
 8. reader, posting-only, and unrelated roles cannot create candidates, while the
