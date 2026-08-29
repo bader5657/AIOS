@@ -91,3 +91,23 @@ artifact provisioning, Project Owner-approved real input, retained evidence,
 and a separately published first-write authority. These do not change the
 dominant class because execution cannot be attempted until secret readiness and
 the ephemeral caller are independently resolved.
+
+## Frozen post-merge sequence and current gate
+
+The complete sequence is seven distinct governed steps in exactly this order:
+
+1. **Resolve runtime secret / caller prerequisites.**
+2. **Govern and provision filesystem prerequisites.**
+3. **Govern and build the ephemeral one-shot harness.**
+4. **Select and approve real retained evidence and trusted business facts.**
+5. **Publish a separate first-production-write authority.**
+6. **Independently review and merge that first-write authority.**
+7. **Execute exactly one bounded production write.**
+
+Classification `D` means Step 1 is the current unresolved step. It does not
+absorb or make optional Steps 2–7. No step may be collapsed, skipped, reordered,
+or implicitly combined. Each step requires its own completion evidence and
+governance boundary. If a step is incomplete or blocked, stop before advancing;
+there is no implicit conditional authorization. After this PR merges, the next
+official action is Step 1 only—not filesystem provisioning, harness creation,
+input selection, authority publication, authority review, or execution.

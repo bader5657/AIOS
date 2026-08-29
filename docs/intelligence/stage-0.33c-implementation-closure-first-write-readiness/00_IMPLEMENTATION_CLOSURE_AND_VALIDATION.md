@@ -75,3 +75,23 @@ connector, and persistence counts are zero for those negative cases.
 
 This closes coding and isolated validation only. It neither publishes nor
 approves a first-write authority. Production candidate activation remains off.
+
+## Frozen post-merge sequence
+
+After this documentation PR is independently approved and merged, progression
+is frozen as seven distinct governed steps in exactly this order:
+
+1. **Resolve runtime secret / caller prerequisites.**
+2. **Govern and provision filesystem prerequisites.**
+3. **Govern and build the ephemeral one-shot harness.**
+4. **Select and approve real retained evidence and trusted business facts.**
+5. **Publish a separate first-production-write authority.**
+6. **Independently review and merge that first-write authority.**
+7. **Execute exactly one bounded production write.**
+
+No step may be collapsed, skipped, reordered, or implicitly combined with any
+other step. Each step requires its own completion evidence and governance
+boundary. If any step is incomplete or blocked, progression stops before the
+next step; there is no implicit or conditional authorization. The current next
+official action after this PR merges is Step 1 only. No first-write authority is
+created here, and production candidate activation remains unauthorized.

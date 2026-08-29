@@ -108,6 +108,58 @@ Project Owner approval remains separately required for real business input,
 first-write authorization, and privileged filesystem provisioning. Publication
 of this readiness package is none of those approvals.
 
+## Exact seven-step post-merge sequence
+
+Progression is frozen as seven distinct governed steps in exactly this order:
+
+1. **Resolve runtime secret / caller prerequisites.** Establish, without
+   exposing secret values, the runtime Unix identity, runtime DB role, writer DB
+   role, credential-mechanism availability, candidate DB secret metadata
+   readiness, and caller execution-context requirements. This step performs no
+   filesystem provisioning, harness creation, or production DB write.
+2. **Govern and provision filesystem prerequisites.** Under a separate
+   provisioning authority, establish the required safe, real, non-symlink path
+   components beneath
+   `/opt/aios/runtime/intelligence/production-candidate-create/stage-0.33c/`,
+   including the eventual authorization-file parent and consumed directory,
+   with frozen owner, group, mode, and exact-runtime write capability. Do not
+   create an active `authorization.json`; this step grants no write authority.
+3. **Govern and build the ephemeral one-shot harness.** Use a separate
+   governance, implementation, and review boundary. The harness must be
+   ephemeral, one-shot, and non-permanent; must invoke only the merged
+   `controlled_create_review_candidate`; and must not be HTTP, Telegram,
+   Universal Ingestion automatic wiring, a scheduler, or agent-autonomous. This
+   step selects no real input and executes no production write.
+4. **Select and approve real retained evidence and trusted business facts.** Bind
+   a real retained ingestion manifest/reference and SHA-256, and obtain Project
+   Owner approval for supplier, document, timestamp, item-line, quantity, and
+   governed-unit facts. Synthetic production data remains prohibited. This step
+   creates no write authority.
+5. **Publish a separate first-production-write authority.** Only after Steps 1–4
+   independently complete, publish an authority for exactly one attempt binding
+   the exact authorization ID, operator, retained-evidence SHA, trusted-facts
+   SHA, harness identity/hash, source/main commit, runtime Unix identity, DB
+   runtime/writer roles, transaction contract, expected receipt `+1`, items
+   `+N`, `NEEDS_REVIEW`, zero confirmation/posting/inventory/stock effects,
+   evidence requirements, and no retry. Publication does not execute a write.
+6. **Independently review and merge that first-write authority.** Require fresh
+   independent PASS, unchanged authority HEAD, merge, source synchronization,
+   and every immediate activation gate. Publication alone is inactive, and no
+   production write occurs during review.
+7. **Execute exactly one bounded production write.** Only after Steps 1–6 PASS,
+   execute one governed candidate-create attempt. There is no retry, second
+   authorization reuse, broad production activation, confirmation, posting,
+   inventory mutation, or stock mutation.
+
+Combining Step 1+2, Step 2+3, Step 3+4, Step 4+5, Step 5+6, or Step 6+7 is
+explicitly prohibited. No other collapse, skip, reorder, or implicit combination
+is permitted. Every step has its own completion evidence and governance
+boundary. If any step is incomplete or blocked: **STOP**. Do not advance, and do
+not infer conditional authority or use “continue if practical” discretion.
+
+Classification `D. RUNTIME_SECRET_OR_CALLER_PREREQUISITE_REQUIRED` is preserved:
+Step 1 is the current unresolved step. Steps 2–7 remain mandatory and separate.
+
 ## Safety statement and next step
 
 During this closure: production PostgreSQL contact `NO`; production DML `NO`;
@@ -115,7 +167,8 @@ production authorization creation `NO`; consumed-root provisioning `NO`;
 candidate creation `NO`; `runtime.env` modification `NO`; service restart `NO`;
 Telegram change `NO`; Universal Ingestion change `NO`; activation `NO`.
 
-The next official action is independent review of this documentation PR, then
-resolution of the classified runtime secret/caller prerequisites and other
-listed prerequisites. Only afterward may a separate first-production-write
-authority PR be proposed.
+The immediate action is fresh independent review of this remediated documentation
+PR. If and only if PR #264 is approved and merged unchanged, the next official
+action is exactly Step 1—resolve runtime secret / caller prerequisites. Do not
+jump to Steps 2–7. No first-write authority is created and production candidate
+activation remains unauthorized.
