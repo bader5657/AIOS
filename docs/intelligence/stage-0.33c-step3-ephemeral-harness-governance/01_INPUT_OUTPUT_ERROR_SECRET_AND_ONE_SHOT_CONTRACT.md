@@ -243,61 +243,84 @@ one call. No retry, loop, batch, fallback, recursion, or second input exists.
 
 ## Repository-grounded error inventory and disjoint exit mapping
 
-The current callable can expose these bounded repository families:
+The callable-facing inventory is exactly 24 stable codes: 8
+`CandidateCreateControlFailureCode`, 7 `CandidateInputFailureCode`, and 9
+`ReviewFailureCode`. The exact mapping is:
 
-- `CandidateCreateControlError` from the authorization/consumption layer, with
-  exactly `AUTHORIZATION_DISABLED`, `AUTHORIZATION_INVALID`,
-  `AUTHORIZATION_EXPIRED`, `AUTHORIZATION_ACTOR_INVALID`,
-  `AUTHORIZATION_BINDING_INVALID`, `AUTHORIZATION_CONSUMED`,
-  `AUTHORIZATION_CONSUMPTION_STATE_INVALID`, and
-  `AUTHORIZATION_DURABILITY_FAILED`.
-- `CandidateInputError` from retained-ingestion/trusted-facts mapping, with
-  exactly `INVALID_INGESTION_EVIDENCE`, `RETAINED_MANIFEST_INVALID`,
-  `TRUSTED_FACTS_INVALID`, `LIMIT_EXCEEDED`, `DECIMAL_POLICY_INVALID`,
-  `PACKAGING_FORMULA_INVALID`, and `ID_GENERATION_INVALID`.
-- `ReviewApplicationError` from review orchestration, with every currently
-  defined `ReviewFailureCode`: `ACTOR_REQUIRED`, `ACTOR_INVALID`,
-  `ACTOR_UNAUTHORIZED`, `SOURCE_IDENTITY_INVALID`,
-  `SOURCE_IDENTITY_CONFLICT`, `INVALID_REVIEW_REQUEST`,
-  `CANDIDATE_OPERATION_FAILED`, `INTERNAL_FAILURE`, and
-  `SOURCE_ACTIVE_RECEIPT_EXISTS`.
+| Exception class | Exact enum/code | Origin | Semantic category and repository meaning | Exit |
+|---|---|---|---|---:|
+| `CandidateCreateControlError` | `AUTHORIZATION_DISABLED` | CALLABLE | authorization/activation rejected: artifact is not enabled for one request | `10` |
+| `CandidateCreateControlError` | `AUTHORIZATION_EXPIRED` | CALLABLE | authorization/activation rejected: current time is outside the valid window | `10` |
+| `CandidateCreateControlError` | `AUTHORIZATION_CONSUMED` | CALLABLE | authorization already consumed: a safe existing consumption marker proves prior use | `20` |
+| `CandidateCreateControlError` | `AUTHORIZATION_INVALID` | CALLABLE | invalid authorization state: artifact, boundary, clock, path, or schema is malformed/unsafe | `30` |
+| `CandidateCreateControlError` | `AUTHORIZATION_ACTOR_INVALID` | CALLABLE | invalid authorization state: operator claim is malformed | `30` |
+| `CandidateCreateControlError` | `AUTHORIZATION_BINDING_INVALID` | CALLABLE | invalid authorization state: request/evidence/facts binding is invalid | `30` |
+| `CandidateCreateControlError` | `AUTHORIZATION_CONSUMPTION_STATE_INVALID` | CALLABLE | invalid authorization state: consumption directory or marker state is unsafe | `30` |
+| `CandidateCreateControlError` | `AUTHORIZATION_DURABILITY_FAILED` | CALLABLE | authorization state/claim unusable: marker create/write/fsync durability failed before the application call | `30` |
+| `CandidateInputError` | `INVALID_INGESTION_EVIDENCE` | CALLABLE | input/business validation: ingestion evidence state is invalid | `40` |
+| `CandidateInputError` | `RETAINED_MANIFEST_INVALID` | CALLABLE | input/business validation: retained manifest cannot be safely validated | `40` |
+| `CandidateInputError` | `TRUSTED_FACTS_INVALID` | CALLABLE | input/business validation: trusted facts violate their DTO/domain rules | `40` |
+| `CandidateInputError` | `LIMIT_EXCEEDED` | CALLABLE | input/business validation: a governed bound is exceeded | `40` |
+| `CandidateInputError` | `DECIMAL_POLICY_INVALID` | CALLABLE | input/business validation: a decimal violates finite/precision/scale policy | `40` |
+| `CandidateInputError` | `PACKAGING_FORMULA_INVALID` | CALLABLE | input/business validation: packaging quantities do not reconcile | `40` |
+| `CandidateInputError` | `ID_GENERATION_INVALID` | CALLABLE | input/business validation: generated candidate/item identity is invalid | `40` |
+| `ReviewApplicationError` | `ACTOR_REQUIRED` | CALLABLE | input/business/review validation: required actor context is absent | `40` |
+| `ReviewApplicationError` | `ACTOR_INVALID` | CALLABLE | input/business/review validation: actor context is malformed | `40` |
+| `ReviewApplicationError` | `ACTOR_UNAUTHORIZED` | CALLABLE | input/business/review validation: actor is not authorized as candidate creator | `40` |
+| `ReviewApplicationError` | `SOURCE_IDENTITY_INVALID` | CALLABLE | input/business/review validation: retained source identity is invalid or unavailable | `40` |
+| `ReviewApplicationError` | `SOURCE_IDENTITY_CONFLICT` | CALLABLE | input/business/review validation: request and retained source identities conflict | `40` |
+| `ReviewApplicationError` | `INVALID_REVIEW_REQUEST` | CALLABLE | input/business/review validation: review request/context fails stable request validation | `40` |
+| `ReviewApplicationError` | `CANDIDATE_OPERATION_FAILED` | CALLABLE | controlled application/domain/persistence failure: bounded candidate operation failed | `50` |
+| `ReviewApplicationError` | `INTERNAL_FAILURE` | CALLABLE | controlled application/domain/persistence failure: application boundary quarantined an internal failure | `50` |
+| `ReviewApplicationError` | `SOURCE_ACTIVE_RECEIPT_EXISTS` | CALLABLE | controlled domain/persistence failure: source already has an active receipt | `50` |
+| harness-local classification | `HARNESS_OUTPUT_OR_EVIDENCE_DURABILITY_FAILURE` | HARNESS | canonical result serialization/size fallback, result/evidence write, flush, fsync, or finalization failure | `60` |
+| harness-local classification | `HARNESS_INTERNAL_FAILURE` | HARNESS | unexpected harness boundary/internal failure, including an exception escaping the callable outside the governed inventory | `70` |
 
-`ReviewApplicationError.candidate_code`, when present, is a current exact
-`MaterialReceiptFailureCode`. The current create path can attach
+`AUTHORIZATION_DURABILITY_FAILED` originates in `_claim`: an `OSError` while
+creating, writing, closing, or fsyncing the authorization consumption marker or
+its directory is converted to this exact control code. It is callable-facing
+and prevents a usable durable authorization claim; it is not harness result or
+evidence durability. It therefore maps to
+`AUTHORIZATION_STATE_INVALID_OR_UNUSABLE` exit 30. No callable code maps to 60
+or 70.
+
+`ReviewApplicationError.candidate_code`, when present, is an exact current
+`MaterialReceiptFailureCode`; it refines the bounded failure but does not alter
+the exit selected by `ReviewFailureCode`. The current create path can attach
 `DATABASE_UNAVAILABLE`, `DATA_INTEGRITY_ERROR`, or
-`SOURCE_ACTIVE_RECEIPT_EXISTS`; all map through their enclosing review code.
-The terminal adapter quarantines raw `MaterialReceiptError` and all other
-repository exceptions, so raw persistence exceptions are not callable-facing
-governed types. The callable's exact-request `TypeError` is prevented by DTO
-construction; if it nevertheless escapes the invocation boundary it is
-unexpected and maps to 70.
+`SOURCE_ACTIVE_RECEIPT_EXISTS`. The terminal adapter quarantines raw
+`MaterialReceiptError` and other repository exceptions, so no raw persistence
+exception is a governed callable-facing type.
+
+The frozen exit taxonomy is:
 
 | Code | Exact classification/source |
 |---:|---|
-| `0` | `SUCCESS`: callable returned `ReceiptForReview` and finalization succeeded |
-| `10` | `AUTHORIZATION_OR_ACTIVATION_REJECTED`: exact `AUTHORIZATION_DISABLED` or `AUTHORIZATION_EXPIRED` only |
-| `20` | `AUTHORIZATION_ALREADY_CONSUMED`: exact `AUTHORIZATION_CONSUMED` only |
-| `30` | `AUTHORIZATION_STATE_INVALID`: exact `AUTHORIZATION_INVALID`, `AUTHORIZATION_ACTOR_INVALID`, `AUTHORIZATION_BINDING_INVALID`, or `AUTHORIZATION_CONSUMPTION_STATE_INVALID` only |
-| `40` | `INPUT_VALIDATION_REJECTED`: harness parser/schema/field/decimal/canonical rejection; pre-call DTO-construction `TypeError`/`ValueError`; or `CandidateInputError` with any of its seven codes enumerated above |
-| `50` | `CONTROLLED_APPLICATION_FAILURE`: `ReviewApplicationError` with any of the nine `ReviewFailureCode` values enumerated above; a valid optional `candidate_code` does not change this exit |
-| `60` | `HARNESS_OUTPUT_OR_DURABILITY_FAILURE`: exact `AUTHORIZATION_DURABILITY_FAILED`, or harness-local stdout serialization, output-size, or finalization/durability failure |
-| `70` | `HARNESS_INTERNAL_FAILURE`: unexpected sanitized internal exception |
+| `0` | `SUCCESS`: callable returned `ReceiptForReview` and harness finalization succeeded |
+| `10` | `AUTHORIZATION_OR_ACTIVATION_REJECTED`: the two exact callable codes shown above |
+| `20` | `AUTHORIZATION_ALREADY_CONSUMED`: the one exact callable code shown above |
+| `30` | `AUTHORIZATION_STATE_INVALID_OR_UNUSABLE`: the five exact callable codes shown above |
+| `40` | `INPUT_OR_BUSINESS_VALIDATION_REJECTED`: all seven candidate-input codes and the six exact review validation codes shown above, plus deterministic harness parser/schema/field/decimal/canonical and pre-call DTO-construction rejection |
+| `50` | `CONTROLLED_APPLICATION_DOMAIN_OR_PERSISTENCE_FAILURE`: the three exact review application/domain/persistence codes shown above |
+| `60` | `HARNESS_OUTPUT_OR_EVIDENCE_DURABILITY_FAILURE`: harness-origin only; never emitted for a callable exception/code |
+| `70` | `HARNESS_INTERNAL_FAILURE`: harness-origin unexpected boundary only; never a claim that an unknown exception is a known callable failure |
 
-Precedence is specific stable code first, stable exception class second, then
-harness fallback: pre-call deterministic input failures -> 40; exact
-`CandidateCreateControlError.code` -> 10/20/30/60; exact
-`CandidateInputError.code` -> 40; exact `ReviewApplicationError.code` -> 50;
-harness output/finalization -> 60; every other exception -> 70. Mapping stops
-once. No message, substring, `repr`, traceback, or unfrozen type is used.
+Mapping precedence is: (1) exact stable enum/code; (2) exact stable exception
+class only where no finer governed code exists; (3) an explicit known
+harness-local failure classification; and (4) every other unexpected harness
+boundary exception -> 70. No message, substring, regex, `repr`, traceback, or
+human-text inference is permitted. If the callable raises an exception outside
+the 24-code governed inventory, the harness converts only the boundary event to
+a fixed sanitized `HARNESS_INTERNAL_FAILURE` result at exit 70; it does not map
+or describe that exception as a known callable/domain failure and emits no raw
+exception text.
 
-Exhaustiveness follows by enum cardinality: all 8 control codes map once
-(2 to 10, 1 to 20, 4 to 30, 1 to 60); all 7 candidate-input codes map once to
-40; all 9 review codes map once to 50. Consumed is code 20 only and cannot be
-invalid-state code 30; parser/DTO and `CandidateInputError` paths are code 40,
-whereas application/repository quarantine is `ReviewApplicationError` code 50;
-unknown exceptions alone reach 70. Harness-local parsing occurs before the
-call, while output/durability occurs after it, so neither is reclassified as a
-controlled callable failure.
+Cardinality proof: the callable inventory and mapping both contain exactly
+`8 + 7 + 9 = 24` codes. Exit counts are 10: 2, 20: 1, 30: 5, 40: 13
+(7 candidate-input + 6 review), 50: 3, 60: 0 callable, and 70: 0 callable;
+`2 + 1 + 5 + 13 + 3 = 24`. Missing callable codes: 0. Duplicate callable
+mappings: 0. Future-selected mappings: 0. Harness-local classifications are
+separate and do not change callable cardinality.
 
 ## Stdout, stderr, and sanitization
 

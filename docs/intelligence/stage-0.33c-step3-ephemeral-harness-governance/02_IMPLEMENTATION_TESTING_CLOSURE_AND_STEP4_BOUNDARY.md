@@ -56,13 +56,22 @@ for governed outcomes; and catastrophic stderr is the fixed <=42-byte line.
 
 Every source maps to exactly one disjoint code 0, 10, 20, 30, 40, 50, 60, or 70
 using exact exception type and bounded code, never message text. Tests exhaust
-all 8 `CandidateCreateControlFailureCode`, all 7 `CandidateInputFailureCode`,
-and all 9 `ReviewFailureCode` values frozen in document 01. They prove the
-specific-code/type/fallback precedence, authorization activation -> 10,
-consumed -> 20, invalid state -> 30, schema/DTO/candidate-input -> 40, every
-current `ReviewApplicationError` code -> 50, authorization or harness output
-durability -> 60, and only unclassifiable exceptions -> 70. Oversized result
-finalization becomes a fixed bounded code-60 result; no partial JSON is emitted.
+the document-01 table: all 8 `CandidateCreateControlFailureCode`, all 7
+`CandidateInputFailureCode`, and all 9 `ReviewFailureCode` values. Callable
+counts must be 10:2, 20:1, 30:5, 40:13, 50:3, 60:0, and 70:0, totaling 24
+with zero missing, duplicate, or future-selected mappings.
+
+Tests specifically prove `AUTHORIZATION_DURABILITY_FAILED` is callable-origin
+exit 30, all seven candidate-input codes and the six review validation codes
+(`ACTOR_REQUIRED`, `ACTOR_INVALID`, `ACTOR_UNAUTHORIZED`,
+`SOURCE_IDENTITY_INVALID`, `SOURCE_IDENTITY_CONFLICT`, and
+`INVALID_REVIEW_REQUEST`) are exit 40, and only
+`CANDIDATE_OPERATION_FAILED`, `INTERNAL_FAILURE`, and
+`SOURCE_ACTIVE_RECEIPT_EXISTS` are review-code exit 50. Exit 60 is
+harness-origin output/evidence durability only. An exception escaping the
+callable outside the governed inventory becomes a sanitized harness boundary
+exit 70, never a claimed known callable failure. Oversized result finalization
+becomes a fixed bounded code-60 result; no partial JSON is emitted.
 
 Decimal tests cover each named field independently and jointly: JSON strings
 only; exact grammar; finite/range/precision/scale checks; no exponent, leading

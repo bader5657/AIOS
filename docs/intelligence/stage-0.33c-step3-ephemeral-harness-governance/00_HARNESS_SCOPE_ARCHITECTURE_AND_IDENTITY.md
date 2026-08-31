@@ -78,8 +78,12 @@ valid limits `MAX_SEMANTIC_INPUT_BYTES = 4,255,677` and
 Callable error governance is likewise repository-grounded now: all 8 current
 `CandidateCreateControlFailureCode` values, all 7 current
 `CandidateInputFailureCode` values, and all 9 current `ReviewFailureCode`
-values map exhaustively by exact code/type. No unfrozen exception,
-message-text matching, or raw persistence exception mapping remains.
+values map exhaustively by exact code/type. Callable failures map only to exits
+10/20/30/40/50: authorization consumption durability is callable-origin exit
+30; six stable review validation codes are exit 40; and three remaining review
+application/domain/persistence codes are exit 50. Exits 60 and 70 are
+harness-origin only. No unfrozen exception, message-text matching, or raw
+persistence exception mapping remains.
 
 Repository truth is that the callable returns `ReceiptForReview`. The harness
 may report only its explicitly allowlisted safe subset and deterministic
