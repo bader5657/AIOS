@@ -175,7 +175,7 @@ failed delivery with `invalid_envelope`; and the longest jointly legal boolean
 state. Summing the subtotals gives
 `100 + 537 + 1,147 + 103,000 + 4,100,000 + 22,000 + 25,500 + 1,500 + 1,392 + 501 = 4,255,677`.
 Therefore `MAX_SEMANTIC_INPUT_BYTES = 4,255,677` and
-`MAX_TRANSPORT_INPUT_BYTES = 4,255,678`, the latter adding exactly one LF. The
+`MAX_TRANSPORT_INPUT_BYTES = 4,255,678`, the latter adding exactly one LF.
 
 Validation order is frozen: raw byte-size cap; UTF-8 decode; exactly one JSON
 document parse; duplicate-key rejection; closed-schema validation; field
