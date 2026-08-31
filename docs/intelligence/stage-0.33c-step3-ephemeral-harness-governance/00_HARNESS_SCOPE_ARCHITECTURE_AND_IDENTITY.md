@@ -2,26 +2,27 @@
 
 ## Authority and source gate
 
-This documentation-only package records Project Owner approval to publish Step
-3 governance and nothing else. Its source gate was clean at `HEAD == main ==
-origin/main == 616e65894fd1d08e08fd3750b5f1691b88268142`. Step 1 and
-Step 2 are `CLOSED / VERIFIED`; PR #271 is `MERGED / VERIFIED`; Step 3 is
-current; Step 4 is not authorized.
+This documentation-only package governs Step 3 and nothing else. Its reviewed
+remediation baseline is PR #272 commit
+`10b6bbfd9daef978a5c73a735677a36a61f9b928`. Step 1 and Step 2 are `CLOSED /
+VERIFIED`; Step 3 requires this governance remediation and later implementation
+review; Step 4 is **NOT AUTHORIZED**.
 
-This publication does not implement or invoke a harness, select input, create
-`authorization.json`, create first-write authority, contact PostgreSQL, create a
-candidate, or activate traffic.
+This publication does not implement or invoke a harness, select real supplier,
+document, item, or retained-evidence values, create `authorization.json`, create
+first-write authority, contact PostgreSQL, create a candidate, activate traffic,
+or merge PR #272.
 
-## Frozen architecture
+## Frozen architecture and path
 
 The future caller is one ephemeral Python process with at most one invocation
 of the controlled callable. It is non-daemon, non-service, and not permanently
 installed as a CLI. It is not an HTTP or Telegram adapter, cron job, scheduler,
-agent, tool registration, background worker, or Universal Ingestion callback.
+agent/tool registration, background worker, or Universal Ingestion callback.
 It has no resident state, polling, loop, retry, batch, fallback, or second-input
 surface. After one bounded result or failure it exits.
 
-The exact future source path is:
+The exact future source path remains:
 
 `core/app/material_receipts/stage033c_one_shot_harness.py`
 
@@ -31,57 +32,67 @@ It may be executed only from a separately reviewed immutable checkout as:
 /opt/aios/runtime/venv/bin/python -m core.app.material_receipts.stage033c_one_shot_harness --input-envelope <ABSOLUTE_PATH> --expected-input-sha256 <LOWERCASE_SHA256>
 ```
 
-This command shape is an ephemeral module invocation, not a registered console
-script. The two placeholders freeze the interface without selecting values.
-The input path and digest must later be bound by separate governance; interactive
-stdin, inline JSON, environment-selected input, and additional arguments are
+This is an ephemeral module invocation, not a registered console script. Input
+path and digest remain placeholders for later governance; interactive stdin,
+inline JSON, environment-selected input, and additional arguments are
 prohibited.
 
-## Runtime and source identity
+## Runtime, source, and first-write identity
 
 Future execution must use Unix identity `aiosadmin:aiosadmin`; root execution
 and sudo inside or around the harness are prohibited. The exact interpreter is
-`/opt/aios/runtime/venv/bin/python`, and both runtime source/import root and
-working directory are `/opt/aios-src`. Before execution, governance must bind
-and verify the exact reviewed repository commit and require a clean,
-Stage-0.33C-compatible checkout.
+`/opt/aios/runtime/venv/bin/python`, and runtime source/import root and working
+directory are `/opt/aios-src`. Governance must bind and verify a clean reviewed
+repository commit before execution.
+
+Step 3 can provide an exact binding set of repository commit, harness-source
+SHA-256, Python interpreter identity/path and version, canonical input-envelope
+SHA-256, externally computed bounded result-envelope SHA-256, and controlled
+callable symbol
+`core.app.material_receipts.controlled_candidate_create.controlled_create_review_candidate`.
+It does not claim that harness output alone binds authorization internals,
+consumption evidence, or DB state; those are later execution evidence.
 
 The harness imports the application capability only through
 `core.app.material_receipts.controlled_candidate_create` and calls only
-`controlled_create_review_candidate`. Imports needed solely to reconstruct the
-exact governed DTO value types and bounded error enums are not alternate
-application capabilities. Direct repository construction, direct SQL,
-connection injection, authorization-function invocation, or calls to
-`create_review_candidate_from_ingestion` are prohibited.
+`controlled_create_review_candidate`. Imports solely for exact DTO construction
+and bounded error enums are not alternate capabilities. Direct repository use,
+direct SQL or DB access, connection injection, authorization-function calls,
+consumed-marker manipulation, or authorization-file mutation are prohibited.
 
-The request is exactly `ControlledCandidateCreateRequest` with its two frozen
-fields: an exact `IngestionResult` and an exact `TrustedReceiptFacts`. Actor
-reference, candidate status, DB connection, credential, authorization data,
-retry policy, and repository are not request fields and cannot be supplied by
-the harness.
+The request remains exactly `ControlledCandidateCreateRequest`, containing one
+exact `IngestionResult` and one exact `TrustedReceiptFacts`. Its closed input
+projection is frozen in `01_INPUT_OUTPUT_ERROR_SECRET_AND_ONE_SHOT_CONTRACT.md`.
+It carries only a retained manifest reference and bounded facts: no raw/base64
+source content, arbitrary metadata, actor, status, DB connection, credential,
+authorization payload, retry policy, or repository.
+
+Repository truth is that the callable returns `ReceiptForReview`. The harness
+may report only its explicitly allowlisted safe subset and deterministic
+harness-local state. It may not infer `AuthorizationClaim.correlation_id`,
+consumption timestamp, authorization/path state, hidden actor claims,
+transaction/repository internals, DB details, row effects, or internal evidence
+events. The callable return type and every existing application/authorization
+interface remain unchanged. Any expansion requires separate governance.
 
 ## Authorization, credential, and marker boundary
 
 The harness never creates, installs, edits, removes, chmods, or chowns
-`authorization.json`. It relies only on the merged Stage 0.33C callable's fixed
-authorization boundary. When authorization is absent or invalid, the controlled
-call must fail closed before repository/DB capability. Installation remains a
+`authorization.json`. It relies only on the existing controlled callable's
+fixed authorization boundary. When authorization is absent or invalid, the
+callable fails closed before repository/DB capability. Installation remains a
 later first-write-authority action.
 
-The future artifact remains `root:aiosadmin`, `0440`, so `aiosadmin` can rely on
-the merged reader without elevated execution. The harness must not touch the
-`consumed` directory or create/read consumption markers directly; only the
-merged authorization implementation owns marker state.
-
-The existing governed environment mechanism may make
-`AIOS_MATERIAL_RECEIPT_CANDIDATE_DB_PASSWORD` available to the repository layer.
-The harness must not read, copy, print, accept, serialize, hash, or persist that
-value. It must not inspect `runtime.env` or dump its environment.
+The future artifact remains `root:aiosadmin`, `0440`; this package creates no
+artifact. The harness must not touch the `consumed` directory or create/read
+markers directly. Only the merged authorization implementation owns marker
+state. The harness must not read, copy, print, accept, serialize, hash, or
+persist `AIOS_MATERIAL_RECEIPT_CANDIDATE_DB_PASSWORD`, inspect `runtime.env`, or
+dump its environment.
 
 ## No permanent registration
 
-Implementation review must statically prove no registration or reference is
-added to `setup.py`, `setup.cfg`, `pyproject.toml` entrypoints, systemd, cron,
-Telegram, HTTP routing, schedulers, agent/tool registries, background workers,
-or Universal Ingestion. No production installation path such as
-`/usr/local/bin` is permitted.
+Implementation review must prove that nothing is added to packaging entrypoints,
+systemd, cron, Telegram, HTTP routing, schedulers, agent/tool registries,
+background workers, Universal Ingestion, or `/usr/local/bin`. No permanent
+registration, service, installation, or production activation is authorized.
