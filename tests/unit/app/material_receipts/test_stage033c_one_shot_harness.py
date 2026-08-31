@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
+import threading
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -197,6 +200,82 @@ async def test_irreversible_claim_rejects_second_attempt_before_callable(monkeyp
     assert first_code == 0
     assert second_code == 70
     assert decoded(second_payload)["error_classification"] == "HARNESS_INTERNAL_FAILURE"
+    assert harness._state == harness._CLAIMED
+    assert calls == 1
+
+
+def test_atomic_claim_allows_exactly_one_concurrent_callable(monkeypatch) -> None:
+    calls = 0
+    calls_lock = threading.Lock()
+    start = threading.Barrier(4)
+
+    async def fake(_request):
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        return result()
+
+    def invoke(raw: bytes, digest: str) -> int:
+        start.wait(timeout=5)
+        code, _ = asyncio.run(harness._execute_transport(raw, digest))
+        return code
+
+    monkeypatch.setattr(harness, "controlled_create_review_candidate", fake)
+    raw, digest = transport(valid_value())
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        codes = list(executor.map(lambda _: invoke(raw, digest), range(4)))
+
+    assert calls == 1
+    assert codes.count(0) == 1
+    assert codes.count(70) == 3
+    assert harness._state == harness._CLAIMED
+
+
+def test_paused_winner_rejects_loser_before_callable(monkeypatch) -> None:
+    calls = 0
+    winner_entered = threading.Event()
+    release_winner = threading.Event()
+
+    async def fake(_request):
+        nonlocal calls
+        calls += 1
+        winner_entered.set()
+        assert release_winner.wait(timeout=5)
+        return result()
+
+    monkeypatch.setattr(harness, "controlled_create_review_candidate", fake)
+    raw, digest = transport(valid_value())
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        winner = executor.submit(asyncio.run, harness._execute_transport(raw, digest))
+        assert winner_entered.wait(timeout=5)
+        loser = executor.submit(asyncio.run, harness._execute_transport(raw, digest))
+        loser_code, _ = loser.result(timeout=5)
+        assert calls == 1
+        assert loser_code == 70
+        release_winner.set()
+        winner_code, _ = winner.result(timeout=5)
+
+    assert winner_code == 0
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_winner_does_not_release_claim(monkeypatch) -> None:
+    calls = 0
+
+    async def fail(_request):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("password=must-not-escape")
+
+    monkeypatch.setattr(harness, "controlled_create_review_candidate", fail)
+    raw, digest = transport(valid_value())
+    winner_code, winner_payload = await harness._execute_transport(raw, digest)
+    loser_code, _ = await harness._execute_transport(raw, digest)
+
+    assert winner_code == 70
+    assert b"password=" not in winner_payload
+    assert loser_code == 70
     assert harness._state == harness._CLAIMED
     assert calls == 1
 
@@ -474,6 +553,45 @@ class _Sink:
 
     def flush(self) -> None:
         self.flushes += 1
+
+
+def test_cancelled_error_is_exit_70_and_secret_safe(tmp_path, monkeypatch) -> None:
+    calls = 0
+    value = valid_value()
+    secret_markers = ["password=", "postgresql://", "Bearer", "sk-", "token="]
+    value["trusted_receipt_facts"]["supplier_name"] = " ".join(secret_markers)
+    raw, digest = transport(value)
+    path = tmp_path / "input.json"
+    path.write_bytes(raw)
+    output = _Sink()
+    error = _Sink()
+
+    async def cancel(_request):
+        nonlocal calls
+        calls += 1
+        raise asyncio.CancelledError("password=cancel-secret")
+
+    monkeypatch.setattr(harness, "controlled_create_review_candidate", cancel)
+    monkeypatch.setattr(harness.sys, "stdout", SimpleNamespace(buffer=output))
+    monkeypatch.setattr(harness.sys, "stderr", SimpleNamespace(buffer=error))
+    code = harness.main(
+        ["--input-envelope", str(path), "--expected-input-sha256", digest]
+    )
+
+    assert code == 70
+    assert calls == 1
+    assert len(output.writes) == 1
+    payload = output.writes[0]
+    assert decoded(payload)["error_classification"] == "HARNESS_INTERNAL_FAILURE"
+    assert payload.endswith(b"\n") and payload.count(b"\n") == 1
+    assert len(payload) <= 4096
+    assert error.writes == []
+    assert b"Traceback" not in payload
+    assert b"CancelledError" not in payload
+    assert b"cancel-secret" not in payload
+    for marker in secret_markers:
+        assert marker.encode() not in payload
+    assert harness._state == harness._CLAIMED
 
 
 def test_main_writes_once_and_governed_stderr_is_empty(tmp_path, monkeypatch) -> None:

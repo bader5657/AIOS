@@ -19,8 +19,8 @@ commit cannot truthfully contain its own identifier.
 |---|---|
 | Harness | `core/app/material_receipts/stage033c_one_shot_harness.py` |
 | Unit tests | `tests/unit/app/material_receipts/test_stage033c_one_shot_harness.py` |
-| Harness SHA-256 | `9e78222b3f8611f40b9440b2b91a9f9bc7c4e3e3c5ef424b37c42c414623f427` |
-| Unit-test SHA-256 | `a1a041874265959f3d98762750567949aa50d7f6a3cbf4fc6aef7602f9349419` |
+| Harness SHA-256 | `b9fc9fb22724184696eabf02525bcc0a626bdff5ce3943ed31ba2e21130f5cad` |
+| Unit-test SHA-256 | `da47bc9b9371c7b6f7188e0305aa890f10cadc52db809eb726c905d85542e5de` |
 | Controlled callable | `core.app.material_receipts.controlled_candidate_create.controlled_create_review_candidate` |
 
 Canonical input algorithm identity is UTF-8 JSON with sorted keys,
@@ -37,9 +37,13 @@ only `AIOS_STAGE_0_33C_HARNESS_BOUNDARY_FAILURE\n`, exactly 42 bytes.
 ## One-shot and mapping proof
 
 The private process state starts `UNUSED` and changes irreversibly to `CLAIMED`
-immediately before the sole controlled-call attempt. Invalid input makes zero
-calls. A second attempt after claim is rejected before invocation. There is no
-retry, loop, daemon, batch, fallback invocation, or permanent registration.
+immediately before the sole controlled-call attempt. A process-local
+`threading.Lock` protects only the check-and-claim critical section and is
+released before the callable. Four contending thread callers produce exactly
+one winner and three pre-call losers; a separately paused winner also rejects a
+loser before completion. Invalid input makes zero calls. A failed or cancelled
+winner remains `CLAIMED`, and a later attempt is rejected. There is no retry,
+loop, daemon, batch, fallback invocation, or permanent registration.
 
 All current callable codes are covered exactly once:
 
@@ -53,9 +57,11 @@ All current callable codes are covered exactly once:
 Callable mappings to exits 60 and 70 are zero.
 `AUTHORIZATION_DURABILITY_FAILED` maps to 30 and
 `INVALID_REVIEW_REQUEST` maps to 40. Exit 60 is harness-local output/evidence
-durability only. An exception outside the governed callable inventory is
-sanitized as the harness boundary classification at exit 70; no exception
-message, representation, traceback, input, or secret is reflected.
+durability only. An `asyncio.CancelledError` or an `Exception` outside the
+governed callable inventory is explicitly sanitized as the harness boundary
+classification at exit 70; no exception message, representation, traceback,
+input, or secret is reflected. `SystemExit` and `KeyboardInterrupt` are not
+blanket-caught through `BaseException`.
 
 ## Validation evidence
 
@@ -64,9 +70,9 @@ The canonical runner was
 
 | Validation | Result |
 |---|---|
-| Focused harness unit tests | `66 passed in 1.41s` |
-| Material-receipt regression suite | `329 passed in 1.49s` |
-| Full repository suite | `1458 passed, 116 skipped, 3 warnings, 793 subtests passed in 16.53s` |
+| Focused harness unit tests | `70 passed in 0.55s` |
+| Material-receipt regression suite | `333 passed in 1.13s` |
+| Full repository suite | `1462 passed, 116 skipped, 3 warnings, 793 subtests passed in 17.30s` |
 | Static compile of harness and tests | PASS |
 | `git diff --check` | PASS |
 | Exact new-file scope | PASS: three allowlisted new files after this evidence file; no existing modifications |
@@ -76,7 +82,9 @@ The canonical runner was
 
 Focused tests prove closed schemas, duplicate-key/UTF-8/size/hash rejection,
 canonical decimals without rounding, the jointly valid decimal witness,
-one-shot call count, all 24 error codes, fixed exit 60 and 70 behavior, strict
+atomic four-thread claiming, paused-winner rejection, irreversible failed-winner
+state, explicit secret-safe `CancelledError` exit 70, all 24 error codes, fixed
+exit 60 and 70 behavior, strict
 observable result fields, one-write stdout, fixed catastrophic stderr, and
 adversarial non-reflection for large messages, quotes, backslashes, LF/CRLF,
 tabs, Unicode, controls, password/database/token/private-key markers,

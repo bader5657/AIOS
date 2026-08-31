@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -9,6 +10,7 @@ from pathlib import Path
 import re
 import stat
 import sys
+import threading
 import unicodedata
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -48,6 +50,7 @@ _MANIFEST = re.compile(
 _UNUSED = "UNUSED"
 _CLAIMED = "CLAIMED"
 _state = _UNUSED
+_claim_lock = threading.Lock()
 
 _TOP_FIELDS = frozenset(
     {"schema_version", "ingestion_result", "trusted_receipt_facts"}
@@ -618,11 +621,14 @@ async def _execute_transport(raw: bytes, expected_sha256: str) -> tuple[int, byt
         return 70, _SAFE_EXIT_70
 
     global _state
-    if _state != _UNUSED:
-        return _serialized(70, input_sha256, error="HARNESS_INTERNAL_FAILURE")
-    _state = _CLAIMED
+    with _claim_lock:
+        if _state != _UNUSED:
+            return _serialized(70, input_sha256, error="HARNESS_INTERNAL_FAILURE")
+        _state = _CLAIMED
     try:
         result = await controlled_create_review_candidate(request)
+    except asyncio.CancelledError:
+        return _serialized(70, input_sha256, error="HARNESS_INTERNAL_FAILURE")
     except Exception as exc:
         known = _known_failure(exc)
         if known is None:
@@ -703,9 +709,9 @@ def main(argv: list[str] | None = None) -> int:
             code, payload = 70, _SAFE_EXIT_70
     else:
         try:
-            import asyncio
-
             code, payload = asyncio.run(_execute_transport(raw, expected))
+        except asyncio.CancelledError:
+            code, payload = 70, _SAFE_EXIT_70
         except Exception:
             code, payload = 70, _SAFE_EXIT_70
     try:
