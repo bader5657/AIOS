@@ -8,10 +8,19 @@ created from that exact clean `main`. It adds exactly three files: the harness,
 one unit-test file, and this evidence document. No existing file is modified;
 the optional isolated integration file was not needed.
 
-The implementation commit candidate is the single commit containing this
-three-new-file diff on top of the governance merge. Its final SHA is recorded
-by the implementation PR and supervisor report after the commit is created; a
-commit cannot truthfully contain its own identifier.
+The reviewed implementation history before this evidence-only correction
+contains two commits on top of the governance merge:
+
+| Commit fact | SHA |
+|---|---|
+| Initial implementation commit | `a0d210a1020c9ab5df6f3e00bc2aeb2fadc38c89` |
+| Cancellation/atomic-claim remediation commit | `13a5edb71a68c3c480bc0dfe7d9fa1f75b678c33` |
+| Reviewed implementation HEAD | `13a5edb71a68c3c480bc0dfe7d9fa1f75b678c33` |
+| Reviewed implementation commit count | `2` |
+
+The subsequent evidence-only correction commit cannot truthfully contain its
+own identifier; the implementation PR and supervisor report record that final
+PR HEAD after the correction is committed.
 
 ## Implementation identity
 
