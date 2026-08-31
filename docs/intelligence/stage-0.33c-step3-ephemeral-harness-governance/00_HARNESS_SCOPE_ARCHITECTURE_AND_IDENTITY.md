@@ -67,6 +67,20 @@ It carries only a retained manifest reference and bounded facts: no raw/base64
 source content, arbitrary metadata, actor, status, DB connection, credential,
 authorization payload, retry policy, or repository.
 
+
+The envelope contract in document 01 freezes the only three decimal fields
+(`qty_per_full_colly`, `partial_qty`, and `total_qty`) as canonical JSON
+strings, precision 20 and scale 6, with their repository-specific ranges and
+packaging relationship. It freezes no-rounding normalization and the jointly
+valid limits `MAX_SEMANTIC_INPUT_BYTES = 4,255,677` and
+`MAX_TRANSPORT_INPUT_BYTES = 4,255,678`. These values replace the prior limits.
+
+Callable error governance is likewise repository-grounded now: all 8 current
+`CandidateCreateControlFailureCode` values, all 7 current
+`CandidateInputFailureCode` values, and all 9 current `ReviewFailureCode`
+values map exhaustively by exact code/type. No unfrozen exception,
+message-text matching, or raw persistence exception mapping remains.
+
 Repository truth is that the callable returns `ReceiptForReview`. The harness
 may report only its explicitly allowlisted safe subset and deterministic
 harness-local state. It may not infer `AuthorizationClaim.correlation_id`,

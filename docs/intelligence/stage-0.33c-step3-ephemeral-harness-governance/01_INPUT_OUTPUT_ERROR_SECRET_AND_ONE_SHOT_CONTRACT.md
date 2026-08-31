@@ -76,6 +76,59 @@ existing `TrustedReceiptFacts` bounds. Control/surrogate characters,
 leading/trailing whitespace, blanks, and invalid dates, UUIDs, timestamps, or
 decimals are rejected.
 
+### Frozen decimal transport and grammar
+
+These are all decimal-valued input fields; there is no generic unowned decimal
+category:
+
+| Field | Meaning | Precision | Scale | Minimum | Maximum | Negative | Zero | Occurrences |
+|---|---|---:|---:|---:|---:|---|---|---:|
+| `items[].qty_per_full_colly` | quantity in each full package | 20 | 6 | exclusive `0` when present | `1000000` | NO | NO | 0–500; null exactly when `full_colly_count == 0` |
+| `items[].partial_qty` | unpackaged remainder | 20 | 6 | `0` | `1000000000` | NO | YES | 1–500 |
+| `items[].total_qty` | total received quantity | 20 | 6 | exclusive `0` | `1000000000` | NO | NO | 1–500 |
+
+All three are JSON strings. Let `I = [1-9][0-9]*` and
+`F = [0-9]{0,5}[1-9]`. The sole lexical grammar is
+`0|I|0\.F|I\.F`; the field-specific range, zero rule, precision <= 20,
+and scale <= 6 in the table are additional mandatory predicates. Thus a
+fraction has 1–6 digits and its last digit is nonzero. This grammar prohibits
+negative values, leading zeroes, a leading plus, a bare decimal point,
+trailing fractional zeroes, exponent notation, whitespace, NaN, Infinity,
+hexadecimal, locale separators, and thousands commas. Examples accepted by
+the applicable range are `0`, `1`, `1.5`, `1.25`, and
+`999999999.999999`; examples rejected are `00`, `01`, `+1`, `1.`, `1.0`,
+`1.500000`, `1e3`, `1E3`, `1,000`, and `-1`.
+
+Canonicalization is fully ordered: (1) parse the JSON string to an exact
+`Decimal`; (2) require it to be finite; (3) enforce the field's range and zero
+rule; (4) enforce repository precision and scale; (5) render fixed-point form,
+never exponent form; (6) remove trailing fractional zeroes; (7) remove the
+decimal point when the fraction becomes empty; (8) normalize negative zero to
+`0` before applying the non-negative field rule; and (9) require the result to
+match the grammar and byte-match the input string. No rounding or quantization
+is allowed. More than six fractional digits or precision beyond 20 rejects the
+input.
+
+Exact longest canonical spellings are:
+
+| Field | Longest value example | Characters | JSON bytes including quotes |
+|---|---|---:|---:|
+| `qty_per_full_colly` | `999999.999999` | 13 | 15 |
+| `partial_qty` | `999999999.999999` | 16 | 18 |
+| `total_qty` | `999999999.999999` | 16 | 18 |
+
+Those three independent examples cannot be added to an arbitrary maximum
+`full_colly_count`. The invariant is
+`total_qty == full_colly_count * qty_per_full_colly + partial_qty`; count zero
+requires null per-colly quantity, and `sheet` requires integral quantities.
+The jointly maximal numeric spelling is 48 unquoted characters per item. One
+witness is count `100` (3), per-colly `999999.999999` (13), partial
+`800000000.000001` (16), and total `899999999.999901` (16). It uses unit
+`pack`; choosing the one-byte-longer `sheet` loses more bytes by forcing all
+quantities integral. Counts with 4–7 digits reduce the available per-colly or
+partial spelling so none exceeds 48. Line numbers are unique 1–500, so their
+joint digit count is `9*1 + 90*2 + 401*3 = 1,392`, not `500*3`.
+
 Raw image, PDF, DOC/DOCX, voice/audio, video, spreadsheet, or other document
 bytes; base64 document content; arbitrary binary blobs; full retained-source
 payloads; unbounded free text; and arbitrary metadata maps are prohibited. So
@@ -93,13 +146,42 @@ data, and alternate encodings are rejected. File transport is those bytes plus
 exactly one LF. SHA-256 covers semantic bytes **without LF**. The file must
 byte-match canonical serialization plus LF. Raw input is never echoed.
 
-The exact maximum file size is **4,259,775 bytes**, replacing the prior limit. The
-contract calculation uses 500 items; four 512-character fields per item and two
-128-character receipt fields at four UTF-8 bytes per scalar; every fixed key,
-separator, longest enum, maximal bounded integer, UUID, timestamp, and decimal
-spelling; and one LF. This yields 4,259,774 semantic bytes plus one LF. It cannot
-honestly be low hundreds of KiB: the current DTO permits 500 x 4 x 512 Unicode
-characters. A smaller text contract requires separate governance.
+Canonical text rejects Unicode categories `Cc` and `Cs`, blank strings, and
+leading/trailing whitespace. With `ensure_ascii=False`, an allowed astral
+scalar is the actual worst case at four UTF-8 bytes. A quote or backslash costs
+two bytes after JSON escaping; other permitted BMP scalars cost at most three.
+Control characters cannot occur and therefore contribute no hypothetical
+six-byte `\\uXXXX` expansion. JSON string quotes add two bytes per value.
+
+The exact reproducible maximum is:
+
+| Component | Occurrences | Max characters/value | Max encoded bytes/value | JSON syntax/key overhead | Subtotal |
+|---|---:|---:|---:|---:|---:|
+| top-level fixed fields (`schema_version` value) | 1 | 34 | 36 | 64 (3 keys/colons, 2 commas, outer braces) | 100 |
+| `IngestionResult` fields, jointly valid failed-delivery registered state | 1 object | field-specific | 184 values total | 353 (16 keys/colons, 15 commas, braces) | 537 |
+| `TrustedReceiptFacts` fixed values (two 128-scalar strings, date, timestamp) | 1 object | 128/128/10/27 | 1,069 total | 78 (5 keys/colons including `items`, 4 commas, braces) | 1,147 |
+| per-item fixed structure | 500 | 11 fields | 0 | 206 each (keys/colons, 10 commas, braces) | 103,000 |
+| per-item bounded text (four 512-scalar strings) | 2,000 | 512 | 2,050 | 0 | 4,100,000 |
+| per-item UUID and longest jointly valid unit (`pack`) | 500 each | 36 / 4 | 38 / 6 | 0 | 22,000 |
+| per-item decimals, jointly valid witness | 500 sets | 13 / 16 / 16 | 15 / 18 / 18 | 0 | 25,500 |
+| `full_colly_count` in witness | 500 | 3 | 3 | 0 | 1,500 |
+| unique `line_number` values 1–500 | 500 | 1–3 | 1,392 total | 0 | 1,392 |
+| `items` array separators and delimiters | 1 array | — | 0 | 499 commas + 2 brackets | 501 |
+| **semantic total** | | | | | **4,255,677** |
+
+The `IngestionResult` row uses `spreadsheet` twice; a 76-character manifest
+reference (78 quoted bytes); registered ID `9223372036854775807`; attempted but
+failed delivery with `invalid_envelope`; and the longest jointly legal boolean
+state. Summing the subtotals gives
+`100 + 537 + 1,147 + 103,000 + 4,100,000 + 22,000 + 25,500 + 1,500 + 1,392 + 501 = 4,255,677`.
+Therefore `MAX_SEMANTIC_INPUT_BYTES = 4,255,677` and
+`MAX_TRANSPORT_INPUT_BYTES = 4,255,678`, the latter adding exactly one LF. The
+
+Validation order is frozen: raw byte-size cap; UTF-8 decode; exactly one JSON
+document parse; duplicate-key rejection; closed-schema validation; field
+validation; decimal canonical validation; exact DTO construction; canonical
+reserialization; canonical semantic-byte bound; then SHA-256. The controlled
+callable cannot be invoked before every stage succeeds.
 
 ## Callable-observable result contract
 
@@ -159,7 +241,36 @@ immediately before the sole call attempt, and never returns. A second attempt is
 rejected before invocation. The process parses one envelope and makes zero or
 one call. No retry, loop, batch, fallback, recursion, or second input exists.
 
-## Disjoint exit mapping and precedence
+## Repository-grounded error inventory and disjoint exit mapping
+
+The current callable can expose these bounded repository families:
+
+- `CandidateCreateControlError` from the authorization/consumption layer, with
+  exactly `AUTHORIZATION_DISABLED`, `AUTHORIZATION_INVALID`,
+  `AUTHORIZATION_EXPIRED`, `AUTHORIZATION_ACTOR_INVALID`,
+  `AUTHORIZATION_BINDING_INVALID`, `AUTHORIZATION_CONSUMED`,
+  `AUTHORIZATION_CONSUMPTION_STATE_INVALID`, and
+  `AUTHORIZATION_DURABILITY_FAILED`.
+- `CandidateInputError` from retained-ingestion/trusted-facts mapping, with
+  exactly `INVALID_INGESTION_EVIDENCE`, `RETAINED_MANIFEST_INVALID`,
+  `TRUSTED_FACTS_INVALID`, `LIMIT_EXCEEDED`, `DECIMAL_POLICY_INVALID`,
+  `PACKAGING_FORMULA_INVALID`, and `ID_GENERATION_INVALID`.
+- `ReviewApplicationError` from review orchestration, with every currently
+  defined `ReviewFailureCode`: `ACTOR_REQUIRED`, `ACTOR_INVALID`,
+  `ACTOR_UNAUTHORIZED`, `SOURCE_IDENTITY_INVALID`,
+  `SOURCE_IDENTITY_CONFLICT`, `INVALID_REVIEW_REQUEST`,
+  `CANDIDATE_OPERATION_FAILED`, `INTERNAL_FAILURE`, and
+  `SOURCE_ACTIVE_RECEIPT_EXISTS`.
+
+`ReviewApplicationError.candidate_code`, when present, is a current exact
+`MaterialReceiptFailureCode`. The current create path can attach
+`DATABASE_UNAVAILABLE`, `DATA_INTEGRITY_ERROR`, or
+`SOURCE_ACTIVE_RECEIPT_EXISTS`; all map through their enclosing review code.
+The terminal adapter quarantines raw `MaterialReceiptError` and all other
+repository exceptions, so raw persistence exceptions are not callable-facing
+governed types. The callable's exact-request `TypeError` is prevented by DTO
+construction; if it nevertheless escapes the invocation boundary it is
+unexpected and maps to 70.
 
 | Code | Exact classification/source |
 |---:|---|
@@ -167,18 +278,26 @@ one call. No retry, loop, batch, fallback, recursion, or second input exists.
 | `10` | `AUTHORIZATION_OR_ACTIVATION_REJECTED`: exact `AUTHORIZATION_DISABLED` or `AUTHORIZATION_EXPIRED` only |
 | `20` | `AUTHORIZATION_ALREADY_CONSUMED`: exact `AUTHORIZATION_CONSUMED` only |
 | `30` | `AUTHORIZATION_STATE_INVALID`: exact `AUTHORIZATION_INVALID`, `AUTHORIZATION_ACTOR_INVALID`, `AUTHORIZATION_BINDING_INVALID`, or `AUTHORIZATION_CONSUMPTION_STATE_INVALID` only |
-| `40` | `INPUT_VALIDATION_REJECTED`: parser/schema rejection, DTO construction `TypeError`/`ValueError`, exact `CandidateInputError`, or governed business-input validation before persistence |
-| `50` | `CONTROLLED_DOMAIN_OR_PERSISTENCE_FAILURE`: exact governed domain/application/persistence failure after eligibility, including `MaterialReceiptError` and implementation-review-frozen bounded types |
-| `60` | `EVIDENCE_OR_OUTPUT_DURABILITY_FAILURE`: exact `AUTHORIZATION_DURABILITY_FAILED` or harness-local result/evidence finalization failure |
+| `40` | `INPUT_VALIDATION_REJECTED`: harness parser/schema/field/decimal/canonical rejection; pre-call DTO-construction `TypeError`/`ValueError`; or `CandidateInputError` with any of its seven codes enumerated above |
+| `50` | `CONTROLLED_APPLICATION_FAILURE`: `ReviewApplicationError` with any of the nine `ReviewFailureCode` values enumerated above; a valid optional `candidate_code` does not change this exit |
+| `60` | `HARNESS_OUTPUT_OR_DURABILITY_FAILURE`: exact `AUTHORIZATION_DURABILITY_FAILED`, or harness-local stdout serialization, output-size, or finalization/durability failure |
 | `70` | `HARNESS_INTERNAL_FAILURE`: unexpected sanitized internal exception |
 
-Precedence: (1) parser/DTO failures before call -> 40; (2) attempted call's exact
-`CandidateCreateControlError.code` -> 10/20/30/60; (3) exact allowlisted
-governed types -> 40 for business-input validation or 50 after eligibility;
-(4) finalization failure -> 60; (5) unmapped exception -> 70. Mapping stops once.
-No message matching or fallback reclassification exists. Codes 10 and 40 never
-overlap. Any proposed class not distinguishable by exact type/code must be
-merged into a deterministic parent class before approval.
+Precedence is specific stable code first, stable exception class second, then
+harness fallback: pre-call deterministic input failures -> 40; exact
+`CandidateCreateControlError.code` -> 10/20/30/60; exact
+`CandidateInputError.code` -> 40; exact `ReviewApplicationError.code` -> 50;
+harness output/finalization -> 60; every other exception -> 70. Mapping stops
+once. No message, substring, `repr`, traceback, or unfrozen type is used.
+
+Exhaustiveness follows by enum cardinality: all 8 control codes map once
+(2 to 10, 1 to 20, 4 to 30, 1 to 60); all 7 candidate-input codes map once to
+40; all 9 review codes map once to 50. Consumed is code 20 only and cannot be
+invalid-state code 30; parser/DTO and `CandidateInputError` paths are code 40,
+whereas application/repository quarantine is `ReviewApplicationError` code 50;
+unknown exceptions alone reach 70. Harness-local parsing occurs before the
+call, while output/durability occurs after it, so neither is reclassified as a
+controlled callable failure.
 
 ## Stdout, stderr, and sanitization
 

@@ -32,7 +32,8 @@ Tests must prove:
    per-item metadata are rejected;
 3. every string/date/UUID/decimal bound, the 1–500 item bound, scalar bound,
    packaging formula, enum vocabulary, and state relationship is enforced;
-4. the exact 4,259,775-byte file maximum, canonical UTF-8 reserialization,
+4. the exact 4,255,678-byte transport maximum (4,255,677 semantic bytes plus
+   one LF), canonical UTF-8 reserialization,
    semantic hash excluding LF, exactly one transport LF, and expected SHA-256
    match are enforced below, at, and above the bound;
 5. exact `IngestionResult`, `TrustedReceiptFacts`, and
@@ -55,10 +56,22 @@ for governed outcomes; and catastrophic stderr is the fixed <=42-byte line.
 
 Every source maps to exactly one disjoint code 0, 10, 20, 30, 40, 50, 60, or 70
 using exact exception type and bounded code, never message text. Tests exhaust
-the mapping and precedence, especially authorization activation -> 10 and
-schema/DTO/trusted-facts/business-input validation -> 40. Unclassifiable
-exceptions -> 70; oversized result finalization -> fixed bounded code-60 result;
-no partial JSON is emitted.
+all 8 `CandidateCreateControlFailureCode`, all 7 `CandidateInputFailureCode`,
+and all 9 `ReviewFailureCode` values frozen in document 01. They prove the
+specific-code/type/fallback precedence, authorization activation -> 10,
+consumed -> 20, invalid state -> 30, schema/DTO/candidate-input -> 40, every
+current `ReviewApplicationError` code -> 50, authorization or harness output
+durability -> 60, and only unclassifiable exceptions -> 70. Oversized result
+finalization becomes a fixed bounded code-60 result; no partial JSON is emitted.
+
+Decimal tests cover each named field independently and jointly: JSON strings
+only; exact grammar; finite/range/precision/scale checks; no exponent, leading
+plus/zero, trailing fractional zero, rounding, or quantization; negative and
+zero rules; null/count relationship; packaging formula; integral `sheet`; the
+48-character jointly valid per-item numeric maximum; and the exact quoted
+lengths 15, 18, and 18 bytes. Size tests reproduce every row of document 01,
+including unique line-number digits and direct four-byte UTF-8 scalar emission
+without impossible control-character escape inflation.
 
 For every governed and unexpected-exception path, adversarial values include:
 
