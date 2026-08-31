@@ -108,3 +108,27 @@ authorization artifact, first-write authority, candidate traffic, or production
 write is approved by this package. The next official action after this PR is
 fresh independent review; after merge, a human operator may perform only the
 exact governed consumed-directory provisioning and verification sequence.
+
+The future authorization staging contract does not alter that immediate Step-2
+scope. Its sole directory is
+`/opt/aios/runtime/intelligence/production-candidate-create/stage-0.33c`, and
+its helper-generated filename must match exactly
+`^\.authorization\.json\.stage-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`.
+Caller, CLI, environment, and payload selection are prohibited. Exclusive
+no-follow creation at `0600` has collision-STOP semantics with no reuse,
+overwrite, deletion, fallback, or second identity. Publication of exact
+validated bytes and `root:aiosadmin`/`0440` metadata is same-directory,
+no-replace, followed by parent `fsync`, final metadata/hash/byte verification,
+exact-path staging removal, another parent `fsync`, staging-absence verification,
+and final-artifact revalidation.
+
+Prepublication cleanup failure is
+`AUTHORIZATION_STAGING_PREPUBLICATION_CLEANUP_INCOMPLETE` and leaves the final
+path absent. Post-publication cleanup failure is
+`AUTHORIZATION_STAGING_CLEANUP_INCOMPLETE`; it leaves the verified final path
+present without automatic deletion or overwrite and forbids republication,
+first write, and traffic activation pending governance/operator disposition.
+Only exact `authorization.json` is authorization-reader input; a residual
+staging path never duplicates authority. Cleanup may target only the exact
+generated staging path—never a wildcard, sweep, arbitrary hidden file, or
+recursive set.

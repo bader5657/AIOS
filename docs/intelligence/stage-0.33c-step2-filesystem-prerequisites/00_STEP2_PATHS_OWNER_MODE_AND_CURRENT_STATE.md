@@ -47,6 +47,30 @@ review. Do not read its business or secret contents. No overwrite, truncate,
 silent replacement, or removal is allowed unless later deactivation/replacement
 governance explicitly authorizes it.
 
+Any future authorization installation stages only in the governed candidate
+root, using the helper-generated name
+`.authorization.json.stage-<canonical-lowercase-UUIDv4>`. The exact accepted
+regex is
+`^\.authorization\.json\.stage-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`.
+The helper derives the staging path from that fixed directory and its internally
+generated canonical name; callers, CLI arguments, environment variables, and
+authorization payloads cannot select either component. No alternate directory,
+`/tmp`, separator, traversal, absolute injected name, backslash, or Unicode path
+trick is accepted.
+
+Creation is exclusive and no-follow (`O_WRONLY | O_CREAT | O_EXCL |
+O_NOFOLLOW`) at initial mode `0600`. A collision is a STOP: no overwrite,
+deletion, fallback loop, or second generated identity occurs in the same
+governed attempt. Publication remains same-directory and no-replace. Cleanup is
+limited to that exact generated path; wildcards, directory sweeps, recursive
+cleanup, and arbitrary hidden-file cleanup are prohibited. A cleanup defect
+before publication is
+`AUTHORIZATION_STAGING_PREPUBLICATION_CLEANUP_INCOMPLETE`; a cleanup defect
+after verified publication is `AUTHORIZATION_STAGING_CLEANUP_INCOMPLETE`.
+Either disposition blocks activation and first write pending governed operator
+resolution. A residual staging name is never a second authorization artifact;
+the runtime reader recognizes only exact `authorization.json`.
+
 ## Authorization artifact contract
 
 Future approved bytes must be strict JSON, contain no secret fields, be no more
