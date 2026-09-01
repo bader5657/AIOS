@@ -46,7 +46,7 @@ must remain absent and must not be created, modified, or consumed.
 | Binding | Frozen value |
 |---|---|
 | executor repository path | `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py` |
-| executor SHA-256 | `1303e4a6b36e96785437d03a53947969b5f917a9d52906640d12664a37656f4a` |
+| executor SHA-256 | `3270894fc987f729f636c4942dd26c067bef40e2843d1c0268a25c4dbfa89437` |
 | interpreter/runtime | `/opt/aios/runtime/venv/bin/python`, governed Python `3.12.3` |
 | run-as identity | Unix `root` (`euid=0`, account name `root`) |
 | arguments/input model | no arguments; closed constants and the two fixed private sources only |

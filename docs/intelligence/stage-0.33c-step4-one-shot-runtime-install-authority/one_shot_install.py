@@ -39,8 +39,40 @@ FILES = (
 )
 
 
-class Stop(RuntimeError):
-    pass
+class GovernedStop(RuntimeError):
+    def __init__(self, classification: str, stage: str, artifact: str | None = None, errno_code: int | None = None):
+        super().__init__(classification); self.classification=classification; self.stage=stage; self.artifact=artifact; self.errno_code=errno_code
+
+class Stop(GovernedStop):
+    def __init__(self, message: str, stage: str = "UNKNOWN", artifact: str | None = None, errno_code: int | None = None):
+        super().__init__(message, stage, artifact, errno_code)
+
+PRECONDITION_FAILED="PRECONDITION_FAILED"
+APPROVAL_EXPIRED="APPROVAL_EXPIRED"
+TARGET_ALREADY_EXISTS="TARGET_ALREADY_EXISTS"
+APPROVED_BYTES_INVALID="APPROVED_BYTES_INVALID"
+AUTHORITY_CONSUMED="AUTHORITY_CONSUMED"
+APPROVED_INPUT_STAGING_FAILED="APPROVED_INPUT_STAGING_FAILED"
+STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION="STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION"
+APPROVED_INPUT_FINAL_VERIFICATION_FAILED="APPROVED_INPUT_FINAL_VERIFICATION_FAILED"
+APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE="APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE"
+RESULT_EVIDENCE_WRITE_FAILED="RESULT_EVIDENCE_WRITE_FAILED"
+
+def staging_name(final: str) -> str:
+    if final not in {x[0] for x in FILES} or "/" in final or "\\" in final:
+        raise Stop(PRECONDITION_FAILED, "STAGING_BASENAME")
+    return f".{final}.stage-{uuid.uuid4()}"
+
+def validate_approval_closed_schema(value: object) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != {"schema_version", "package_payload"}: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_SCHEMA")
+    if value["schema_version"] != "aios-stage-0.33c-step4-approved-input-v1": raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_SCHEMA")
+    p=value["package_payload"]
+    if not isinstance(p, dict) or set(p) != {"harness_sha256", "evidence"} or p["harness_sha256"] != HARNESS_SHA256: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_PAYLOAD")
+    e=p["evidence"]
+    if not isinstance(e, dict) or set(e) != {"manifest_id", "not_after_utc"}: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_EVIDENCE")
+    if not isinstance(e["manifest_id"], str) or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", e["manifest_id"]): raise Stop(APPROVED_BYTES_INVALID, "UUID")
+    parse_utc(e["not_after_utc"])
+    return value
 
 
 def sha256(data: bytes) -> str:
