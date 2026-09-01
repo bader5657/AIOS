@@ -2,18 +2,23 @@
 
 ## Decision
 
-This clarification resolves `CONTRACT_VERIFICATION_GAP` by adopting **HASH-BOUND
-PACKAGE CROSS-VALIDATION** for `registry_record_id` during filesystem-only
-Step-4 approved-package installation.
+This clarification resolves `CONTRACT_VERIFICATION_GAP` by adopting
+**MODEL B — HASH-BOUND PACKAGE CROSS-VALIDATION** for `registry_record_id`
+during filesystem-only Step-4 approved-package installation.
 
 The executor validates the frozen package's internal consistency. It does not
 independently re-prove external Registry or PostgreSQL state.
 
 ## Exact rule
 
-`package_payload.evidence.registry_record_id` must equal
-`approved_input.ingestion_result.registry_record_id` using exact JSON equality:
-no coercion, conversion, normalization, or aliases.
+```text
+approval.package_payload.evidence.registry_record_id
+==
+approved_input.ingestion_result.registry_record_id
+```
+
+This equality uses exact JSON equality: no coercion, conversion, normalization,
+or aliases.
 
 When `registration_succeeded` is `false`, `registry_record_id` must be `null` in
 the approved input and approval evidence. When it is `true`, the value must be a
