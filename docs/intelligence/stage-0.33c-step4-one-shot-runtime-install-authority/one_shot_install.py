@@ -113,22 +113,45 @@ def staging_name(final: str) -> str:
     return make_stage_name(final)
 
 def validate_approval_closed_schema(value: object) -> dict[str, object]:
-    if not isinstance(value, dict) or set(value) != {"schema_version", "package_payload"}: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_SCHEMA")
-    if value["schema_version"] != "aios-stage-0.33c-step4-approved-input-v1": raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_SCHEMA")
+    top={"schema_version","package_payload","package_payload_sha256"}
+    if not isinstance(value,dict) or set(value)!=top: raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_SCHEMA")
+    if value["schema_version"]!="aios-stage-0.33c-step4-approved-input-v1": raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_SCHEMA")
     p=value["package_payload"]
-    if not isinstance(p, dict) or set(p) != {"harness_sha256", "evidence"} or p["harness_sha256"] != HARNESS_SHA256: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_PAYLOAD")
-    e=p["evidence"]
-    if not isinstance(e, dict) or set(e) != {"manifest_id", "not_after_utc"}: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_EVIDENCE")
-    validate_uuid4_canonical_lowercase(e["manifest_id"])
-    validate_sha256_lowercase(p["harness_sha256"])
-    expiry = parse_utc(e["not_after_utc"])
-    if expiry <= utc_now(): raise Stop(APPROVAL_EXPIRED, "APPROVAL_SCHEMA")
+    keys={"approval_id","approved_at_utc","not_after_utc","project_owner_approval_reference","repository_commit","harness_sha256","python_path","python_version","controlled_callable","evidence","trusted_facts_sha256","input_semantic_sha256","input_transport_sha256","input_semantic_bytes","input_transport_bytes","item_count","trusted_fact_provenance","more_than_three_items_justification"}
+    if not isinstance(p,dict) or set(p)!=keys: raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_PAYLOAD")
+    validate_uuid4_canonical_lowercase(p["approval_id"]); approved=validate_utc_microsecond_z(p["approved_at_utc"]); expiry=validate_utc_microsecond_z(p["not_after_utc"])
+    if approved>expiry or expiry<=utc_now(): raise Stop(APPROVAL_EXPIRED,"APPROVAL_TIME")
+    validate_approval_safe_string(p["project_owner_approval_reference"],128)
+    if not isinstance(p["repository_commit"],str) or not re.fullmatch(r"[0-9a-f]{40}",p["repository_commit"]): raise Stop(APPROVED_BYTES_INVALID,"COMMIT")
+    if p["harness_sha256"]!=HARNESS_SHA256: raise Stop(APPROVED_BYTES_INVALID,"HARNESS")
+    if p["python_path"]!="/opt/aios/runtime/venv/bin/python" or p["python_version"]!="3.12.3" or p["controlled_callable"]!="core.app.material_receipts.controlled_candidate_create.controlled_create_review_candidate": raise Stop(APPROVED_BYTES_INVALID,"RUNTIME")
+    e=p["evidence"]; ek={"manifest_reference","manifest_id","manifest_sha256","manifest_size_bytes","represented_media_type","manifest_received_at","stored_original_size_bytes","stored_original_sha256","mime_type","registry_record_id"}
+    if not isinstance(e,dict) or set(e)!=ek: raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_EVIDENCE")
+    validate_uuid4_canonical_lowercase(e["manifest_id"]); validate_sha256_lowercase(e["manifest_sha256"]); validate_utc_microsecond_z(e["manifest_received_at"])
+    if not isinstance(e["manifest_reference"],str) or not re.fullmatch(r"/opt/aios/data/documents/manifests/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json",e["manifest_reference"]): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST")
+    for k,lo,hi in (("manifest_size_bytes",0,4194304),("registry_record_id",0,9223372036854775807)):
+        if not isinstance(e[k],int) or not lo<=e[k]<=hi: raise Stop(APPROVED_BYTES_INVALID,"EVIDENCE_SIZE")
+    if e["stored_original_size_bytes"] is not None and (not isinstance(e["stored_original_size_bytes"],int) or not 0<=e["stored_original_size_bytes"]<=9223372036854775807): raise Stop(APPROVED_BYTES_INVALID,"EVIDENCE_SIZE")
+    for k in ("stored_original_sha256",):
+        if e[k] is not None: validate_sha256_lowercase(e[k])
+    if e["mime_type"] is not None: validate_approval_safe_string(e["mime_type"],255)
+    for k in ("trusted_facts_sha256","input_semantic_sha256","input_transport_sha256"): validate_sha256_lowercase(p[k])
+    if p["input_semantic_bytes"]!=1327 or p["input_transport_bytes"]!=1328 or p["item_count"]<1 or p["item_count"]>10: raise Stop(APPROVED_BYTES_INVALID,"INPUT_BINDING")
+    if not isinstance(p["trusted_fact_provenance"],dict) or not p["trusted_fact_provenance"]: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
+    for k,v in p["trusted_fact_provenance"].items():
+        if not isinstance(k,str) or not k.startswith("/trusted_receipt_facts/") or v not in {"EVIDENCE_DERIVED","PROJECT_OWNER_APPROVED"}: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
+    if p["more_than_three_items_justification"] is not None: validate_approval_safe_string(p["more_than_three_items_justification"],512)
+    validate_sha256_lowercase(value["package_payload_sha256"])
     return value
 
-def validate_approved_input(value: object) -> dict[str, object]:
-    if not isinstance(value, dict) or set(value) != {"schema_version", "manifest_id", "payload"}: raise Stop(APPROVED_BYTES_INVALID, "INPUT_SCHEMA")
-    if value.get("schema_version") != "aios-stage-0.33c-step4-approved-input-v1" or value.get("manifest_id") != MANIFEST_ID or not isinstance(value.get("payload"), dict): raise Stop(APPROVED_BYTES_INVALID, "INPUT_SCHEMA")
+def validate_approved_input_closed_schema(value: object) -> dict[str, object]:
+    top={"schema_version","ingestion_result","trusted_receipt_facts"}
+    if not isinstance(value,dict) or set(value)!=top or value["schema_version"]!="aios-stage-0.33c-one-shot-input-v1": raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
+    if not isinstance(value["ingestion_result"],dict) or set(value["ingestion_result"])!={"input_type","recognized_input_type","stored_path","manifest_path","metadata","text","register_handoff_ready","process_handoff_ready","route_handoff_ready","respond_acknowledgement_ready","registration_succeeded","registry_record_id","event_publication_attempted","event_delivery_succeeded","event_delivery_failure_code","brain_result"}: raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
+    if not isinstance(value["trusted_receipt_facts"],dict) or set(value["trusted_receipt_facts"])!={"supplier_name","document_number","document_date","received_at","items"}: raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
     return value
+
+def validate_approved_input(value: object) -> dict[str, object]: return validate_approved_input_closed_schema(value)
 
 
 def sha256(data: bytes) -> str:
@@ -294,10 +317,16 @@ def durable_claim(evidence_fd: int, authority_commit: str, executor_sha: str) ->
     try:
         write_all(fd, encoded)
         os.fsync(fd)
-    finally:
-        # A close error is a STOP and leaves durability uncertain.
+    except OSError as exc:
+        raise Stop("CONSUMPTION_DURABILITY_UNCERTAIN", "CLAIM", errno_code=exc.errno) from exc
+    try:
         os.close(fd)
-    os.fsync(evidence_fd)
+    except OSError as exc:
+        raise Stop("CONSUMPTION_DURABILITY_UNCERTAIN", "CLAIM", errno_code=exc.errno) from exc
+    try:
+        os.fsync(evidence_fd)
+    except OSError as exc:
+        raise Stop("CONSUMPTION_DURABILITY_UNCERTAIN", "CLAIM", errno_code=exc.errno) from exc
     return record
 
 
@@ -390,6 +419,7 @@ def main() -> int:
         if any(not absent(parent_fd, name) for name, _, _, _ in FILES):
             raise Stop("target already exists")
         sources = [read_source(source_fd, *spec) for spec in FILES]
+        validate_approved_input_closed_schema(exact_json(sources[0][:-1]))
         approval_bytes = sources[1][:-1]
         approval = exact_json(approval_bytes)
         validate_approval_closed_schema(approval)
