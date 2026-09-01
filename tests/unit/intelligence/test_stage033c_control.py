@@ -11,6 +11,11 @@ class ControlTests(unittest.TestCase):
  def test_duplicate_and_schema(self):
   with self.assertRaises(m.GovernedStop): m.exact_json(b'{"a":1,"a":2}')
   with self.assertRaises(m.GovernedStop): m.validate_approval_closed_schema({"schema_version":"x"})
+ def test_provenance_generator(self):
+  self.assertEqual(len(m.expected_provenance_pointers(2)),26)
+  self.assertIn("/trusted_receipt_facts/items/1/unit",m.expected_provenance_pointers(2))
+ def test_decimal_equation_rejects_mismatch(self):
+  with self.assertRaises(m.GovernedStop): m.validate_approved_input_closed_schema({"schema_version":"aios-stage-0.33c-one-shot-input-v1","ingestion_result":{},"trusted_receipt_facts":{}})
  def test_failure_result_minimized(self):
   with tempfile.TemporaryDirectory() as d:
    fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); st=m.ExecutionState(executor_sha="a"*64); f=m.GovernedStop(m.APPROVED_BYTES_INVALID,"TEST","input",22); m.write_failure_result(fd,st,f); data=Path(d,m.RESULT).read_text(); self.assertNotIn("traceback",data); self.assertNotIn("supplier",data); os.close(fd)

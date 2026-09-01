@@ -112,6 +112,12 @@ def staging_name(final: str) -> str:
         raise Stop(PRECONDITION_FAILED, "STAGING_BASENAME")
     return make_stage_name(final)
 
+def expected_provenance_pointers(item_count: int) -> set[str]:
+    if not isinstance(item_count,int) or not 1 <= item_count <= 10: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
+    base={"/trusted_receipt_facts/supplier_name","/trusted_receipt_facts/document_number","/trusted_receipt_facts/document_date","/trusted_receipt_facts/received_at"}
+    fields=("candidate_material_description","canonical_display_name","size_description","specification","material_id","full_colly_count","qty_per_full_colly","partial_qty","total_qty","unit","line_number")
+    return base | {f"/trusted_receipt_facts/items/{i}/{field}" for i in range(item_count) for field in fields}
+
 def validate_approval_closed_schema(value: object) -> dict[str, object]:
     top={"schema_version","package_payload","package_payload_sha256"}
     if not isinstance(value,dict) or set(value)!=top: raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_SCHEMA")
@@ -137,9 +143,9 @@ def validate_approval_closed_schema(value: object) -> dict[str, object]:
     if e["mime_type"] is not None: validate_approval_safe_string(e["mime_type"],255)
     for k in ("trusted_facts_sha256","input_semantic_sha256","input_transport_sha256"): validate_sha256_lowercase(p[k])
     if p["input_semantic_bytes"]!=1327 or p["input_transport_bytes"]!=1328 or p["item_count"]<1 or p["item_count"]>10: raise Stop(APPROVED_BYTES_INVALID,"INPUT_BINDING")
-    if not isinstance(p["trusted_fact_provenance"],dict) or not p["trusted_fact_provenance"]: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
+    if not isinstance(p["trusted_fact_provenance"],dict) or set(p["trusted_fact_provenance"]) != expected_provenance_pointers(p["item_count"]): raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
     for k,v in p["trusted_fact_provenance"].items():
-        if not isinstance(k,str) or not k.startswith("/trusted_receipt_facts/") or v not in {"EVIDENCE_DERIVED","PROJECT_OWNER_APPROVED"}: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
+        if v not in {"EVIDENCE_DERIVED","PROJECT_OWNER_APPROVED"}: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
     if p["more_than_three_items_justification"] is not None: validate_approval_safe_string(p["more_than_three_items_justification"],512)
     validate_sha256_lowercase(value["package_payload_sha256"])
     canonical = json.dumps(p, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
@@ -187,6 +193,11 @@ def validate_approved_input_closed_schema(value: object) -> dict[str, object]:
         if c>0: _decimal_string(item["qty_per_full_colly"],"1000000",False)
         _decimal_string(item["partial_qty"],"100000000",True); _decimal_string(item["total_qty"],"100000000",False)
         if item["unit"] not in {"sheet","pcs","kg","roll","pack"}: raise Stop(APPROVED_BYTES_INVALID,"INPUT_UNIT")
+        from decimal import Decimal
+        q = Decimal(item["qty_per_full_colly"]) if item["qty_per_full_colly"] is not None else Decimal(0)
+        partial = Decimal(item["partial_qty"]); total = Decimal(item["total_qty"])
+        if total != Decimal(c)*q + partial: raise Stop(APPROVED_BYTES_INVALID,"INPUT_EQUATION")
+        if item["unit"] == "sheet" and any(x != x.to_integral_value() for x in (partial,total,q)): raise Stop(APPROVED_BYTES_INVALID,"INPUT_UNIT")
     return value
 
 def validate_approved_input(value: object) -> dict[str, object]: return validate_approved_input_closed_schema(value)
