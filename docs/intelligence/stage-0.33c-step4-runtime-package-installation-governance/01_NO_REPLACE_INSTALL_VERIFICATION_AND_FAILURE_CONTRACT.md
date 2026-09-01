@@ -16,9 +16,9 @@ candidate root and both final basenames. Before creating anything, it must:
    including a symlink, is `UNEXPECTED_PREEXISTING_APPROVED_INPUT_TARGET` and a
    STOP;
 5. reject governed staging-name collisions and unexpected staging debris; and
-6. verify the exact approved source byte objects are regular non-symlink files,
-   bounded to their exact transport sizes and hashes, without logging their
-   contents.
+6. verify the exact approved source byte objects are regular non-symlink files
+   and satisfy their exact transport-length, terminal-LF, and semantic-prefix
+   hash contracts without logging their contents.
 
 No absolute caller-selected staging path, `..`, separator, backslash, Unicode
 path trick, `/tmp`, alternate filesystem, environment-selected component, or
@@ -40,34 +40,71 @@ Each accepted basename must match its fixed prefix followed by
 The caller cannot supply the UUID or name. One collision stops the attempt;
 there is no deletion, fallback loop, second UUID, or reuse.
 
-The helper creates the staged object relative to the retained directory
-descriptor with semantics equivalent to `O_WRONLY | O_CREAT | O_EXCL |
-O_NOFOLLOW` and initial mode `0600`. It requires a regular non-symlink object on
-the candidate root's filesystem, writes only the already-approved transport
-bytes to completion, flushes and file-`fsync`s, and rejects short writes or
-trailing bytes. Before publication it sets only the exact final metadata
-`root:aiosadmin` and `0440`, then reopens without following symlinks and verifies
-type, device, owner, group, mode, byte count, and SHA-256:
+For each artifact, the helper must complete this lifecycle in order:
 
-| Final basename | Transport bytes | Required SHA-256 |
-|---|---:|---|
-| `approved-input.json` | `1328` | `e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d` |
-| `approved-input-approval.json` | `3550` | `266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57` |
+1. create the unique staged object relative to the retained directory
+   descriptor with semantics equivalent to `O_WRONLY | O_CREAT | O_EXCL |
+   O_NOFOLLOW` and initial mode `0600`;
+2. require a regular non-symlink object on the candidate root's filesystem and
+   write only the already-approved transport bytes to completion, rejecting
+   short writes and trailing bytes;
+3. flush userspace state if applicable and file-`fsync` the staging object;
+4. set exactly `root:aiosadmin` ownership and mode `0440`, and `fsync` metadata
+   as required by the governed installation design;
+5. close every writable descriptor, treating any close, `fsync`, ownership, or
+   permission-setting failure as an installation failure that leaves the final
+   target absent;
+6. prove that no `O_WRONLY` or `O_RDWR` descriptor controlled by the installer
+   still references the staged inode, then reopen it read-only with no-follow
+   semantics if descriptor-based verification is required; and
+7. through read-only access, verify type, device, owner, group, exact mode, and
+   the applicable byte-domain contract below.
 
-Publication uses the established Stage 0.33C same-filesystem hard-link model:
-plain `linkat`-equivalent semantics from the complete staged inode to the fixed
-final basename. It is atomic and no-replace; any existing final object produces
-`EEXIST` and a STOP. The executor must never unlink, truncate, chmod, chown,
+Setting mode `0440` does not revoke write authority retained by an already-open
+`O_WRONLY` or `O_RDWR` descriptor. Publication is prohibited until every such
+installer-controlled descriptor has been closed and its absence proved. A
+close or read-only reopen failure must fail closed; the helper must not publish,
+weaken permissions, or reopen either staging or final path writable.
+
+| Final basename | Semantic bytes | Transport bytes | Required semantic-prefix SHA-256 |
+|---|---:|---:|---|
+| `approved-input.json` | `1327` | `1328` | `e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d` |
+| `approved-input-approval.json` | `3549` | `3550` | `266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57` |
+
+For `approved-input.json`, verification requires an exact 1,328-byte transport
+file, bytes `[0:1327]` as the semantic payload, SHA-256 of exactly that prefix
+equal to the table value, byte `[1327]` equal to `0x0A`, and no later byte. For
+`approved-input-approval.json`, it requires an exact 3,550-byte transport file,
+bytes `[0:3549]` as the semantic payload, SHA-256 of exactly that prefix equal
+to the table value, byte `[3549]` equal to `0x0A`, and no later byte. Thus each
+file contains exactly one terminal LF. No transport-file SHA is frozen or
+required: fixed semantic length and frozen semantic SHA, exact terminal byte,
+and exact total length bind the transport bytes without conflating the two byte
+domains.
+
+Only after that read-only pre-publication verification passes, publication uses
+the established Stage 0.33C same-filesystem hard-link model: plain
+`linkat`-equivalent semantics from the complete staged inode to the fixed final
+basename. The destination must still be absent. Link creation is atomic and
+no-replace; any existing final object produces `EEXIST` and a STOP. The executor must never unlink, truncate, chmod, chown,
 overwrite, or replace an existing final object and must not retry publication.
-The final name can therefore expose only the already complete inode.
+The final name can therefore expose only the already complete inode, with no
+installer-controlled writable staging handle through which published content
+could subsequently be modified.
 
 After each publication, the helper `fsync`s the parent directory, opens the
-final path without following symlinks, and independently verifies regular-file
-type, device, `root:aiosadmin`, `0440`, exact transport byte count, exact
-SHA-256, and byte-for-byte equality with the approved source object. Only then
-may it unlink that artifact's exact staging pathname, `fsync` the parent again,
-verify staging absence, and reverify the final object. Wildcards, directory
-sweeps, recursive cleanup, and arbitrary hidden-file removal are prohibited.
+final path read-only without following symlinks, and independently verifies
+regular-file type, device, `root:aiosadmin`, exact mode `0440`, exact transport
+length, exactly one terminal `0x0A`, the exact semantic-prefix length and frozen
+semantic SHA, no extra bytes, and byte-for-byte equality with the approved
+source object. It must also prove no installer-controlled writable descriptor
+references the published inode. Only then may it unlink that artifact's exact
+staging pathname, `fsync` the parent again, verify staging absence, and reverify
+the final object. It must not leave the staging pathname as an uncontrolled
+writable alias or reopen staging or final paths writable. If absence of a
+writable descriptor or alias cannot be proved, fail closed and require separate
+incident/recovery governance. Wildcards, directory sweeps, recursive cleanup,
+and arbitrary hidden-file removal are prohibited.
 
 After both objects pass independently, the executor must verify the pair again
 and record that both are present and exact. The pair is not usable and Step 4
@@ -97,8 +134,11 @@ invoke the harness, and require separate incident/recovery governance. The same
 partial-install classification applies to any state where exactly one final
 artifact is present. This governance grants no rollback-by-replacement.
 
-Any metadata, size, hash, byte, approval-window, path, staging, durability, or
-pair-verification mismatch fails closed. Publication success never invokes the
+Any descriptor close or read-only reopen failure, metadata, size, hash, byte,
+approval-window, path, staging, durability, or pair-verification mismatch fails
+closed. Pre-publication failure leaves the final target absent and is an
+installation failure; permissions must never be weakened as a retry.
+Publication success never invokes the
 harness or controlled callable and never authorizes candidate or database
 activity.
 
@@ -108,12 +148,14 @@ Future execution evidence may record only:
 
 - reviewed governance commit and installer/helper hash;
 - fixed parent and final paths;
-- source, staged, and final byte counts and SHA-256 values;
+- source, staged, and final semantic/transport byte counts, terminal-LF checks,
+  and semantic-prefix SHA-256 values;
 - non-following type, device, ownership, group, and mode checks;
 - approval validity result and exclusive-expiry comparison result, without raw
   approval JSON;
 - internally generated staging basenames, `caller-selected = NO`, exclusive
-  creation results, file and parent `fsync` results;
+  creation results, file and parent `fsync` results, writable-descriptor close
+  and absence proofs, and read-only reopen results;
 - atomic no-replace publication results and final pair verification;
 - exact-path cleanup results and any closed failure classification; and
 - zero harness, candidate, inventory, stock, authorization, and PostgreSQL
