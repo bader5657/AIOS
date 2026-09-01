@@ -18,6 +18,7 @@ import stat
 import subprocess
 import sys
 import uuid
+from contextlib import ExitStack
 from pathlib import Path
 
 
@@ -57,6 +58,7 @@ STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION="STEP4_APPROVED_INPUT_PARTIAL_INSTALLA
 APPROVED_INPUT_FINAL_VERIFICATION_FAILED="APPROVED_INPUT_FINAL_VERIFICATION_FAILED"
 APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE="APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE"
 RESULT_EVIDENCE_WRITE_FAILED="RESULT_EVIDENCE_WRITE_FAILED"
+_WRITABLE_FDS: set[int] = set()
 
 def staging_name(final: str) -> str:
     if final not in {x[0] for x in FILES} or "/" in final or "\\" in final:
@@ -71,7 +73,13 @@ def validate_approval_closed_schema(value: object) -> dict[str, object]:
     e=p["evidence"]
     if not isinstance(e, dict) or set(e) != {"manifest_id", "not_after_utc"}: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_EVIDENCE")
     if not isinstance(e["manifest_id"], str) or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", e["manifest_id"]): raise Stop(APPROVED_BYTES_INVALID, "UUID")
-    parse_utc(e["not_after_utc"])
+    expiry = parse_utc(e["not_after_utc"])
+    if expiry <= utc_now(): raise Stop(APPROVAL_EXPIRED, "APPROVAL_SCHEMA")
+    return value
+
+def validate_approved_input(value: object) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != {"schema_version", "manifest_id", "payload"}: raise Stop(APPROVED_BYTES_INVALID, "INPUT_SCHEMA")
+    if value.get("schema_version") != "aios-stage-0.33c-step4-approved-input-v1" or value.get("manifest_id") != MANIFEST_ID or not isinstance(value.get("payload"), dict): raise Stop(APPROVED_BYTES_INVALID, "INPUT_SCHEMA")
     return value
 
 
@@ -247,7 +255,7 @@ def durable_claim(evidence_fd: int, authority_commit: str, executor_sha: str) ->
 
 def stage_and_publish(parent_fd: int, source: bytes, final: str, semantic: int, digest: str) -> None:
     stage = f".{uuid.uuid4()}"
-    fd = os.open(stage, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent_fd)
+    fd = os.open(stage, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent_fd); _WRITABLE_FDS.add(fd)
     try:
         write_all(fd, source)
         os.fsync(fd)
@@ -255,8 +263,9 @@ def stage_and_publish(parent_fd: int, source: bytes, final: str, semantic: int, 
         os.fchmod(fd, 0o440)
         os.fsync(fd)
     finally:
-        os.close(fd)
+        os.close(fd); _WRITABLE_FDS.discard(fd)
     verify_file(parent_fd, stage, source, semantic, digest)
+    if _WRITABLE_FDS: raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "WRITABLE_FD", final)
     os.link(stage, final, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
     os.fsync(parent_fd)
     verify_file(parent_fd, final, source, semantic, digest)
@@ -317,17 +326,19 @@ def main() -> int:
         if any(not absent(parent_fd, name) for name, _, _, _ in FILES):
             raise Stop("target already exists")
         sources = [read_source(source_fd, *spec) for spec in FILES]
-        approval = exact_json(sources[1][:-1])
-        if not isinstance(approval, dict) or approval.get("schema_version") != "aios-stage-0.33c-step4-approved-input-v1":
-            raise Stop("approval schema mismatch")
+        approval_bytes = sources[1][:-1]
+        approval = exact_json(approval_bytes)
+        validate_approval_closed_schema(approval)
+        if json.dumps(approval, sort_keys=True, separators=(",", ":")).encode() != approval_bytes:
+            raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_CANONICAL")
         payload = approval.get("package_payload")
         if not isinstance(payload, dict) or payload.get("harness_sha256") != HARNESS_SHA256:
             raise Stop("approval binding mismatch")
         evidence = payload.get("evidence")
         if not isinstance(evidence, dict) or evidence.get("manifest_id") != MANIFEST_ID:
             raise Stop("manifest binding mismatch")
-        if utc_now() >= parse_utc(payload.get("not_after_utc")):
-            raise Stop("approval expired")
+        if utc_now() >= parse_utc(evidence.get("not_after_utc")):
+            raise Stop(APPROVAL_EXPIRED, "APPROVAL_EXPIRY")
         # Both target-absence and expiry gates have passed; only now claim.
         claim = durable_claim(evidence_fd, authority_commit, executor_sha)
         for source, spec in zip(sources, FILES):
