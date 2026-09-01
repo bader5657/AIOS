@@ -13,7 +13,8 @@ order without invoking the harness or writing candidate state:
    retained ingestion/registry facts;
 4. resolve every trusted fact and explicit null with one allowed provenance;
 5. enforce 1–10 items, bounds, units, canonical decimals, packaging equation,
-   timestamps, uniqueness, closed schema, and the 65,536-byte transport limit;
+   timestamps, uniqueness, closed schema, and the 86,836-byte input transport
+   limit;
 6. perform privacy/DLP and secret scanning before any approval;
 7. execute a separately authorized, least-privilege, source-bound duplicate
    preflight and require active count zero;
@@ -63,8 +64,10 @@ are:
 - `/opt/aios/runtime/intelligence/production-candidate-create/stage-0.33c/approved-input-approval.json`.
 
 Neither path is created by this package. Both final objects must be non-symlink
-regular files, `root:aiosadmin`, mode `0440`, and at most 65,536 bytes each. A
-separate filesystem governance/installation task must verify the existing
+regular files, `root:aiosadmin`, and mode `0440`. `approved-input.json` is at
+most 86,836 transport bytes; `approved-input-approval.json` is independently
+bounded at 13,620 transport bytes. A separate filesystem
+governance/installation task must verify the existing
 non-symlink parent, absence of both final paths, and absence of staging debris;
 create internally named same-directory staging files with `O_EXCL | O_NOFOLLOW`;
 write bounded bytes; flush and file-fsync; install without overwrite; parent

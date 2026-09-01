@@ -97,10 +97,38 @@ separate governance amendment. Prefer one clear retained receipt, simple units,
 unambiguous quantities, and no unusual edge case. This is blast-radius
 minimization, not permission to fabricate a simpler receipt.
 
-The operational input limit is 65,535 canonical semantic bytes and 65,536 bytes
-including its one LF, well below the harness ceilings of 4,255,677 and
-4,255,678. Any real input exceeding the operational limit is ineligible without
-separate governance even if the harness could parse it.
+The frozen constants are:
+
+`MAX_STEP4_SEMANTIC_PACKAGE_BYTES = 86835`
+
+`MAX_STEP4_TRANSPORT_PACKAGE_BYTES = 86836`
+
+The exact operational input limit is therefore 86,835 canonical semantic bytes
+and 86,836 bytes including its one LF. This supports every simultaneously valid
+1–10-item input at the current field maxima and remains strictly below the
+Step 3 harness ceilings of 4,255,677 and 4,255,678. The arithmetic is:
+
+| Input component | Bytes |
+|---|---:|
+| Fixed/top-level subtotal | 1,784 |
+| Ten item structures | 2,060 |
+| Ten items × four maximum 512-scalar text values | 82,000 |
+| Ten UUID/unit value sets | 440 |
+| Ten jointly valid decimal sets | 510 |
+| Ten unique three-digit line numbers | 30 |
+| Array delimiters and nine separators | 11 |
+| **Canonical semantic total** | **86,835** |
+| Exactly one LF | **+1** |
+| **Transport total** | **86,836** |
+
+The witness remains jointly valid: ten unique line numbers in 491–500; four
+maximum allowed astral-scalar strings and a canonical UUID per item; unit
+`pack`; full-colly count `100`; and the already reviewed jointly valid decimal
+spellings `999999.999999`, `800000000.000001`, and `899999999.999901`.
+Text/identity maxima do not affect the packaging equation. The higher ceiling is
+a validity/safety bound, not a size target; selection still prefers 1–3 small,
+clear items. Any input exceeding it is ineligible even though the harness has a
+larger bound.
 
 ## Canonical two-artifact approval package
 
@@ -124,7 +152,7 @@ The approval record has a closed wrapper:
     "approval_id": <canonical UUIDv4>,
     "approved_at_utc": <absolute UTC microsecond-Z timestamp>,
     "not_after_utc": <approved_at plus exactly 604800 seconds>,
-    "project_owner_approval_reference": <bounded non-secret reference>,
+    "project_owner_approval_reference": <canonical non-secret text, maximum 128 scalars>,
     "repository_commit": <40 lowercase hex>,
     "harness_sha256": "b9fc9fb22724184696eabf02525bcc0a626bdff5ce3943ed31ba2e21130f5cad",
     "python_path": "/opt/aios/runtime/venv/bin/python",
@@ -134,32 +162,63 @@ The approval record has a closed wrapper:
       "manifest_reference": <canonical retained reference>,
       "manifest_id": <matching canonical UUID>,
       "manifest_sha256": <64 lowercase hex>,
-      "manifest_size_bytes": <bounded integer>,
+      "manifest_size_bytes": <integer 0 through 4194304>,
       "represented_media_type": <current manifest enum>,
-      "manifest_received_at": <UTC RFC3339>,
-      "stored_original_size_bytes": <integer or null>,
+      "manifest_received_at": <the manifest instant normalized to exact UTC microsecond-Z>,
+      "stored_original_size_bytes": <integer 0 through 9223372036854775807 or null>,
       "stored_original_sha256": <64 lowercase hex or null>,
-      "content_type": <supported metadata value or null>,
-      "registry_record_id": <positive integer or null>
+      "mime_type": <exact supported metadata value, maximum 255 scalars, or null>,
+      "registry_record_id": <integer 1 through 9223372036854775807 or null>
     },
     "trusted_facts_sha256": <64 lowercase hex from the current authorization binding algorithm>,
     "input_semantic_sha256": <64 lowercase hex>,
     "input_transport_sha256": <64 lowercase hex>,
-    "input_semantic_bytes": <integer at most 65535>,
-    "input_transport_bytes": <semantic plus one>,
+    "input_semantic_bytes": <integer at most 86835>,
+    "input_transport_bytes": <semantic plus one, at most 86836>,
     "item_count": <integer 1 through 10>,
     "trusted_fact_provenance": {<exact JSON Pointer>: <one provenance enum>},
-    "more_than_three_items_justification": <bounded text or null>
+    "more_than_three_items_justification": <canonical text, maximum 512 scalars, or null>
   },
   "package_payload_sha256": <SHA-256 of canonical package_payload bytes>
 }
 ```
 
-Angle-bracket terms are type placeholders, not approved values. The payload
-hash avoids impossible self-hashing: canonicalize only `package_payload` with
+Angle-bracket terms are type placeholders, not approved values. The wrapper,
+`package_payload`, and `evidence` object are closed; no unlisted key is allowed.
+The provenance map contains exactly four receipt pointers plus eleven pointers
+for every present item index, and no other pointer. Thus ten items produce
+exactly 114 entries. The payload hash avoids impossible self-hashing: canonicalize only `package_payload` with
 the same JSON rules and hash those bytes without LF. The separately recorded
 approval-record SHA-256 covers the complete approval file including LF. The
 future selection evidence must bind both artifact hashes.
+
+
+### Exact approval-record size bound
+
+The approval record has its own exact bound; it does not reuse the input limit:
+
+`MAX_STEP4_APPROVAL_RECORD_SEMANTIC_BYTES = 13619`
+
+`MAX_STEP4_APPROVAL_RECORD_TRANSPORT_BYTES = 13620`
+
+At 10 items, the maximum canonical record assumes all optional evidence values
+are present, the longest `youtube_link` media enum, 19-digit size/registry
+integers, 128-scalar approval reference, 255-scalar MIME value, 512-scalar
+justification, maximum four-byte allowed UTF-8 scalars, and all 114 provenance
+values set to the longer `PROJECT_OWNER_APPROVED` enum.
+
+| Approval-record component | Bytes |
+|---|---:|
+| Closed keys/syntax, fixed/scalar maxima, empty bounded-text contents, and empty provenance object | 1,684 |
+| Maximum UTF-8 contents: approval reference 512, MIME 1,020, justification 2,048 | 3,580 |
+| Exact 114-entry provenance map beyond its two braces | 8,355 |
+| **Canonical approval-record semantic total** | **13,619** |
+| Exactly one LF | **+1** |
+| **Approval-record transport total** | **13,620** |
+
+Null optional values and shorter item counts only reduce this result. The exact
+future filesystem maxima are therefore 86,836 bytes for `approved-input.json`
+and 13,620 bytes for `approved-input-approval.json`.
 
 Project Owner approval must explicitly bind the exact retained evidence
 identity/hash, every `PROJECT_OWNER_APPROVED` fact, all provenance entries, the

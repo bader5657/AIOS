@@ -72,6 +72,10 @@ bounded, source-specific read:
 6. it satisfies the later candidate-bound duplicate preflight.
 
 This publication performs none of those production reads and selects nothing.
+The later harness-native input is bounded at exactly 86,835 canonical semantic
+bytes and 86,836 transport bytes including one LF. That larger corrected ceiling
+does not permit raw content, extra metadata, or any privacy expansion.
+
 If the real evidence cannot be represented by the existing manifest,
 `IngestionResult`, `TrustedReceiptFacts`, and harness contracts, selection stops
 for separate architecture/interface governance.
