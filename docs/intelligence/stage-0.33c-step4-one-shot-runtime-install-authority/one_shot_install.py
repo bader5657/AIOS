@@ -122,6 +122,41 @@ def expected_provenance_pointers(item_count: int) -> set[str]:
     fields=("candidate_material_description","canonical_display_name","size_description","specification","material_id","full_colly_count","qty_per_full_colly","partial_qty","total_qty","unit","line_number")
     return base | {f"/trusted_receipt_facts/items/{i}/{field}" for i in range(item_count) for field in fields}
 
+def verify_retained_manifest(manifest_reference: str, evidence: dict[str, object], *, manifest_root: Path | None = None) -> dict[str, object]:
+    if not isinstance(manifest_reference,str) or not re.fullmatch(r"/opt/aios/data/documents/manifests/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json",manifest_reference): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST")
+    path = (manifest_root / Path(manifest_reference).name) if manifest_root is not None else Path(manifest_reference)
+    try:
+        fd=os.open(path, os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW)
+    except OSError as exc: raise Stop(APPROVED_BYTES_INVALID,"MANIFEST",errno_code=exc.errno) from exc
+    try:
+        st=os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST")
+        data=b""
+        while True:
+            chunk=os.read(fd,1024*1024)
+            if not chunk: break
+            data += chunk
+    finally: os.close(fd)
+    if sha256(data)!=evidence.get("manifest_sha256") or len(data)!=evidence.get("manifest_size_bytes"): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST_BINDING")
+    obj=exact_json(data)
+    try:
+        from core.storage.document_manifest import validate_manifest
+        validate_manifest(obj)
+    except Exception as exc: raise Stop(APPROVED_BYTES_INVALID,"MANIFEST_SCHEMA") from exc
+    if obj.get("manifest_id") != evidence.get("manifest_id") or obj.get("represented_media_type") != evidence.get("represented_media_type") or obj.get("received_at") != evidence.get("manifest_received_at"): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST_BINDING")
+    md=obj.get("metadata",{})
+    if evidence.get("mime_type") != md.get("mime_type") and evidence.get("mime_type") is not None: raise Stop(APPROVED_BYTES_INVALID,"MIME_BINDING")
+    if evidence.get("registry_record_id") is not None and obj.get("registry_record_id") != evidence.get("registry_record_id"): raise Stop(APPROVED_BYTES_INVALID,"REGISTRY_BINDING")
+    original=obj.get("storage_path")
+    if original and evidence.get("stored_original_size_bytes") is not None:
+        try: ost=os.stat(original,follow_symlinks=False)
+        except OSError as exc: raise Stop(APPROVED_BYTES_INVALID,"ORIGINAL",errno_code=exc.errno) from exc
+        if not stat.S_ISREG(ost.st_mode) or ost.st_size != evidence["stored_original_size_bytes"]: raise Stop(APPROVED_BYTES_INVALID,"ORIGINAL_BINDING")
+        if evidence.get("stored_original_sha256") is not None:
+            with open(original,"rb") as f: od=f.read()
+            if sha256(od)!=evidence["stored_original_sha256"]: raise Stop(APPROVED_BYTES_INVALID,"ORIGINAL_BINDING")
+    return obj
+
 def validate_manifest_evidence(e: object, *, authoritative: dict[str, object] | None = None) -> None:
     if not isinstance(e,dict): raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_EVIDENCE")
     ref=e.get("manifest_reference"); mid=e.get("manifest_id")
@@ -504,6 +539,7 @@ def main() -> int:
         if sha256(json.dumps(trusted, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()) != payload["trusted_facts_sha256"]: raise Stop(APPROVED_BYTES_INVALID, "TRUSTED_FACTS_HASH")
         ev = payload["evidence"]
         if input_obj["ingestion_result"]["manifest_path"] != ev["manifest_reference"] or ev["manifest_id"] != ev["manifest_reference"][-41:-5]: raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
+        verify_retained_manifest(ev["manifest_reference"], ev)
         if json.dumps(approval, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode() != approval_bytes:
             raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_CANONICAL")
         payload = approval.get("package_payload")
