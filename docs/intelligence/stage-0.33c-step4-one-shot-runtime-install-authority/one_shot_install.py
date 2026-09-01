@@ -60,6 +60,38 @@ APPROVED_INPUT_FINAL_VERIFICATION_FAILED="APPROVED_INPUT_FINAL_VERIFICATION_FAIL
 APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE="APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE"
 RESULT_EVIDENCE_WRITE_FAILED="RESULT_EVIDENCE_WRITE_FAILED"
 _WRITABLE_FDS: dict[int, tuple[str, int, int]] = {}
+TERMINAL_CLASSIFICATIONS = frozenset({PRECONDITION_FAILED, APPROVAL_EXPIRED, TARGET_ALREADY_EXISTS, APPROVED_BYTES_INVALID, AUTHORITY_CONSUMED, "CONSUMPTION_DURABILITY_UNCERTAIN", "CONSUMPTION_DURABILITY_FAILED", APPROVED_INPUT_STAGING_FAILED, STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION, APPROVED_INPUT_FINAL_VERIFICATION_FAILED, APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE, RESULT_EVIDENCE_WRITE_FAILED, "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED"})
+
+@dataclass
+class ExecutionState:
+    authority_commit: str = ""
+    executor_sha: str = ""
+    consumption_state: str = "NOT_CONSUMED"
+    current_stage: str = "PRECONDITION"
+    input_staged: bool = False
+    input_published: bool = False
+    input_final_verified: bool = False
+    input_cleanup_complete: bool = False
+    approval_staged: bool = False
+    approval_published: bool = False
+    approval_final_verified: bool = False
+    approval_cleanup_complete: bool = False
+
+def validate_uuid4_canonical_lowercase(value: object) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", value) or str(uuid.UUID(value)) != value: raise Stop(APPROVED_BYTES_INVALID, "UUID")
+    return value
+
+def validate_sha256_lowercase(value: object) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value): raise Stop(APPROVED_BYTES_INVALID, "SHA")
+    return value
+
+def validate_utc_microsecond_z(value: object) -> dt.datetime:
+    return parse_utc(value)
+
+def validate_approval_safe_string(value: object, max_len: int = 256) -> str:
+    if not isinstance(value, str) or len(value) > max_len or any(ord(c) < 0x20 or ord(c) == 0x7f or 0xd800 <= ord(c) <= 0xdfff for c in value): raise Stop(APPROVED_BYTES_INVALID, "SAFE_STRING")
+    return value
+
 
 @dataclass(frozen=True)
 class VerifiedFile:
@@ -87,7 +119,8 @@ def validate_approval_closed_schema(value: object) -> dict[str, object]:
     if not isinstance(p, dict) or set(p) != {"harness_sha256", "evidence"} or p["harness_sha256"] != HARNESS_SHA256: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_PAYLOAD")
     e=p["evidence"]
     if not isinstance(e, dict) or set(e) != {"manifest_id", "not_after_utc"}: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_EVIDENCE")
-    if not isinstance(e["manifest_id"], str) or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", e["manifest_id"]): raise Stop(APPROVED_BYTES_INVALID, "UUID")
+    validate_uuid4_canonical_lowercase(e["manifest_id"])
+    validate_sha256_lowercase(p["harness_sha256"])
     expiry = parse_utc(e["not_after_utc"])
     if expiry <= utc_now(): raise Stop(APPROVAL_EXPIRED, "APPROVAL_SCHEMA")
     return value
@@ -313,6 +346,17 @@ def verify_file(parent_fd: int, name: str, source: bytes, semantic: int, digest:
     return VerifiedFile(info.st_dev, info.st_ino, info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode), len(data))
 
 
+def write_failure_result(evidence_fd: int, state: ExecutionState, failure: GovernedStop) -> None:
+    record = {"schema_version":"aios-stage-0.33c-p4s6-result-v1", "authority_id":AUTHORITY_ID, "executor_sha256":state.executor_sha, "authority_commit":state.authority_commit, "timestamp_utc":utc_text(utc_now()), "stage":failure.stage, "classification":failure.classification, "consumption_state":state.consumption_state, "artifact_role":failure.artifact or "NONE", "input_published":state.input_published, "input_verified":state.input_final_verified, "approval_published":state.approval_published, "approval_verified":state.approval_final_verified, "errno_code":failure.errno_code}
+    fd = os.open(RESULT, os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC, 0o600, dir_fd=evidence_fd)
+    try:
+        write_all(fd, json.dumps(record, sort_keys=True, separators=(",", ":")).encode()+b"\n"); os.fsync(fd); os.close(fd)
+    except OSError as exc:
+        try: os.close(fd)
+        except OSError: pass
+        raise Stop(RESULT_EVIDENCE_WRITE_FAILED, "RESULT", errno_code=exc.errno) from exc
+    os.fsync(evidence_fd)
+
 def write_result(evidence_fd: int, claim: dict[str, object], classification: str) -> None:
     result = dict(claim)
     result.update({"schema_version": "aios-stage-0.33c-p4s6-result-v1", "claim_outcome": "CLAIMED",
@@ -361,11 +405,19 @@ def main() -> int:
             raise Stop(APPROVAL_EXPIRED, "APPROVAL_EXPIRY")
         # Both target-absence and expiry gates have passed; only now claim.
         claim = durable_claim(evidence_fd, authority_commit, executor_sha)
-        for source, spec in zip(sources, FILES):
-            stage_and_publish(parent_fd, source, spec[0], spec[1], spec[3])
-        for source, spec in zip(sources, FILES):
-            verify_file(parent_fd, spec[0], source, spec[1], spec[3])
-        write_result(evidence_fd, claim, "STEP4_APPROVED_INPUT_PAIR_INSTALLED_VERIFIED")
+        state = ExecutionState(authority_commit=authority_commit, executor_sha=executor_sha, consumption_state="DURABLY_CONSUMED")
+        for index, (source, spec) in enumerate(zip(sources, FILES)):
+            state.current_stage = "INPUT" if index == 0 else "APPROVAL"
+            try:
+                stage_and_publish(parent_fd, source, spec[0], spec[1], spec[3])
+            except GovernedStop as failure:
+                if index == 1 and state.input_final_verified: failure = GovernedStop(STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION, failure.stage, spec[0], failure.errno_code)
+                try: write_failure_result(evidence_fd, state, failure)
+                except GovernedStop: pass
+                raise failure
+            if index == 0: state.input_published = state.input_final_verified = state.input_cleanup_complete = True
+            else: state.approval_published = state.approval_final_verified = state.approval_cleanup_complete = True
+        write_result(evidence_fd, claim, "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED")
         return 0
     finally:
         os.close(evidence_fd)
