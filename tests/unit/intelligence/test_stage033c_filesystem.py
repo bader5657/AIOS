@@ -1,4 +1,4 @@
-import importlib.util, tempfile, unittest, os, re, sys
+import importlib.util, tempfile, unittest, os, re, sys, pwd
 from pathlib import Path
 P=Path(__file__).resolve().parents[3]/"docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py"
 s=importlib.util.spec_from_file_location("ex",P); ex=importlib.util.module_from_spec(s); sys.modules["ex"]=ex; s.loader.exec_module(ex)
@@ -13,7 +13,7 @@ class FilesystemTests(unittest.TestCase):
    os.link(stage,final,src_dir_fd=fd,dst_dir_fd=fd); a=os.stat(os.path.join(d,stage)); b=os.stat(os.path.join(d,final)); self.assertEqual(a.st_ino,b.st_ino); os.unlink(stage,dir_fd=fd); self.assertFalse(os.path.lexists(os.path.join(d,stage))); os.close(fd)
  def test_verify_returns_metadata(self):
   with tempfile.TemporaryDirectory() as d:
-   fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); n="approved-input.json"; path=os.path.join(d,n); Path(path).write_bytes(b"{}\n"); os.chmod(path,0o440); os.chown(path,0,os.getgid()) if os.geteuid()==0 else None
+   fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); n="approved-input.json"; path=os.path.join(d,n); Path(path).write_bytes(b"{}\n"); os.chmod(path,0o440); os.chown(path,0,pwd.getpwnam("aiosadmin").pw_gid) if os.geteuid()==0 else None
    if os.geteuid()!=0: self.skipTest("root metadata")
    m=ex.verify_file(fd,n,b"{}\n",2,ex.sha256(b"{}")); self.assertGreater(m.st_ino,0); os.close(fd)
 if __name__=="__main__": unittest.main()
