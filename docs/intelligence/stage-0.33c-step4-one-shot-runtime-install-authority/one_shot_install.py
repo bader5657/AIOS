@@ -142,13 +142,51 @@ def validate_approval_closed_schema(value: object) -> dict[str, object]:
         if not isinstance(k,str) or not k.startswith("/trusted_receipt_facts/") or v not in {"EVIDENCE_DERIVED","PROJECT_OWNER_APPROVED"}: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
     if p["more_than_three_items_justification"] is not None: validate_approval_safe_string(p["more_than_three_items_justification"],512)
     validate_sha256_lowercase(value["package_payload_sha256"])
+    canonical = json.dumps(p, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    if sha256(canonical) != value["package_payload_sha256"]: raise Stop(APPROVED_BYTES_INVALID, "PAYLOAD_HASH")
+    if p["item_count"] > 3 and (not isinstance(p["more_than_three_items_justification"], str) or not p["more_than_three_items_justification"]): raise Stop(APPROVED_BYTES_INVALID, "JUSTIFICATION")
+    if p["item_count"] <= 3 and p["more_than_three_items_justification"] is not None: raise Stop(APPROVED_BYTES_INVALID, "JUSTIFICATION")
     return value
+
+def _decimal_string(value: object, maximum: str, zero_allowed: bool = True) -> None:
+    if not isinstance(value,str) or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]{0,5}[1-9])?",value): raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
+    from decimal import Decimal
+    try: d=Decimal(value)
+    except Exception: raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
+    if not d.is_finite() or d<0 or (not zero_allowed and d==0) or d>Decimal(maximum): raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
+    t=d.as_tuple();
+    if max(-t.exponent,0)>6 or len(t.digits)+max(t.exponent,0)>20 or (t.sign and d!=0): raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
+    rendered=format(d,"f").rstrip("0").rstrip(".") or "0"
+    if rendered!=value: raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
 
 def validate_approved_input_closed_schema(value: object) -> dict[str, object]:
     top={"schema_version","ingestion_result","trusted_receipt_facts"}
     if not isinstance(value,dict) or set(value)!=top or value["schema_version"]!="aios-stage-0.33c-one-shot-input-v1": raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
-    if not isinstance(value["ingestion_result"],dict) or set(value["ingestion_result"])!={"input_type","recognized_input_type","stored_path","manifest_path","metadata","text","register_handoff_ready","process_handoff_ready","route_handoff_ready","respond_acknowledgement_ready","registration_succeeded","registry_record_id","event_publication_attempted","event_delivery_succeeded","event_delivery_failure_code","brain_result"}: raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
-    if not isinstance(value["trusted_receipt_facts"],dict) or set(value["trusted_receipt_facts"])!={"supplier_name","document_number","document_date","received_at","items"}: raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
+    i=value["ingestion_result"]; ik={"input_type","recognized_input_type","stored_path","manifest_path","metadata","text","register_handoff_ready","process_handoff_ready","route_handoff_ready","respond_acknowledgement_ready","registration_succeeded","registry_record_id","event_publication_attempted","event_delivery_succeeded","event_delivery_failure_code","brain_result"}
+    if not isinstance(i,dict) or set(i)!=ik: raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
+    if not isinstance(i["input_type"],str) or not isinstance(i["recognized_input_type"],str) or i["stored_path"] is not None or i["metadata"]!={} or i["text"]!="" or i["brain_result"] is not None: raise Stop(APPROVED_BYTES_INVALID,"INPUT_VALUE")
+    if i["process_handoff_ready"] is not False or i["register_handoff_ready"] is not True or i["respond_acknowledgement_ready"] is not True: raise Stop(APPROVED_BYTES_INVALID,"INPUT_VALUE")
+    if not all(type(i[k]) is bool for k in ("route_handoff_ready","registration_succeeded","event_publication_attempted","event_delivery_succeeded")): raise Stop(APPROVED_BYTES_INVALID,"INPUT_VALUE")
+    f=value["trusted_receipt_facts"]; fk={"supplier_name","document_number","document_date","received_at","items"}
+    if not isinstance(f,dict) or set(f)!=fk: raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
+    if not isinstance(f["supplier_name"],str) or not 1<=len(f["supplier_name"])<=128 or any(ord(c)<32 or ord(c)==127 or 0xd800<=ord(c)<=0xdfff for c in f["supplier_name"]): raise Stop(APPROVED_BYTES_INVALID,"INPUT_TEXT")
+    if f["document_number"] is not None and not isinstance(f["document_number"],str): raise Stop(APPROVED_BYTES_INVALID,"INPUT_TEXT")
+    if not isinstance(f["items"],list) or not 1<=len(f["items"] )<=10: raise Stop(APPROVED_BYTES_INVALID,"INPUT_ITEMS")
+    lines=[]
+    for item in f["items"]:
+        keys={"line_number","candidate_material_description","canonical_display_name","size_description","specification","material_id","full_colly_count","qty_per_full_colly","partial_qty","total_qty","unit"}
+        if not isinstance(item,dict) or set(item)!=keys: raise Stop(APPROVED_BYTES_INVALID,"INPUT_ITEM")
+        if not isinstance(item["line_number"],int) or not 1<=item["line_number"]<=500 or item["line_number"] in lines: raise Stop(APPROVED_BYTES_INVALID,"INPUT_ITEM")
+        lines.append(item["line_number"])
+        for k in ("candidate_material_description","canonical_display_name","size_description","specification"):
+            if item[k] is not None and (not isinstance(item[k],str) or not item[k] or len(item[k])>512 or any(ord(c)<32 or ord(c)==127 or 0xd800<=ord(c)<=0xdfff for c in item[k])): raise Stop(APPROVED_BYTES_INVALID,"INPUT_TEXT")
+        if item["material_id"] is not None: validate_uuid4_canonical_lowercase(item["material_id"])
+        c=item["full_colly_count"]
+        if not isinstance(c,int) or not 0<=c<=1000000: raise Stop(APPROVED_BYTES_INVALID,"INPUT_QTY")
+        if c==0 and item["qty_per_full_colly"] is not None: raise Stop(APPROVED_BYTES_INVALID,"INPUT_QTY")
+        if c>0: _decimal_string(item["qty_per_full_colly"],"1000000",False)
+        _decimal_string(item["partial_qty"],"100000000",True); _decimal_string(item["total_qty"],"100000000",False)
+        if item["unit"] not in {"sheet","pcs","kg","roll","pack"}: raise Stop(APPROVED_BYTES_INVALID,"INPUT_UNIT")
     return value
 
 def validate_approved_input(value: object) -> dict[str, object]: return validate_approved_input_closed_schema(value)
@@ -419,11 +457,14 @@ def main() -> int:
         if any(not absent(parent_fd, name) for name, _, _, _ in FILES):
             raise Stop("target already exists")
         sources = [read_source(source_fd, *spec) for spec in FILES]
-        validate_approved_input_closed_schema(exact_json(sources[0][:-1]))
+        input_obj = exact_json(sources[0][:-1])
+        validate_approved_input_closed_schema(input_obj)
+        if json.dumps(input_obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode() != sources[0][:-1]: raise Stop(APPROVED_BYTES_INVALID, "INPUT_CANONICAL")
         approval_bytes = sources[1][:-1]
         approval = exact_json(approval_bytes)
         validate_approval_closed_schema(approval)
-        if json.dumps(approval, sort_keys=True, separators=(",", ":")).encode() != approval_bytes:
+        if sha256(sources[0][:-1]) != approval["package_payload"]["input_semantic_sha256"] or sha256(sources[0]) != approval["package_payload"]["input_transport_sha256"]: raise Stop(APPROVED_BYTES_INVALID, "INPUT_HASH")
+        if json.dumps(approval, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode() != approval_bytes:
             raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_CANONICAL")
         payload = approval.get("package_payload")
         if not isinstance(payload, dict) or payload.get("harness_sha256") != HARNESS_SHA256:
