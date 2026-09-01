@@ -122,6 +122,14 @@ def expected_provenance_pointers(item_count: int) -> set[str]:
     fields=("candidate_material_description","canonical_display_name","size_description","specification","material_id","full_colly_count","qty_per_full_colly","partial_qty","total_qty","unit","line_number")
     return base | {f"/trusted_receipt_facts/items/{i}/{field}" for i in range(item_count) for field in fields}
 
+def validate_manifest_evidence(e: object, *, authoritative: dict[str, object] | None = None) -> None:
+    if not isinstance(e,dict): raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_EVIDENCE")
+    ref=e.get("manifest_reference"); mid=e.get("manifest_id")
+    if not isinstance(ref,str) or not re.fullmatch(r"/opt/aios/data/documents/manifests/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json",ref) or ref[-41:-5] != mid: raise Stop(APPROVED_BYTES_INVALID,"MANIFEST_BINDING")
+    if authoritative:
+        for key in ("manifest_sha256","manifest_size_bytes","represented_media_type","manifest_received_at","stored_original_size_bytes","stored_original_sha256","mime_type","registry_record_id"):
+            if key in authoritative and e.get(key) != authoritative[key]: raise Stop(APPROVED_BYTES_INVALID,"EVIDENCE_BINDING")
+
 def validate_approval_closed_schema(value: object) -> dict[str, object]:
     top={"schema_version","package_payload","package_payload_sha256"}
     if not isinstance(value,dict) or set(value)!=top: raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_SCHEMA")
@@ -138,7 +146,7 @@ def validate_approval_closed_schema(value: object) -> dict[str, object]:
     e=p["evidence"]; ek={"manifest_reference","manifest_id","manifest_sha256","manifest_size_bytes","represented_media_type","manifest_received_at","stored_original_size_bytes","stored_original_sha256","mime_type","registry_record_id"}
     if not isinstance(e,dict) or set(e)!=ek: raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_EVIDENCE")
     validate_uuid4_canonical_lowercase(e["manifest_id"]); validate_sha256_lowercase(e["manifest_sha256"]); validate_utc_microsecond_z(e["manifest_received_at"])
-    if not isinstance(e["manifest_reference"],str) or not re.fullmatch(r"/opt/aios/data/documents/manifests/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json",e["manifest_reference"]): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST")
+    validate_manifest_evidence(e)
     for k,lo,hi in (("manifest_size_bytes",0,4194304),("registry_record_id",0,9223372036854775807)):
         if not isinstance(e[k],int) or not lo<=e[k]<=hi: raise Stop(APPROVED_BYTES_INVALID,"EVIDENCE_SIZE")
     if e["stored_original_size_bytes"] is not None and (not isinstance(e["stored_original_size_bytes"],int) or not 0<=e["stored_original_size_bytes"]<=9223372036854775807): raise Stop(APPROVED_BYTES_INVALID,"EVIDENCE_SIZE")
