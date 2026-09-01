@@ -30,6 +30,7 @@ REL_EXECUTOR = Path("docs/intelligence/stage-0.33c-step4-one-shot-runtime-instal
 REL_POLICY = Path("docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md")
 RUNTIME_PARENT = Path("/opt/aios/runtime/intelligence/production-candidate-create/stage-0.33c")
 SOURCE_PARENT = Path("/run/aios/stage-0.33c-p4s5-source")
+RETAINED_DATA_ROOT = Path("/opt/aios/data/documents")
 EVIDENCE_DIR = "runtime-sync-evidence"
 MARKER = f"step4-install-authority-{AUTHORITY_ID}.json"
 RESULT = MARKER + ".result.json"
@@ -90,7 +91,10 @@ def validate_sha256_lowercase(value: object) -> str:
     return value
 
 def validate_utc_microsecond_z(value: object) -> dt.datetime:
-    return parse_utc(value)
+    try:
+        return parse_utc(value)
+    except GovernedStop as exc:
+        raise Stop(APPROVED_BYTES_INVALID, "TIMESTAMP") from exc
 
 def validate_approval_safe_string(value: object, max_len: int = 256) -> str:
     if not isinstance(value, str) or len(value) > max_len or any(ord(c) < 0x20 or ord(c) == 0x7f or 0xd800 <= ord(c) <= 0xdfff for c in value): raise Stop(APPROVED_BYTES_INVALID, "SAFE_STRING")
@@ -122,40 +126,82 @@ def expected_provenance_pointers(item_count: int) -> set[str]:
     fields=("candidate_material_description","canonical_display_name","size_description","specification","material_id","full_colly_count","qty_per_full_colly","partial_qty","total_qty","unit","line_number")
     return base | {f"/trusted_receipt_facts/items/{i}/{field}" for i in range(item_count) for field in fields}
 
-def verify_retained_manifest(manifest_reference: str, evidence: dict[str, object], *, manifest_root: Path | None = None) -> dict[str, object]:
-    if not isinstance(manifest_reference,str) or not re.fullmatch(r"/opt/aios/data/documents/manifests/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json",manifest_reference): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST")
-    path = (manifest_root / Path(manifest_reference).name) if manifest_root is not None else Path(manifest_reference)
+def _read_regular_nofollow(path: Path, stage: str) -> tuple[bytes, os.stat_result]:
     try:
-        fd=os.open(path, os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW)
-    except OSError as exc: raise Stop(APPROVED_BYTES_INVALID,"MANIFEST",errno_code=exc.errno) from exc
+        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise Stop(APPROVED_BYTES_INVALID, stage, errno_code=exc.errno) from exc
     try:
-        st=os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST")
-        data=b""
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise Stop(APPROVED_BYTES_INVALID, stage)
+        chunks: list[bytes] = []
         while True:
-            chunk=os.read(fd,1024*1024)
-            if not chunk: break
-            data += chunk
-    finally: os.close(fd)
-    if sha256(data)!=evidence.get("manifest_sha256") or len(data)!=evidence.get("manifest_size_bytes"): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST_BINDING")
-    obj=exact_json(data)
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        return b"".join(chunks), info
+    finally:
+        os.close(fd)
+
+
+def _retained_original_path(storage_path: object, retained_root: Path) -> Path:
+    if not isinstance(storage_path, str) or not storage_path:
+        raise Stop(APPROVED_BYTES_INVALID, "ORIGINAL_PATH")
+    candidate = Path(storage_path)
+    if not candidate.is_absolute():
+        raise Stop(APPROVED_BYTES_INVALID, "ORIGINAL_PATH")
+    try:
+        candidate.relative_to(retained_root)
+    except ValueError as exc:
+        raise Stop(APPROVED_BYTES_INVALID, "ORIGINAL_PATH") from exc
+    if candidate == retained_root or ".." in candidate.parts:
+        raise Stop(APPROVED_BYTES_INVALID, "ORIGINAL_PATH")
+    current = Path(candidate.anchor)
+    for component in candidate.parts[1:-1]:
+        current /= component
+        try:
+            info = os.stat(current, follow_symlinks=False)
+        except OSError as exc:
+            raise Stop(APPROVED_BYTES_INVALID, "ORIGINAL_PATH", errno_code=exc.errno) from exc
+        if not stat.S_ISDIR(info.st_mode):
+            raise Stop(APPROVED_BYTES_INVALID, "ORIGINAL_PATH")
+    return candidate
+
+
+def verify_retained_manifest(manifest_reference: str, evidence: dict[str, object], *, manifest_root: Path | None = None, retained_root: Path | None = None) -> dict[str, object]:
+    if not isinstance(manifest_reference, str) or not re.fullmatch(r"/opt/aios/data/documents/manifests/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json", manifest_reference):
+        raise Stop(APPROVED_BYTES_INVALID, "MANIFEST")
+    path = (manifest_root / Path(manifest_reference).name) if manifest_root is not None else Path(manifest_reference)
+    data, _ = _read_regular_nofollow(path, "MANIFEST")
+    if sha256(data) != evidence.get("manifest_sha256") or len(data) != evidence.get("manifest_size_bytes"):
+        raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
+    obj = exact_json(data)
     try:
         from core.storage.document_manifest import validate_manifest
         validate_manifest(obj)
-    except Exception as exc: raise Stop(APPROVED_BYTES_INVALID,"MANIFEST_SCHEMA") from exc
-    if obj.get("manifest_id") != evidence.get("manifest_id") or obj.get("represented_media_type") != evidence.get("represented_media_type") or obj.get("received_at") != evidence.get("manifest_received_at"): raise Stop(APPROVED_BYTES_INVALID,"MANIFEST_BINDING")
-    md=obj.get("metadata",{})
-    if evidence.get("mime_type") != md.get("mime_type") and evidence.get("mime_type") is not None: raise Stop(APPROVED_BYTES_INVALID,"MIME_BINDING")
-    if evidence.get("registry_record_id") is not None and obj.get("registry_record_id") != evidence.get("registry_record_id"): raise Stop(APPROVED_BYTES_INVALID,"REGISTRY_BINDING")
-    original=obj.get("storage_path")
-    if original and evidence.get("stored_original_size_bytes") is not None:
-        try: ost=os.stat(original,follow_symlinks=False)
-        except OSError as exc: raise Stop(APPROVED_BYTES_INVALID,"ORIGINAL",errno_code=exc.errno) from exc
-        if not stat.S_ISREG(ost.st_mode) or ost.st_size != evidence["stored_original_size_bytes"]: raise Stop(APPROVED_BYTES_INVALID,"ORIGINAL_BINDING")
-        if evidence.get("stored_original_sha256") is not None:
-            with open(original,"rb") as f: od=f.read()
-            if sha256(od)!=evidence["stored_original_sha256"]: raise Stop(APPROVED_BYTES_INVALID,"ORIGINAL_BINDING")
+    except Exception as exc:
+        raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_SCHEMA") from exc
+    if (obj.get("manifest_id") != evidence.get("manifest_id") or
+            obj.get("represented_media_type") != evidence.get("represented_media_type") or
+            obj.get("received_at") != evidence.get("manifest_received_at")):
+        raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
+    metadata = obj.get("metadata", {})
+    if evidence.get("mime_type") != metadata.get("mime_type"):
+        raise Stop(APPROVED_BYTES_INVALID, "MIME_BINDING")
+    original_root = retained_root if retained_root is not None else RETAINED_DATA_ROOT
+    original = _retained_original_path(obj.get("storage_path"), original_root)
+    original_bytes, original_info = _read_regular_nofollow(original, "ORIGINAL")
+    original_digest = sha256(original_bytes)
+    if original_info.st_size != obj.get("file_size_bytes") or original_digest != obj.get("checksum_sha256"):
+        raise Stop(APPROVED_BYTES_INVALID, "ORIGINAL_BINDING")
+    if evidence.get("stored_original_size_bytes") is not None and evidence["stored_original_size_bytes"] != original_info.st_size:
+        raise Stop(APPROVED_BYTES_INVALID, "ORIGINAL_BINDING")
+    if evidence.get("stored_original_sha256") is not None and evidence["stored_original_sha256"] != original_digest:
+        raise Stop(APPROVED_BYTES_INVALID, "ORIGINAL_BINDING")
     return obj
+
 
 def validate_manifest_evidence(e: object, *, authoritative: dict[str, object] | None = None) -> None:
     if not isinstance(e,dict): raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_EVIDENCE")
@@ -182,14 +228,20 @@ def validate_approval_closed_schema(value: object) -> dict[str, object]:
     if not isinstance(e,dict) or set(e)!=ek: raise Stop(APPROVED_BYTES_INVALID,"APPROVAL_EVIDENCE")
     validate_uuid4_canonical_lowercase(e["manifest_id"]); validate_sha256_lowercase(e["manifest_sha256"]); validate_utc_microsecond_z(e["manifest_received_at"])
     validate_manifest_evidence(e)
-    for k,lo,hi in (("manifest_size_bytes",0,4194304),("registry_record_id",0,9223372036854775807)):
-        if not isinstance(e[k],int) or not lo<=e[k]<=hi: raise Stop(APPROVED_BYTES_INVALID,"EVIDENCE_SIZE")
+    if type(e["manifest_size_bytes"]) is not int or not 0 <= e["manifest_size_bytes"] <= 4194304:
+        raise Stop(APPROVED_BYTES_INVALID, "EVIDENCE_SIZE")
+    registry_id = e["registry_record_id"]
+    if registry_id is not None and (type(registry_id) is not int or not 1 <= registry_id <= 9223372036854775807):
+        raise Stop(APPROVED_BYTES_INVALID, "EVIDENCE_REGISTRY")
     if e["stored_original_size_bytes"] is not None and (not isinstance(e["stored_original_size_bytes"],int) or not 0<=e["stored_original_size_bytes"]<=9223372036854775807): raise Stop(APPROVED_BYTES_INVALID,"EVIDENCE_SIZE")
     for k in ("stored_original_sha256",):
         if e[k] is not None: validate_sha256_lowercase(e[k])
     if e["mime_type"] is not None: validate_approval_safe_string(e["mime_type"],255)
     for k in ("trusted_facts_sha256","input_semantic_sha256","input_transport_sha256"): validate_sha256_lowercase(p[k])
-    if p["input_semantic_bytes"]!=1327 or p["input_transport_bytes"]!=1328 or p["item_count"]<1 or p["item_count"]>10: raise Stop(APPROVED_BYTES_INVALID,"INPUT_BINDING")
+    if (type(p["input_semantic_bytes"]) is not int or type(p["input_transport_bytes"]) is not int or
+            not 0 <= p["input_semantic_bytes"] <= 86835 or p["input_transport_bytes"] != p["input_semantic_bytes"] + 1 or
+            type(p["item_count"]) is not int or not 1 <= p["item_count"] <= 10):
+        raise Stop(APPROVED_BYTES_INVALID, "INPUT_BINDING")
     if not isinstance(p["trusted_fact_provenance"],dict) or set(p["trusted_fact_provenance"]) != expected_provenance_pointers(p["item_count"]): raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
     for k,v in p["trusted_fact_provenance"].items():
         if v not in {"EVIDENCE_DERIVED","PROJECT_OWNER_APPROVED"}: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
@@ -200,6 +252,61 @@ def validate_approval_closed_schema(value: object) -> dict[str, object]:
     if p["item_count"] > 3 and (not isinstance(p["more_than_three_items_justification"], str) or not p["more_than_three_items_justification"]): raise Stop(APPROVED_BYTES_INVALID, "JUSTIFICATION")
     if p["item_count"] <= 3 and p["more_than_three_items_justification"] is not None: raise Stop(APPROVED_BYTES_INVALID, "JUSTIFICATION")
     return value
+
+def validate_registry_binding(approved_input: dict[str, object], approval: dict[str, object]) -> None:
+    ingestion = approved_input["ingestion_result"]
+    evidence = approval["package_payload"]["evidence"]
+    succeeded = ingestion["registration_succeeded"]
+    input_id = ingestion["registry_record_id"]
+    approval_id = evidence["registry_record_id"]
+    if type(succeeded) is not bool:
+        raise Stop(APPROVED_BYTES_INVALID, "REGISTRY_BINDING")
+    if succeeded:
+        if type(input_id) is not int or not 1 <= input_id <= 9223372036854775807:
+            raise Stop(APPROVED_BYTES_INVALID, "REGISTRY_BINDING")
+    elif input_id is not None:
+        raise Stop(APPROVED_BYTES_INVALID, "REGISTRY_BINDING")
+    if approval_id != input_id or type(approval_id) is not type(input_id):
+        raise Stop(APPROVED_BYTES_INVALID, "REGISTRY_BINDING")
+
+
+def validate_frozen_package(input_transport: bytes, approval_transport: bytes, *, manifest_root: Path | None = None, retained_root: Path | None = None) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+    if not input_transport.endswith(b"\n") or input_transport.endswith(b"\n\n"):
+        raise Stop(APPROVED_BYTES_INVALID, "INPUT_TRANSPORT")
+    if not approval_transport.endswith(b"\n") or approval_transport.endswith(b"\n\n"):
+        raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_TRANSPORT")
+    input_semantic = input_transport[:-1]
+    approval_semantic = approval_transport[:-1]
+    input_obj = exact_json(input_semantic)
+    validate_approved_input_closed_schema(input_obj)
+    if json.dumps(input_obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode() != input_semantic:
+        raise Stop(APPROVED_BYTES_INVALID, "INPUT_CANONICAL")
+    approval = exact_json(approval_semantic)
+    validate_approval_closed_schema(approval)
+    if json.dumps(approval, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode() != approval_semantic:
+        raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_CANONICAL")
+    payload = approval["package_payload"]
+    if (payload["input_semantic_bytes"] != len(input_semantic) or
+            payload["input_transport_bytes"] != len(input_transport) or
+            payload["input_semantic_sha256"] != sha256(input_semantic) or
+            payload["input_transport_sha256"] != sha256(input_transport)):
+        raise Stop(APPROVED_BYTES_INVALID, "INPUT_HASH")
+    trusted = input_obj["trusted_receipt_facts"]
+    trusted_bytes = json.dumps(trusted, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    if payload["trusted_facts_sha256"] != sha256(trusted_bytes):
+        raise Stop(APPROVED_BYTES_INVALID, "TRUSTED_FACTS_HASH")
+    if payload["item_count"] != len(trusted["items"]):
+        raise Stop(APPROVED_BYTES_INVALID, "ITEM_COUNT")
+    validate_registry_binding(input_obj, approval)
+    evidence = payload["evidence"]
+    ingestion = input_obj["ingestion_result"]
+    if ingestion["manifest_path"] != evidence["manifest_reference"] or evidence["manifest_id"] != evidence["manifest_reference"][-41:-5]:
+        raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
+    manifest = verify_retained_manifest(evidence["manifest_reference"], evidence, manifest_root=manifest_root, retained_root=retained_root)
+    if manifest["manifest_id"] != evidence["manifest_id"]:
+        raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
+    return input_obj, approval, manifest
+
 
 def _decimal_string(value: object, maximum: str, zero_allowed: bool = True) -> None:
     if not isinstance(value,str) or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]{0,5}[1-9])?",value): raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
@@ -527,29 +634,10 @@ def main() -> int:
         if any(not absent(parent_fd, name) for name, _, _, _ in FILES):
             raise Stop("target already exists")
         sources = [read_source(source_fd, *spec) for spec in FILES]
-        input_obj = exact_json(sources[0][:-1])
-        validate_approved_input_closed_schema(input_obj)
-        if json.dumps(input_obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode() != sources[0][:-1]: raise Stop(APPROVED_BYTES_INVALID, "INPUT_CANONICAL")
-        approval_bytes = sources[1][:-1]
-        approval = exact_json(approval_bytes)
-        validate_approval_closed_schema(approval)
-        if sha256(sources[0][:-1]) != approval["package_payload"]["input_semantic_sha256"] or sha256(sources[0]) != approval["package_payload"]["input_transport_sha256"]: raise Stop(APPROVED_BYTES_INVALID, "INPUT_HASH")
-        payload = approval["package_payload"]
-        trusted = input_obj["trusted_receipt_facts"]
-        if sha256(json.dumps(trusted, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()) != payload["trusted_facts_sha256"]: raise Stop(APPROVED_BYTES_INVALID, "TRUSTED_FACTS_HASH")
-        ev = payload["evidence"]
-        if input_obj["ingestion_result"]["manifest_path"] != ev["manifest_reference"] or ev["manifest_id"] != ev["manifest_reference"][-41:-5]: raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
-        verify_retained_manifest(ev["manifest_reference"], ev)
-        if json.dumps(approval, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode() != approval_bytes:
-            raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_CANONICAL")
-        payload = approval.get("package_payload")
-        if not isinstance(payload, dict) or payload.get("harness_sha256") != HARNESS_SHA256:
-            raise Stop("approval binding mismatch")
-        evidence = payload.get("evidence")
-        if not isinstance(evidence, dict) or evidence.get("manifest_id") != MANIFEST_ID:
-            raise Stop("manifest binding mismatch")
-        if utc_now() >= parse_utc(evidence.get("not_after_utc")):
-            raise Stop(APPROVAL_EXPIRED, "APPROVAL_EXPIRY")
+        input_obj, approval, manifest = validate_frozen_package(sources[0], sources[1])
+        evidence = approval["package_payload"]["evidence"]
+        if evidence["manifest_id"] != MANIFEST_ID:
+            raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
         # Both target-absence and expiry gates have passed; only now claim.
         claim = durable_claim(evidence_fd, authority_commit, executor_sha)
         state = ExecutionState(authority_commit=authority_commit, executor_sha=executor_sha, consumption_state="DURABLY_CONSUMED")
