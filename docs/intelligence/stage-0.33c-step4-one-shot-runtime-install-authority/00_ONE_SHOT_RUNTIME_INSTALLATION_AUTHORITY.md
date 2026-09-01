@@ -1,4 +1,4 @@
-# Stage 0.33C-P4S5 One-Shot Runtime Package Installation Authority
+# Stage 0.33C-P4S6 One-Shot Runtime Package Installation Authority
 
 ## Authority identity, activation, and scope
 
@@ -40,6 +40,40 @@ must remain absent and must not be created, modified, or consumed.
 | approval transport bytes | `3550` |
 | approval semantic-prefix SHA-256 | `266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57` |
 | harness SHA-256, binding context only | `b9fc9fb22724184696eabf02525bcc0a626bdff5ce3943ed31ba2e21130f5cad` |
+
+## Frozen executor and merged-authority binding
+
+| Binding | Frozen value |
+|---|---|
+| executor repository path | `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py` |
+| executor SHA-256 | `1303e4a6b36e96785437d03a53947969b5f917a9d52906640d12664a37656f4a` |
+| interpreter/runtime | `/opt/aios/runtime/venv/bin/python`, governed Python `3.12.3` |
+| run-as identity | Unix `root` (`euid=0`, account name `root`) |
+| arguments/input model | no arguments; closed constants and the two fixed private sources only |
+| security-critical helpers | none; all claim, verification, fd, fsync, staging, ownership, publication, and final-verification logic is contained in the frozen executor |
+
+This is the only installation mechanism authorized. Root is required solely for
+the fixed `root:aiosadmin` ownership transition; service-account privileges are
+unchanged. The executor has no generic mode and accepts no target, source, hash,
+owner, mode, manifest, approval, force, overwrite, retry, reset, or network
+argument. It contains no raw package content and must not be imported as a helper.
+
+Before claim, the executor computes its own SHA-256, requires the policy table
+above to contain that exact digest, requires both tracked artifacts to be clean
+at repository `HEAD`, proves merged PR #277 commit
+`ca7940b8b94237611a37189e0bed10b002167e78` is an ancestor, and finds a
+first-parent merge commit containing both this authority identifier and this
+exact executor digest. The containing merge commit is recorded in the marker;
+no unknown future merge SHA is hard-coded. Human merge is permitted only after
+the final PR #278 head is independently reviewed, and its merge commit must
+contain that reviewed executor identity and policy. An unmerged head, dirty
+replacement, hash mismatch, absent containing merge, or post-review executor
+change stops before claim. A later clean deployment remains bound to the
+original containing merge, not merely moving `main`.
+
+The executor and Python standard library are the complete helper dependency
+surface. Network, PostgreSQL, service-control, harness, candidate, and
+`authorization.json` behavior are prohibited.
 
 The future executor may obtain bytes only from these two fixed private,
 execution-side source paths:
@@ -114,30 +148,47 @@ real-directory and no-symlink checks and be exactly `aiosadmin:aiosadmin`, mode
 `0700`; this authority does not provision, repair, chmod, chown, or replace it.
 An unsafe or unavailable evidence directory stops before consumption.
 
-After every preflight gate passes and immediately before creating the first
-staging object, the executor must atomically claim the authority by creating the
-fixed record relative to a retained no-follow directory descriptor with
-semantics equivalent to `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW`, initial and
-final mode `0600`, and no exists-then-create race. Successful exclusive creation
-is the irreversible consume point. It occurs before any package construction or
-publication.
+The exact transition is `UNUSED -> CLAIMED -> DURABLY_CONSUMED ->
+EXECUTION_STARTED`. `UNUSED` means no marker exists and no execution history
+indicates an unresolved claim attempt. `CLAIMED` means the exclusive marker
+inode was created but durable persistence has not been proven.
+`DURABLY_CONSUMED` means the exact marker was fully written, its file `fsync`
+succeeded, its writable fd closed successfully, and the retained parent
+directory `fsync` succeeded. `EXECUTION_STARTED` begins only with staging after
+that complete barrier. Only `DURABLY_CONSUMED` authorizes staging.
 
-Exactly one concurrent caller can win `O_EXCL`. Every losing caller must perform
-only bounded non-following metadata validation, report `AUTHORITY_CONSUMED`, and
-stop before staging or publication. It must not read raw evidence, wait, poll,
-take over, unlink, repair, retry, invoke the harness, or contact PostgreSQL. An
-unsafe existing object is `AUTHORITY_CONSUMPTION_STATE_INVALID` and also stops.
+After every preflight gate, including both-target absence and approval freshness,
+passes, the executor claims with `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW`, mode
+`0600`, relative to the retained no-follow directory fd. There is no overwrite
+or truncate-existing path. Successful `O_EXCL` creation establishes exclusive
+`CLAIMED` ownership; successful complete write, file `fsync`, close, and
+parent-directory `fsync` establishes the `DURABLY_CONSUMED` one-shot boundary.
+Any barrier failure is a STOP with no staging.
 
-The winner writes only: schema version, authority identifier, PR #277 merge
-commit, this authority's merge commit, consumption timestamp UTC, hostname,
-installer identity, state `CONSUMED`, and safe preflight outcomes. It then
-flushes, file-`fsync`s, closes the record, and `fsync`s the evidence parent
-before staging. Creation itself remains consumption if writing, close, either
-`fsync`, later installation, cleanup, evidence completion, or process execution
-fails. A zero-byte, partial, or not-yet-durable safely typed record is still
-operator-visible `CONSUMED / EVIDENCE_INCOMPLETE`, never reusable. A crash at or
-after successful `O_EXCL` prohibits silent retry and requires separate
-incident/recovery governance.
+The immutable write-once record contains only schema/state version, authority
+identifier and containing merge commit, UTC claim timestamp, executor path and
+SHA-256, and run-as identity. It contains no raw package or business data and
+requires no later marker mutation. Its serialized `DURABLY_CONSUMED` state is
+valid only after the external barrier completes; before then it is `CLAIMED`.
+
+Exactly one concurrent process can claim. Every `EEXIST` loser reports
+`AUTHORITY_CONSUMED` and stops immediately before staging. A loser must not read
+partial claim contents to decide takeover. There is no lease, wait, poll,
+timeout, stale-marker takeover, deletion, reset, repair, or retry.
+
+A crash after `CLAIMED` but before the barrier is proven does **not** guarantee
+that a persistent marker remains. It is `CONSUMPTION_DURABILITY_UNCERTAIN`;
+automatic retry is prohibited even if the marker appears absent after restart.
+Filesystem absence alone cannot re-prove `UNUSED`. If execution history,
+operator evidence, or result evidence indicates a claim attempt without proven
+durable completion, authority remains non-reusable until separate
+incident/recovery review establishes disposition. External claim observability
+never weakens the one-shot rule and creates no retry mechanism.
+
+After the complete barrier, authority is irreversibly `DURABLY_CONSUMED`. A
+crash or failure afterward never permits retry, even if staging never began,
+staging failed, publication failed, or final verification failed. Separate
+incident/recovery governance is required.
 
 ## Exact staging, verification, and publication contract
 
@@ -198,19 +249,33 @@ final target, and STOP. Do not delete, overwrite, retry, continue as success,
 invoke the harness, or begin Step 5. Separate incident/recovery governance is
 required. After both targets pass, independently verify the exact pair again.
 
+## Explicit crash-window disposition
+
+- Before `CLAIM`: unused and safe to stop, absent earlier unresolved claim history.
+- After `CLAIMED` before the barrier: `CONSUMPTION_DURABILITY_UNCERTAIN`; no automatic retry.
+- After `DURABLY_CONSUMED` before staging: permanently consumed; no retry.
+- During staging: permanently consumed; no retry.
+- After first publication: merged partial-install rules apply; preserve the published object.
+- After pair publication before final verification: permanently consumed; investigate, do not retry.
+- After final verification before cleanup: pair remains verified; merged cleanup classification applies.
+
+Approval expiry and both target-absence checks precede `CLAIM`. Staging is
+structurally after successful marker `fsync`, writable-fd close, and retained
+parent-directory `fsync`; merely `CLAIMED` execution cannot stage or publish.
+
 ## Minimized execution evidence and excluded effects
 
 The authority-bound final evidence path is exactly the consumption-record path
-with `.result.json` appended. It must record the authority identifier, authority
-merge binding, execution timestamp UTC, hostname, installer identity, parent
+with `.result.json` appended. It must record the authority identifier and merge binding, executor path and SHA-256, run-as identity,
+claim outcome, durability outcome, final consumed status, execution timestamp UTC, parent
 metadata, pre-target absence, approval-validity result, semantic hashes,
 transport byte counts, staging checks, writable-descriptor closure/absence,
 publication outcome per target, final metadata and semantic-prefix hashes,
 cleanup status, consumption status, and final classification. This companion is
 created exclusively/no-follow as mode `0600`, durably file- and parent-`fsync`ed,
 never overwrites an existing object, and never contains raw package or business
-content. Failure to create or complete final evidence after consumption remains
-`CONSUMED / EVIDENCE_INCOMPLETE` and never permits retry.
+content. Failure to create or complete final evidence after durable consumption remains
+`DURABLY_CONSUMED / EVIDENCE_INCOMPLETE` and never permits retry.
 
 This filesystem-only authority permits no service restart, Telegram reload,
 service-environment change, `runtime.env` change, harness import-for-execution,
@@ -234,4 +299,4 @@ The required lifecycle is this authority PR, independent review, human merge,
 exactly one governed attempt, post-install verification, and independent Step-4
 closure review. This authority does not execute installation and does not close
 Step 4. Its pre-execution classification is
-`STEP4_ONE_SHOT_RUNTIME_INSTALL_AUTHORITY_READY_FOR_REVIEW`.
+`P4S6_BLOCKERS_REMEDIATED_READY_FOR_REREVIEW`.
