@@ -68,11 +68,23 @@ _WRITABLE_FDS: dict[int, tuple[str, int, int]] = {}
 TERMINAL_CLASSIFICATIONS = frozenset({PRECONDITION_FAILED, APPROVAL_EXPIRED, TARGET_ALREADY_EXISTS, APPROVED_BYTES_INVALID, AUTHORITY_CONSUMED, "CONSUMPTION_DURABILITY_UNCERTAIN", "CONSUMPTION_DURABILITY_FAILED", APPROVED_INPUT_STAGING_FAILED, STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION, APPROVED_INPUT_FINAL_VERIFICATION_FAILED, APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE, RESULT_EVIDENCE_WRITE_FAILED, "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED"})
 
 @dataclass
+class ArtifactState:
+    staged: bool = False
+    preverified: bool = False
+    published: bool = False
+    final_verified: bool = False
+    cleanup_complete: bool = False
+
+
+
+@dataclass
 class ExecutionState:
     authority_commit: str = ""
     executor_sha: str = ""
-    consumption_state: str = "NOT_CONSUMED"
+    consumption_state: str = "UNUSED"
     current_stage: str = "PRECONDITION"
+    input: ArtifactState = None
+    approval: ArtifactState = None
     input_staged: bool = False
     input_published: bool = False
     input_final_verified: bool = False
@@ -81,6 +93,31 @@ class ExecutionState:
     approval_published: bool = False
     approval_final_verified: bool = False
     approval_cleanup_complete: bool = False
+
+    def __post_init__(self):
+        if self.input is None: self.input = ArtifactState()
+        if self.approval is None: self.approval = ArtifactState()
+
+def derive_primary_classification(state: ExecutionState, failure_context: object = None) -> str:
+    context = failure_context if isinstance(failure_context, dict) else {}
+    if state.consumption_state == "CLAIMED":
+        return "CONSUMPTION_DURABILITY_UNCERTAIN"
+    if state.input.final_verified and not state.approval.final_verified and state.consumption_state in {"DURABLY_CONSUMED", "EXECUTION_STARTED"}:
+        return STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION
+    if context.get("cleanup") == "prepublication":
+        return "APPROVED_INPUT_STAGING_PREPUBLICATION_CLEANUP_INCOMPLETE"
+    if context.get("cleanup") == "postpublication":
+        return APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE
+    if context.get("stage") == "staging":
+        return APPROVED_INPUT_STAGING_FAILED
+    if context.get("classification"):
+        return context["classification"]
+    if (state.consumption_state in {"DURABLY_CONSUMED", "EXECUTION_STARTED"} and
+            state.input.published and state.input.final_verified and state.input.cleanup_complete and
+            state.approval.published and state.approval.final_verified and state.approval.cleanup_complete and
+            context.get("pair_reverified") is True):
+        return "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED"
+    return PRECONDITION_FAILED
 
 def validate_uuid4_canonical_lowercase(value: object) -> str:
     if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", value) or str(uuid.UUID(value)) != value: raise Stop(APPROVED_BYTES_INVALID, "UUID")
@@ -513,27 +550,19 @@ def write_all(fd: int, data: bytes) -> None:
         offset += count
 
 
-def durable_claim(evidence_fd: int, authority_commit: str, executor_sha: str) -> dict[str, object]:
-    record: dict[str, object] = {
-        "schema_version": "aios-stage-0.33c-p4s6-consumption-v1",
-        "authority_id": AUTHORITY_ID,
-        "authority_commit": authority_commit,
-        "claim_timestamp_utc": utc_text(utc_now()),
-        "executor_path": str(REL_EXECUTOR),
-        "executor_sha256": executor_sha,
-        "run_as": "root",
-        "state": "DURABLY_CONSUMED",
-    }
+def durable_claim(evidence_fd: int, authority_commit: str, executor_sha: str, state: ExecutionState | None = None) -> dict[str, object]:
+    if state is not None: state.consumption_state = "UNUSED"
+    record: dict[str, object] = {"schema_version":"aios-stage-0.33c-p4s6-consumption-v1","authority_id":AUTHORITY_ID,"authority_commit":authority_commit,"claim_timestamp_utc":utc_text(utc_now()),"executor_path":str(REL_EXECUTOR),"executor_sha256":executor_sha,"run_as":"root","state":"DURABLY_CONSUMED"}
     encoded = json.dumps(record, sort_keys=True, separators=(",", ":")).encode() + b"\n"
     try:
         fd = os.open(MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=evidence_fd)
     except FileExistsError as exc:
-        raise Stop("AUTHORITY_CONSUMED") from exc
+        raise Stop(AUTHORITY_CONSUMED, "CLAIM") from exc
+    if state is not None: state.consumption_state = "CLAIMED"
     try:
-        write_all(fd, encoded)
-        os.fsync(fd)
-    except OSError as exc:
-        raise Stop("CONSUMPTION_DURABILITY_UNCERTAIN", "CLAIM", errno_code=exc.errno) from exc
+        write_all(fd, encoded); os.fsync(fd)
+    except (OSError, GovernedStop) as exc:
+        raise Stop("CONSUMPTION_DURABILITY_UNCERTAIN", "CLAIM", errno_code=getattr(exc, "errno_code", None)) from exc
     try:
         os.close(fd)
     except OSError as exc:
@@ -542,6 +571,7 @@ def durable_claim(evidence_fd: int, authority_commit: str, executor_sha: str) ->
         os.fsync(evidence_fd)
     except OSError as exc:
         raise Stop("CONSUMPTION_DURABILITY_UNCERTAIN", "CLAIM", errno_code=exc.errno) from exc
+    if state is not None: state.consumption_state = "DURABLY_CONSUMED"
     return record
 
 
@@ -602,10 +632,7 @@ def write_failure_result(evidence_fd: int, state: ExecutionState, failure: Gover
     os.fsync(evidence_fd)
 
 def write_result(evidence_fd: int, claim: dict[str, object], classification: str) -> None:
-    result = dict(claim)
-    result.update({"schema_version": "aios-stage-0.33c-p4s6-result-v1", "claim_outcome": "CLAIMED",
-                   "durability_outcome": "FILE_FSYNC_CLOSE_PARENT_FSYNC_PASS",
-                   "final_consumed_status": "DURABLY_CONSUMED", "execution_classification": classification})
+    result = {"schema_version":"aios-stage-0.33c-p4s6-result-v1","authority_id":AUTHORITY_ID,"executor_sha256":claim.get("executor_sha256", ""),"authority_commit":claim.get("authority_commit", ""),"timestamp_utc":utc_text(utc_now()),"stage":"COMPLETE","classification":classification,"consumption_state":"DURABLY_CONSUMED","artifact_role":"NONE","input_published":True,"input_verified":True,"approval_published":True,"approval_verified":True,"errno_code":None}
     encoded = json.dumps(result, sort_keys=True, separators=(",", ":")).encode() + b"\n"
     fd = os.open(RESULT, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=evidence_fd)
     try:
@@ -615,6 +642,15 @@ def write_result(evidence_fd: int, claim: dict[str, object], classification: str
         os.close(fd)
     os.fsync(evidence_fd)
 
+
+def write_result_with_secondary(evidence_fd: int, state: ExecutionState, primary: str, *, success: bool = False) -> tuple[str, str | None]:
+    failure = GovernedStop(primary, "COMPLETE" if success else state.current_stage)
+    try:
+        write_failure_result(evidence_fd, state, failure)
+    except GovernedStop:
+        print(RESULT_EVIDENCE_WRITE_FAILED, file=sys.stderr)
+        return primary, RESULT_EVIDENCE_WRITE_FAILED
+    return primary, None
 
 def main() -> int:
     check_no_args_root()
@@ -638,21 +674,33 @@ def main() -> int:
         evidence = approval["package_payload"]["evidence"]
         if evidence["manifest_id"] != MANIFEST_ID:
             raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
-        # Both target-absence and expiry gates have passed; only now claim.
-        claim = durable_claim(evidence_fd, authority_commit, executor_sha)
-        state = ExecutionState(authority_commit=authority_commit, executor_sha=executor_sha, consumption_state="DURABLY_CONSUMED")
+        # Both target-absence and expiry gates have passed; claim starts UNUSED -> CLAIMED -> DURABLY_CONSUMED.
+        state = ExecutionState(authority_commit=authority_commit, executor_sha=executor_sha)
+        claim = durable_claim(evidence_fd, authority_commit, executor_sha, state)
         for index, (source, spec) in enumerate(zip(sources, FILES)):
             state.current_stage = "INPUT" if index == 0 else "APPROVAL"
+            state.consumption_state = "EXECUTION_STARTED"
+            (state.input if index == 0 else state.approval).staged = True
             try:
                 stage_and_publish(parent_fd, source, spec[0], spec[1], spec[3])
             except GovernedStop as failure:
-                if index == 1 and state.input_final_verified: failure = GovernedStop(STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION, failure.stage, spec[0], failure.errno_code)
+                context = {"stage": "staging", "cleanup": "prepublication" if state.current_stage == "INPUT" and state.input.staged and not state.input.published else None}
+                primary = derive_primary_classification(state, context)
+                failure = GovernedStop(primary, failure.stage, spec[0], failure.errno_code)
                 try: write_failure_result(evidence_fd, state, failure)
-                except GovernedStop: pass
+                except GovernedStop: print(RESULT_EVIDENCE_WRITE_FAILED, file=sys.stderr)
                 raise failure
-            if index == 0: state.input_published = state.input_final_verified = state.input_cleanup_complete = True
-            else: state.approval_published = state.approval_final_verified = state.approval_cleanup_complete = True
-        write_result(evidence_fd, claim, "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED")
+            if index == 0:
+                state.input.staged = state.input.preverified = state.input.published = state.input.final_verified = state.input.cleanup_complete = True
+                state.input_published = state.input_final_verified = state.input_cleanup_complete = True
+            else:
+                state.approval.staged = state.approval.preverified = state.approval.published = state.approval.final_verified = state.approval.cleanup_complete = True
+                state.approval_published = state.approval_final_verified = state.approval_cleanup_complete = True
+        try:
+            write_result(evidence_fd, claim, "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED")
+        except GovernedStop:
+            print(RESULT_EVIDENCE_WRITE_FAILED, file=sys.stderr)
+            return 1
         return 0
     finally:
         os.close(evidence_fd)
