@@ -18,6 +18,7 @@ import stat
 import subprocess
 import sys
 import uuid
+from dataclasses import dataclass
 from contextlib import ExitStack
 from pathlib import Path
 
@@ -58,12 +59,26 @@ STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION="STEP4_APPROVED_INPUT_PARTIAL_INSTALLA
 APPROVED_INPUT_FINAL_VERIFICATION_FAILED="APPROVED_INPUT_FINAL_VERIFICATION_FAILED"
 APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE="APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE"
 RESULT_EVIDENCE_WRITE_FAILED="RESULT_EVIDENCE_WRITE_FAILED"
-_WRITABLE_FDS: set[int] = set()
+_WRITABLE_FDS: dict[int, tuple[str, int, int]] = {}
+
+@dataclass(frozen=True)
+class VerifiedFile:
+    st_dev: int
+    st_ino: int
+    st_uid: int
+    st_gid: int
+    mode: int
+    size: int
+
+def make_stage_name(final_basename: str) -> str:
+    if final_basename not in {x[0] for x in FILES} or "/" in final_basename or "\\" in final_basename:
+        raise Stop(PRECONDITION_FAILED, "STAGING_BASENAME")
+    return f".{final_basename}.stage-{uuid.uuid4()}"
 
 def staging_name(final: str) -> str:
     if final not in {x[0] for x in FILES} or "/" in final or "\\" in final:
         raise Stop(PRECONDITION_FAILED, "STAGING_BASENAME")
-    return f".{final}.stage-{uuid.uuid4()}"
+    return make_stage_name(final)
 
 def validate_approval_closed_schema(value: object) -> dict[str, object]:
     if not isinstance(value, dict) or set(value) != {"schema_version", "package_payload"}: raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_SCHEMA")
@@ -254,8 +269,8 @@ def durable_claim(evidence_fd: int, authority_commit: str, executor_sha: str) ->
 
 
 def stage_and_publish(parent_fd: int, source: bytes, final: str, semantic: int, digest: str) -> None:
-    stage = f".{uuid.uuid4()}"
-    fd = os.open(stage, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent_fd); _WRITABLE_FDS.add(fd)
+    stage = make_stage_name(final)
+    fd = os.open(stage, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent_fd); _WRITABLE_FDS[fd] = (final, 0, 0)
     try:
         write_all(fd, source)
         os.fsync(fd)
@@ -263,18 +278,22 @@ def stage_and_publish(parent_fd: int, source: bytes, final: str, semantic: int, 
         os.fchmod(fd, 0o440)
         os.fsync(fd)
     finally:
-        os.close(fd); _WRITABLE_FDS.discard(fd)
-    verify_file(parent_fd, stage, source, semantic, digest)
-    if _WRITABLE_FDS: raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "WRITABLE_FD", final)
+        os.close(fd); _WRITABLE_FDS.pop(fd, None)
+    stage_meta = verify_file(parent_fd, stage, source, semantic, digest)
+    parent_meta = os.fstat(parent_fd)
+    if stage_meta.st_dev != parent_meta.st_dev: raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "DEVICE", final)
+    if any(dev == stage_meta.st_dev and ino == stage_meta.st_ino for _, dev, ino in _WRITABLE_FDS.values()): raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "WRITABLE_FD", final)
     os.link(stage, final, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
     os.fsync(parent_fd)
-    verify_file(parent_fd, final, source, semantic, digest)
+    final_meta = verify_file(parent_fd, final, source, semantic, digest)
+    if final_meta.st_dev != parent_meta.st_dev or final_meta.st_dev != stage_meta.st_dev or final_meta.st_ino != stage_meta.st_ino:
+        raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "INODE", final)
     os.unlink(stage, dir_fd=parent_fd)
     os.fsync(parent_fd)
     verify_file(parent_fd, final, source, semantic, digest)
 
 
-def verify_file(parent_fd: int, name: str, source: bytes, semantic: int, digest: str) -> None:
+def verify_file(parent_fd: int, name: str, source: bytes, semantic: int, digest: str) -> VerifiedFile:
     fd = os.open(name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
     try:
         info = os.fstat(fd)
@@ -291,6 +310,7 @@ def verify_file(parent_fd: int, name: str, source: bytes, semantic: int, digest:
             stat.S_IMODE(info.st_mode) != 0o440 or data != source or
             data[semantic:] != b"\n" or sha256(data[:semantic]) != digest):
         raise Stop("staged/final verification failed")
+    return VerifiedFile(info.st_dev, info.st_ino, info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode), len(data))
 
 
 def write_result(evidence_fd: int, claim: dict[str, object], classification: str) -> None:
