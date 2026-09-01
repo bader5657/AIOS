@@ -19,7 +19,9 @@ order without invoking the harness or writing candidate state:
 7. execute a separately authorized, least-privilege, source-bound duplicate
    preflight and require active count zero;
 8. canonicalize the two artifacts, calculate all hashes, and independently
-   reproduce them;
+   reproduce them, first rejecting every approval-record string that violates
+   its exact field grammar or the shared `APPROVAL_SAFE_STRING` control, DEL,
+   and surrogate exclusions;
 9. obtain Project Owner approval of the exact package and hashes; and
 10. install the two approved files only under separately reviewed filesystem
     authority, then verify metadata and bytes without invoking the harness.
@@ -66,7 +68,8 @@ are:
 Neither path is created by this package. Both final objects must be non-symlink
 regular files, `root:aiosadmin`, and mode `0440`. `approved-input.json` is at
 most 86,836 transport bytes; `approved-input-approval.json` is independently
-bounded at 13,620 transport bytes. A separate filesystem
+bounded at exactly 13,620 transport bytes (13,619 semantic bytes plus one LF)
+after exact safe-string validation. A separate filesystem
 governance/installation task must verify the existing
 non-symlink parent, absence of both final paths, and absence of staging debris;
 create internally named same-directory staging files with `O_EXCL | O_NOFOLLOW`;
@@ -76,6 +79,13 @@ and SHA-256. Partial publication, overwrite, replacement, mutable correction,
 and caller-selected staging names are prohibited. Failure must clean only exact
 staging files and fail closed. The pair is usable only when both independently
 verified files and all bound hashes agree.
+
+Installation validation must reject rather than sanitize strings: C0 controls,
+DEL, and surrogates are prohibited in bounded approval metadata, while each
+UUID, hash, timestamp, enum, manifest reference, and software identity must
+match its stricter closed grammar. The input file keeps its separately accepted
+86,836-byte transport contract; this approval-record grammar does not alter the
+harness-native input domain.
 
 Because these files contain real business data, retention, deletion, recovery,
 and post-use disposition also require separate governance. The existing

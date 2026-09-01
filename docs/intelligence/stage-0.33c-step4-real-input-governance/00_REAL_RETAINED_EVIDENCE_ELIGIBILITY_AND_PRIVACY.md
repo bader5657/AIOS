@@ -47,6 +47,15 @@ recalculate the exact manifest SHA-256 and, for file-backed evidence, recalculat
 the stored-original SHA-256 and size. URL-only evidence has no invented stored
 file checksum. The manifest-byte SHA is required for every selected source.
 
+Every retained string projected into `approved-input-approval.json`, including
+MIME metadata, must satisfy the approval record's `APPROVAL_SAFE_STRING`
+grammar: valid Unicode scalar values excluding U+0000 through U+001F, U+007F,
+and U+D800 through U+DFFF. MIME is null or the exact retained value of 1–255
+permitted scalars. A prohibited scalar makes the evidence ineligible; stripping,
+replacement, trimming, normalization, or any semantic transformation is
+prohibited. Fixed identifiers, hashes, timestamps, enums, and references use
+their stricter closed grammars rather than generic strings.
+
 No image, PDF, DOC/DOCX, voice/audio/video, spreadsheet, text payload, base64,
 raw binary, or raw retained content may be copied into the approval record or
 Git. Reference, size, type metadata, and hashes only are permitted outside the

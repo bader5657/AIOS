@@ -152,7 +152,7 @@ The approval record has a closed wrapper:
     "approval_id": <canonical UUIDv4>,
     "approved_at_utc": <absolute UTC microsecond-Z timestamp>,
     "not_after_utc": <approved_at plus exactly 604800 seconds>,
-    "project_owner_approval_reference": <canonical non-secret text, maximum 128 scalars>,
+    "project_owner_approval_reference": <APPROVAL_SAFE_STRING, 1 through 128 scalars>,
     "repository_commit": <40 lowercase hex>,
     "harness_sha256": "b9fc9fb22724184696eabf02525bcc0a626bdff5ce3943ed31ba2e21130f5cad",
     "python_path": "/opt/aios/runtime/venv/bin/python",
@@ -167,7 +167,7 @@ The approval record has a closed wrapper:
       "manifest_received_at": <the manifest instant normalized to exact UTC microsecond-Z>,
       "stored_original_size_bytes": <integer 0 through 9223372036854775807 or null>,
       "stored_original_sha256": <64 lowercase hex or null>,
-      "mime_type": <exact supported metadata value, maximum 255 scalars, or null>,
+      "mime_type": <exact supported metadata value satisfying APPROVAL_SAFE_STRING, 1 through 255 scalars, or null>,
       "registry_record_id": <integer 1 through 9223372036854775807 or null>
     },
     "trusted_facts_sha256": <64 lowercase hex from the current authorization binding algorithm>,
@@ -177,7 +177,7 @@ The approval record has a closed wrapper:
     "input_transport_bytes": <semantic plus one, at most 86836>,
     "item_count": <integer 1 through 10>,
     "trusted_fact_provenance": {<exact JSON Pointer>: <one provenance enum>},
-    "more_than_three_items_justification": <canonical text, maximum 512 scalars, or null>
+    "more_than_three_items_justification": <APPROVAL_SAFE_STRING, 1 through 512 scalars, or null>
   },
   "package_payload_sha256": <SHA-256 of canonical package_payload bytes>
 }
@@ -192,6 +192,65 @@ the same JSON rules and hash those bytes without LF. The separately recorded
 approval-record SHA-256 covers the complete approval file including LF. The
 future selection evidence must bind both artifact hashes.
 
+### Approval-record string grammar
+
+`APPROVAL_SAFE_STRING` is a non-empty sequence of valid Unicode scalar values
+excluding U+0000 through U+001F, U+007F, and U+D800 through U+DFFF. NUL, every
+C0 control (including TAB, LF, and CR), DEL, and every surrogate code point are
+prohibited. Ordinary quotes, backslashes, Unicode letters and symbols, and
+astral Unicode scalar values remain permitted. Individual fields may apply a
+stricter grammar below.
+
+Validation is exact and precedes approval and hashing. It does not trim,
+normalize Unicode, strip controls, replace characters, insert replacement
+characters, or otherwise transform a value. A source value either matches its
+field grammar byte-for-byte or the evidence/package is ineligible. Retained
+MIME metadata containing a prohibited scalar therefore fails closed.
+
+Canonical serialization remains compact sorted-key UTF-8 JSON with
+`ensure_ascii=False`, `allow_nan=False`, duplicate keys prohibited, and exactly
+one final LF outside the semantic document. Ordinary ASCII uses one byte;
+quotes and backslashes use two serialized ASCII bytes; a permitted BMP
+non-ASCII scalar uses at most three UTF-8 bytes; and a permitted astral scalar
+uses four. C0 controls cannot trigger a six-byte `\u00XX` expansion because
+they are prohibited. Thus every permitted scalar occupies at most four bytes.
+
+Every string-valued location in the closed approval record is enumerated here.
+Member overhead is the quoted key, colon, and value quotes; commas and object
+delimiters remain in the fixed/syntax subtotal below.
+
+| Field | Maximum scalars | Null | Exact grammar | Maximum value bytes | Member overhead bytes |
+|---|---:|---|---|---:|---:|
+| `schema_version` | 40 | no | exact schema token | 40 | 19 |
+| `approval_id` | 36 | no | canonical lowercase UUIDv4 | 36 | 16 |
+| `approved_at_utc` | 27 | no | exact UTC microsecond-Z timestamp | 27 | 20 |
+| `not_after_utc` | 27 | no | exact UTC microsecond-Z timestamp | 27 | 18 |
+| `project_owner_approval_reference` | 128 | no | `APPROVAL_SAFE_STRING` | 512 | 37 |
+| `repository_commit` | 40 | no | exactly 40 lowercase hex | 40 | 22 |
+| `harness_sha256` | 64 | no | exact frozen lowercase SHA-256 | 64 | 19 |
+| `python_path` | 33 | no | exact governed path | 33 | 16 |
+| `python_version` | 6 | no | exact `3.12.3` | 6 | 19 |
+| `controlled_callable` | 89 | no | exact governed symbol | 89 | 24 |
+| `manifest_reference` | 76 | no | exact root, lowercase UUID, `.json` | 76 | 23 |
+| `manifest_id` | 36 | no | matching canonical lowercase UUID | 36 | 16 |
+| `manifest_sha256` | 64 | no | exactly 64 lowercase hex | 64 | 20 |
+| `represented_media_type` | 12 | no | closed manifest media enum | 12 | 27 |
+| `manifest_received_at` | 27 | no | exact UTC microsecond-Z timestamp | 27 | 25 |
+| `stored_original_sha256` | 64 | yes | exactly 64 lowercase hex | 64 | 27 |
+| `mime_type` | 255 | yes | exact retained `APPROVAL_SAFE_STRING` | 1,020 | 14 |
+| `trusted_facts_sha256` | 64 | no | exactly 64 lowercase hex | 64 | 25 |
+| `input_semantic_sha256` | 64 | no | exactly 64 lowercase hex | 64 | 26 |
+| `input_transport_sha256` | 64 | no | exactly 64 lowercase hex | 64 | 27 |
+| provenance keys | 61 | no | required `/trusted_receipt_facts/...` JSON Pointer set | 61 | n/a |
+| provenance values | 22 | no | one of two closed enums | 22 | n/a |
+| `more_than_three_items_justification` | 512 | yes | `APPROVAL_SAFE_STRING`; required for 4–10 items | 2,048 | 40 |
+| `package_payload_sha256` | 64 | no | exactly 64 lowercase hex | 64 | 27 |
+
+The remaining approval members are JSON objects, bounded integers, or nulls,
+not strings. No generic unconstrained approval-record string remains. UUIDs,
+hashes, timestamps, enums, paths, and software identities use their stricter
+closed grammars. The owner approval reference is a bounded non-secret human
+approval identity/reference using `APPROVAL_SAFE_STRING`.
 
 ### Exact approval-record size bound
 
@@ -204,8 +263,13 @@ The approval record has its own exact bound; it does not reuse the input limit:
 At 10 items, the maximum canonical record assumes all optional evidence values
 are present, the longest `youtube_link` media enum, 19-digit size/registry
 integers, 128-scalar approval reference, 255-scalar MIME value, 512-scalar
-justification, maximum four-byte allowed UTF-8 scalars, and all 114 provenance
-values set to the longer `PROJECT_OWNER_APPROVED` enum.
+justification, maximum four-byte permitted astral scalars, and all 114
+provenance values set to the longer `PROJECT_OWNER_APPROVED` enum. There are
+exactly four `/trusted_receipt_facts/<field>` pointers plus eleven
+`/trusted_receipt_facts/items/<index>/<field>` pointers per item:
+`4 + 11 * 10 = 114`. Keys use only these closed JSON Pointer forms and values are
+the closed `EVIDENCE_DERIVED` or `PROJECT_OWNER_APPROVED` enums; no arbitrary
+provenance note exists.
 
 | Approval-record component | Bytes |
 |---|---:|
@@ -216,9 +280,13 @@ values set to the longer `PROJECT_OWNER_APPROVED` enum.
 | Exactly one LF | **+1** |
 | **Approval-record transport total** | **13,620** |
 
-Null optional values and shorter item counts only reduce this result. The exact
-future filesystem maxima are therefore 86,836 bytes for `approved-input.json`
-and 13,620 bytes for `approved-input-approval.json`.
+The calculation is `1,684 + 3,580 + 8,355 = 13,619`, then one LF gives 13,620.
+The bounded-string term is
+`128 * 4 + 255 * 4 + 512 * 4 = 3,580`; the safe grammar proves that no permitted
+scalar exceeds four bytes. Null optional values and shorter item counts only
+reduce this result. The exact future filesystem maxima are therefore 86,836
+bytes for `approved-input.json` and 13,620 bytes for
+`approved-input-approval.json`.
 
 Project Owner approval must explicitly bind the exact retained evidence
 identity/hash, every `PROJECT_OWNER_APPROVED` fact, all provenance entries, the
