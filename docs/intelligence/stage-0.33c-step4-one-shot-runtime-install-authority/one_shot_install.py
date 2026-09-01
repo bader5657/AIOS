@@ -40,6 +40,10 @@ FILES = (
     ("approved-input-approval.json", 3549, 3550, "266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57"),
 )
 
+INPUT_TYPES={"text","image","voice","document","pdf","doc","spreadsheet","video","audio","web_link","youtube_link","unknown"}
+PIPELINE_COMPAT={"pdf":"document","doc":"document","spreadsheet":"document","web_link":"text","youtube_link":"text"}
+EVENT_FAILURE_CODES={"TIMEOUT","UNAVAILABLE","REJECTED","UNKNOWN"}
+
 
 class GovernedStop(RuntimeError):
     def __init__(self, classification: str, stage: str, artifact: str | None = None, errno_code: int | None = None):
@@ -170,6 +174,16 @@ def validate_approved_input_closed_schema(value: object) -> dict[str, object]:
     if not isinstance(value,dict) or set(value)!=top or value["schema_version"]!="aios-stage-0.33c-one-shot-input-v1": raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
     i=value["ingestion_result"]; ik={"input_type","recognized_input_type","stored_path","manifest_path","metadata","text","register_handoff_ready","process_handoff_ready","route_handoff_ready","respond_acknowledgement_ready","registration_succeeded","registry_record_id","event_publication_attempted","event_delivery_succeeded","event_delivery_failure_code","brain_result"}
     if not isinstance(i,dict) or set(i)!=ik: raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
+    if i["input_type"] not in INPUT_TYPES or i["recognized_input_type"] not in INPUT_TYPES or i["input_type"] != PIPELINE_COMPAT.get(i["recognized_input_type"], i["recognized_input_type"]): raise Stop(APPROVED_BYTES_INVALID,"INPUT_VALUE")
+    if not isinstance(i["manifest_path"],str) or not re.fullmatch(r"/opt/aios/data/documents/manifests/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json",i["manifest_path"]): raise Stop(APPROVED_BYTES_INVALID,"INPUT_MANIFEST")
+    if i["registration_succeeded"]:
+        if not isinstance(i["registry_record_id"],int) or not 1<=i["registry_record_id"]<=9223372036854775807: raise Stop(APPROVED_BYTES_INVALID,"INPUT_REGISTRY")
+    elif i["registry_record_id"] is not None: raise Stop(APPROVED_BYTES_INVALID,"INPUT_REGISTRY")
+    if i["event_delivery_succeeded"] and not i["event_publication_attempted"]: raise Stop(APPROVED_BYTES_INVALID,"INPUT_EVENT")
+    if i["route_handoff_ready"] and not i["event_delivery_succeeded"]: raise Stop(APPROVED_BYTES_INVALID,"INPUT_EVENT")
+    if i["event_publication_attempted"] and not i["registration_succeeded"]: raise Stop(APPROVED_BYTES_INVALID,"INPUT_EVENT")
+    if i["event_publication_attempted"] and not i["event_delivery_succeeded"] and (not isinstance(i["event_delivery_failure_code"],str) or not i["event_delivery_failure_code"]): raise Stop(APPROVED_BYTES_INVALID,"INPUT_EVENT")
+    if (not i["event_publication_attempted"] or i["event_delivery_succeeded"]) and i["event_delivery_failure_code"] is not None: raise Stop(APPROVED_BYTES_INVALID,"INPUT_EVENT")
     if not isinstance(i["input_type"],str) or not isinstance(i["recognized_input_type"],str) or i["stored_path"] is not None or i["metadata"]!={} or i["text"]!="" or i["brain_result"] is not None: raise Stop(APPROVED_BYTES_INVALID,"INPUT_VALUE")
     if i["process_handoff_ready"] is not False or i["register_handoff_ready"] is not True or i["respond_acknowledgement_ready"] is not True: raise Stop(APPROVED_BYTES_INVALID,"INPUT_VALUE")
     if not all(type(i[k]) is bool for k in ("route_handoff_ready","registration_succeeded","event_publication_attempted","event_delivery_succeeded")): raise Stop(APPROVED_BYTES_INVALID,"INPUT_VALUE")
@@ -177,6 +191,8 @@ def validate_approved_input_closed_schema(value: object) -> dict[str, object]:
     if not isinstance(f,dict) or set(f)!=fk: raise Stop(APPROVED_BYTES_INVALID,"INPUT_SCHEMA")
     if not isinstance(f["supplier_name"],str) or not 1<=len(f["supplier_name"])<=128 or any(ord(c)<32 or ord(c)==127 or 0xd800<=ord(c)<=0xdfff for c in f["supplier_name"]): raise Stop(APPROVED_BYTES_INVALID,"INPUT_TEXT")
     if f["document_number"] is not None and not isinstance(f["document_number"],str): raise Stop(APPROVED_BYTES_INVALID,"INPUT_TEXT")
+    if f["document_date"] is not None and (not isinstance(f["document_date"],str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}",f["document_date"])): raise Stop(APPROVED_BYTES_INVALID,"INPUT_DATE")
+    validate_utc_microsecond_z(f["received_at"])
     if not isinstance(f["items"],list) or not 1<=len(f["items"] )<=10: raise Stop(APPROVED_BYTES_INVALID,"INPUT_ITEMS")
     lines=[]
     for item in f["items"]:
@@ -475,6 +491,11 @@ def main() -> int:
         approval = exact_json(approval_bytes)
         validate_approval_closed_schema(approval)
         if sha256(sources[0][:-1]) != approval["package_payload"]["input_semantic_sha256"] or sha256(sources[0]) != approval["package_payload"]["input_transport_sha256"]: raise Stop(APPROVED_BYTES_INVALID, "INPUT_HASH")
+        payload = approval["package_payload"]
+        trusted = input_obj["trusted_receipt_facts"]
+        if sha256(json.dumps(trusted, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()) != payload["trusted_facts_sha256"]: raise Stop(APPROVED_BYTES_INVALID, "TRUSTED_FACTS_HASH")
+        ev = payload["evidence"]
+        if input_obj["ingestion_result"]["manifest_path"] != ev["manifest_reference"] or ev["manifest_id"] != ev["manifest_reference"][-41:-5]: raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
         if json.dumps(approval, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode() != approval_bytes:
             raise Stop(APPROVED_BYTES_INVALID, "APPROVAL_CANONICAL")
         payload = approval.get("package_payload")
