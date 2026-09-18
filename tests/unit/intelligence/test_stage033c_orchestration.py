@@ -155,7 +155,7 @@ class SyntheticRun(TempCase):
                 values = list(value); values[4] = 0; values[5] = 0 if stat.S_IMODE(value.st_mode) == 0o400 else value.st_gid
                 return os.stat_result(values)
             return value
-        def open_fixture(path, *_):
+        def open_fixture(path, *_, **__):
             self.assertIn(path, (self.parent, self.source))
             return os.open(path, os.O_RDONLY | os.O_DIRECTORY)
         for name, value in (("REPOSITORY", self.root), ("REL_EXECUTOR", Path("fixture-executor.py")),
@@ -183,6 +183,30 @@ class SyntheticRun(TempCase):
         self.assertEqual(caught.exception.classification, executor.AUTHORITY_CONSUMED)
         stage.assert_not_called()
         self.assertEqual(marker.read_bytes(), before)
+
+class PreclaimMatrix(SyntheticRun):
+    def test_staging_debris_stops_before_claim_and_publication(self):
+        for final in ("approved-input.json", "approved-input-approval.json"):
+            for suffix in ("123e4567-e89b-42d3-a456-426614174000", "partial"):
+                with self.subTest(final=final, suffix=suffix):
+                    debris = self.parent / f".{final}.stage-{suffix}"
+                    debris.write_bytes(b"preserve")
+                    with patch.object(executor, "durable_claim") as claim, patch.object(executor, "stage_and_publish") as stage:
+                        with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+                    self.assertEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
+                    claim.assert_not_called(); stage.assert_not_called()
+                    self.assertFalse((self.evidence / executor.MARKER).exists())
+                    self.assertEqual(debris.read_bytes(), b"preserve")
+                    self.assertEqual(list(self.parent.glob('.approved-input*.stage-*')), [debris])
+                    debris.unlink()
+
+    def test_path_failure_stops_before_claim_and_staging(self):
+        with patch.object(executor, "open_dir", side_effect=executor.Stop(executor.PRECONDITION_FAILED, "PATH_PREFLIGHT")), patch.object(executor, "durable_claim") as claim, patch.object(executor, "stage_and_publish") as stage:
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
+        claim.assert_not_called(); stage.assert_not_called()
+        self.assertFalse((self.evidence / executor.MARKER).exists())
+        self.assertFalse(list(self.parent.glob('*.stage-*')))
 
 class DurabilityMatrix(SyntheticRun):
     def failed_claim(self, mode):

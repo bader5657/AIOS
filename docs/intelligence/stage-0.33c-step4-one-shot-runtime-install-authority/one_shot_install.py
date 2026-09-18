@@ -506,23 +506,40 @@ def verify_merged_authority(executor_sha: str) -> str:
     raise Stop("no merged authority commit contains the reviewed executor and policy binding")
 
 
-def open_dir(path: Path, uid: int, gid: int, mode: int) -> int:
+def open_dir(path: Path, uid: int, gid: int, mode: int, *, check_components: bool = False) -> int:
     if not path.is_absolute():
-        raise Stop("directory path must be absolute")
-    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        raise Stop(PRECONDITION_FAILED, "PATH_PREFLIGHT")
+    opened = [os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)]
     try:
         for component in path.parts[1:]:
-            next_fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=fd)
+            parent = opened[-1]
+            child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent)
+            opened.append(child)
+            if check_components:
+                info = os.fstat(child)
+                entry = os.stat(component, dir_fd=parent, follow_symlinks=False)
+                if (not stat.S_ISDIR(info.st_mode) or not stat.S_ISDIR(entry.st_mode) or
+                        (info.st_dev, info.st_ino) != (entry.st_dev, entry.st_ino) or
+                        info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o022 or
+                        not stat.S_IMODE(info.st_mode) & 0o100):
+                    raise Stop(PRECONDITION_FAILED, "PATH_PREFLIGHT")
+        final = os.fstat(opened[-1])
+        if not stat.S_ISDIR(final.st_mode) or final.st_uid != uid or final.st_gid != gid or stat.S_IMODE(final.st_mode) != mode:
+            raise Stop(PRECONDITION_FAILED, "PATH_PREFLIGHT")
+        if check_components:
+            for parent, child, component in zip(opened, opened[1:], path.parts[1:]):
+                entry = os.stat(component, dir_fd=parent, follow_symlinks=False)
+                info = os.fstat(child)
+                if not stat.S_ISDIR(entry.st_mode) or (entry.st_dev, entry.st_ino) != (info.st_dev, info.st_ino):
+                    raise Stop(PRECONDITION_FAILED, "PATH_PREFLIGHT")
+        return opened[-1]
+    except OSError as exc:
+        raise Stop(PRECONDITION_FAILED, "PATH_PREFLIGHT", errno_code=exc.errno) from exc
+    finally:
+        for fd in opened[:-1]:
             os.close(fd)
-            fd = next_fd
-    except BaseException:
-        os.close(fd)
-        raise
-    info = os.fstat(fd)
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != uid or info.st_gid != gid or stat.S_IMODE(info.st_mode) != mode:
-        os.close(fd)
-        raise Stop(f"unsafe directory metadata: {path}")
-    return fd
+        if sys.exc_info()[0] is not None:
+            os.close(opened[-1])
 
 
 def absent(dir_fd: int, name: str) -> bool:
@@ -531,6 +548,18 @@ def absent(dir_fd: int, name: str) -> bool:
     except FileNotFoundError:
         return True
     return False
+
+
+def preflight_install_names(parent_fd: int) -> None:
+    if any(not absent(parent_fd, name) for name, _, _, _ in FILES):
+        raise Stop(TARGET_ALREADY_EXISTS, "TARGET_PREFLIGHT")
+    prefixes = tuple(f".{name}.stage-" for name, _, _, _ in FILES)
+    try:
+        names = os.listdir(parent_fd)
+    except OSError as exc:
+        raise Stop(PRECONDITION_FAILED, "STAGING_PREFLIGHT", errno_code=exc.errno) from exc
+    if any(name.startswith(prefixes) for name in names):
+        raise Stop(PRECONDITION_FAILED, "STAGING_PREFLIGHT")
 
 
 def read_source(source_fd: int, name: str, semantic: int, transport: int, digest: str) -> bytes:
@@ -781,7 +810,7 @@ def main() -> int:
     executor_sha = sha256(executor_bytes)
     authority_commit = verify_merged_authority(executor_sha)
     aios = pwd.getpwnam("aiosadmin")
-    parent_fd = open_dir(RUNTIME_PARENT, 0, aios.pw_gid, 0o750)
+    parent_fd = open_dir(RUNTIME_PARENT, 0, aios.pw_gid, 0o750, check_components=True)
     source_fd = open_dir(SOURCE_PARENT, 0, 0, 0o700)
     evidence_fd = os.open(EVIDENCE_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
     try:
@@ -790,8 +819,7 @@ def main() -> int:
             raise Stop("unsafe consumption directory")
         if not absent(evidence_fd, MARKER) or not absent(evidence_fd, RESULT):
             raise Stop("AUTHORITY_CONSUMED")
-        if any(not absent(parent_fd, name) for name, _, _, _ in FILES):
-            raise Stop("target already exists")
+        preflight_install_names(parent_fd)
         sources = [read_source(source_fd, *spec) for spec in FILES]
         input_obj, approval, manifest = validate_frozen_package(sources[0], sources[1])
         evidence = approval["package_payload"]["evidence"]
