@@ -35,6 +35,7 @@ class RegistryModelBMatrix(Base):
    with self.subTest(v=v): self.bad(v)
  def test_registry_10_handoff_independent(self): f=self.f(); self.assertTrue(f["input"]["ingestion_result"]["register_handoff_ready"]); self.assertFalse(f["input"]["ingestion_result"]["registration_succeeded"]); validate(f)
  def test_registry_11_hash_tamper(self): f=self.f(); rehash(f); f["approval"]["package_payload"]["evidence"]["registry_record_id"]=9; invalid(self,f,canon(f["approval"])+b"\n")
+ def test_registry_13_false_boolean_id(self): self.bad(False)
  def test_registry_12_no_postgresql(self): src=P.read_text().lower(); self.assertNotIn("psycopg",src); self.assertNotIn("asyncpg",src); self.assertNotIn("create_connection(",src)
 class CoreValueHash25(Base):
  def reject(self,fn): f=self.f(); fn(f["input"]); refresh(f); invalid(self,f)
@@ -44,6 +45,12 @@ class CoreValueHash25(Base):
  def test_core_22_transport_sha(self): f=self.f(); f["approval"]["package_payload"]["input_transport_sha256"]="0"*64; invalid(self,f)
  def test_core_23_payload_sha(self): f=self.f(); rehash(f); f["approval"]["package_payload"]["item_count"]=2; invalid(self,f,canon(f["approval"])+b"\n")
  def test_core_24_item_count(self): f=self.f(); p=f["approval"]["package_payload"]; p["item_count"]=2; p["trusted_fact_provenance"]={k:"EVIDENCE_DERIVED" for k in m.expected_provenance_pointers(2)}; invalid(self,f)
+ def test_core_26_boolean_item_count(self):
+  f=self.f(); f["approval"]["package_payload"]["item_count"]=True; invalid(self,f)
+ def test_core_27_boolean_input_byte_count(self):
+  f=self.f(); f["approval"]["package_payload"]["input_semantic_bytes"]=True; invalid(self,f)
+ def test_core_28_boolean_original_size(self):
+  f=self.f(); f["approval"]["package_payload"]["evidence"]["stored_original_size_bytes"]=True; invalid(self,f)
  def test_core_25_justification(self): f=self.f(); base=f["input"]["trusted_receipt_facts"]["items"][0]; f["input"]["trusted_receipt_facts"]["items"]=[{**copy.deepcopy(base),"line_number":n} for n in range(1,5)]; refresh(f); p=f["approval"]["package_payload"]; p["item_count"]=4; p["trusted_fact_provenance"]={k:"EVIDENCE_DERIVED" for k in m.expected_provenance_pointers(4)}; invalid(self,f)
 def core(name,fn):
  def test(self): self.reject(fn)
@@ -52,6 +59,7 @@ core("test_core_02_wrong_boolean",lambda x:x["ingestion_result"].__setitem__("ro
 class ManifestMatrix(Base):
  def eb(self,k,v): f=self.f(); f["approval"]["package_payload"]["evidence"][k]=v; invalid(self,f)
  def rewrite(self,f): d=canon(f["manifest"]); f["manifest_path"].write_bytes(d); e=f["approval"]["package_payload"]["evidence"]; e["manifest_sha256"]=hashlib.sha256(d).hexdigest(); e["manifest_size_bytes"]=len(d)
+ def test_manifest_17_boolean_size(self): self.eb("manifest_size_bytes",True)
  def test_manifest_01_valid(self): validate(self.f())
  def test_manifest_02_reference_id(self): self.eb("manifest_id","12345678-1234-4abc-8def-1234567890ab")
  def test_manifest_03_sha(self): self.eb("manifest_sha256","0"*64)

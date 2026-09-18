@@ -19,6 +19,22 @@ class ValueHashMatrix(unittest.TestCase):
  def test_equation(self): x=inp(); x["trusted_receipt_facts"]["items"][0]["total_qty"]="3"; self.assertRaises(m.GovernedStop,m.validate_approved_input_closed_schema,x)
  def test_zero_colly(self): x=inp(); i=x["trusted_receipt_facts"]["items"][0]; i["full_colly_count"]=0; i["qty_per_full_colly"]="2"; self.assertRaises(m.GovernedStop,m.validate_approved_input_closed_schema,x)
  def test_positive_colly_null_qty(self): x=inp(); x["trusted_receipt_facts"]["items"][0]["qty_per_full_colly"]=None; self.assertRaises(m.GovernedStop,m.validate_approved_input_closed_schema,x)
+ def test_canonical_whole_numbers(self):
+  for v in ("10", "100", "1000", "20", "50"):
+   with self.subTest(v=v):
+    x=inp(); item=x["trusted_receipt_facts"]["items"][0]
+    item["qty_per_full_colly"]=v; item["total_qty"]=v
+    m.validate_approved_input_closed_schema(x)
+ def test_noncanonical_decimal_strings(self):
+  for v in ("10.0", "100.00", "01", "+10", "-0", "1e2"):
+   with self.subTest(v=v):
+    x=inp(); x["trusted_receipt_facts"]["items"][0]["qty_per_full_colly"]=v
+    self.assertRaises(m.GovernedStop,m.validate_approved_input_closed_schema,x)
+ def test_boolean_integer_fields(self):
+  for field,value in (("line_number",True),("full_colly_count",False)):
+   with self.subTest(field=field):
+    x=inp(); x["trusted_receipt_facts"]["items"][0][field]=value
+    self.assertRaises(m.GovernedStop,m.validate_approved_input_closed_schema,x)
  def test_manifest_binding(self):
   with self.assertRaises(m.GovernedStop): m.validate_manifest_evidence({"manifest_reference":"/opt/aios/data/documents/manifests/9801b5e4-453d-429a-b51f-e8ffaa17a2c9.json","manifest_id":"00000000-0000-4000-8000-000000000000"})
 if __name__=="__main__": unittest.main()

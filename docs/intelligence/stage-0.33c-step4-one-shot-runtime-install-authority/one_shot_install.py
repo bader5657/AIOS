@@ -74,6 +74,13 @@ class ArtifactState:
     published: bool = False
     final_verified: bool = False
     cleanup_complete: bool = False
+    writable_fd_closed: bool = False
+    writable_fd_absent: bool = False
+    stage_device_verified: bool = False
+    final_inode_verified: bool = False
+    final_metadata: dict[str, int] | None = None
+    semantic_prefix_hash_verified: bool = False
+    transport_bytes_verified: bool = False
 
 
 
@@ -83,6 +90,11 @@ class ExecutionState:
     executor_sha: str = ""
     consumption_state: str = "UNUSED"
     current_stage: str = "PRECONDITION"
+    parent_metadata: dict[str, int] | None = None
+    pre_targets_absent: bool | None = None
+    approval_freshness_valid: bool | None = None
+    source_semantic_sha256: tuple[str, str] | None = None
+    source_transport_bytes: tuple[int, int] | None = None
     input: ArtifactState = None
     approval: ArtifactState = None
     input_staged: bool = False
@@ -158,7 +170,7 @@ def staging_name(final: str) -> str:
     return make_stage_name(final)
 
 def expected_provenance_pointers(item_count: int) -> set[str]:
-    if not isinstance(item_count,int) or not 1 <= item_count <= 10: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
+    if type(item_count) is not int or not 1 <= item_count <= 10: raise Stop(APPROVED_BYTES_INVALID,"PROVENANCE")
     base={"/trusted_receipt_facts/supplier_name","/trusted_receipt_facts/document_number","/trusted_receipt_facts/document_date","/trusted_receipt_facts/received_at"}
     fields=("candidate_material_description","canonical_display_name","size_description","specification","material_id","full_colly_count","qty_per_full_colly","partial_qty","total_qty","unit","line_number")
     return base | {f"/trusted_receipt_facts/items/{i}/{field}" for i in range(item_count) for field in fields}
@@ -270,7 +282,7 @@ def validate_approval_closed_schema(value: object) -> dict[str, object]:
     registry_id = e["registry_record_id"]
     if registry_id is not None and (type(registry_id) is not int or not 1 <= registry_id <= 9223372036854775807):
         raise Stop(APPROVED_BYTES_INVALID, "EVIDENCE_REGISTRY")
-    if e["stored_original_size_bytes"] is not None and (not isinstance(e["stored_original_size_bytes"],int) or not 0<=e["stored_original_size_bytes"]<=9223372036854775807): raise Stop(APPROVED_BYTES_INVALID,"EVIDENCE_SIZE")
+    if e["stored_original_size_bytes"] is not None and (type(e["stored_original_size_bytes"]) is not int or not 0<=e["stored_original_size_bytes"]<=9223372036854775807): raise Stop(APPROVED_BYTES_INVALID,"EVIDENCE_SIZE")
     for k in ("stored_original_sha256",):
         if e[k] is not None: validate_sha256_lowercase(e[k])
     if e["mime_type"] is not None: validate_approval_safe_string(e["mime_type"],255)
@@ -353,8 +365,8 @@ def _decimal_string(value: object, maximum: str, zero_allowed: bool = True) -> N
     if not d.is_finite() or d<0 or (not zero_allowed and d==0) or d>Decimal(maximum): raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
     t=d.as_tuple();
     if max(-t.exponent,0)>6 or len(t.digits)+max(t.exponent,0)>20 or (t.sign and d!=0): raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
-    rendered=format(d,"f").rstrip("0").rstrip(".") or "0"
-    if rendered!=value: raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
+    # Integer trailing zeros are valid; fractional trailing zeros are noncanonical.
+    if "." in value and value.endswith("0"): raise Stop(APPROVED_BYTES_INVALID,"INPUT_DECIMAL")
 
 def validate_approved_input_closed_schema(value: object) -> dict[str, object]:
     top={"schema_version","ingestion_result","trusted_receipt_facts"}
@@ -364,7 +376,7 @@ def validate_approved_input_closed_schema(value: object) -> dict[str, object]:
     if i["input_type"] not in INPUT_TYPES or i["recognized_input_type"] not in INPUT_TYPES or i["input_type"] != PIPELINE_COMPAT.get(i["recognized_input_type"], i["recognized_input_type"]): raise Stop(APPROVED_BYTES_INVALID,"INPUT_VALUE")
     if not isinstance(i["manifest_path"],str) or not re.fullmatch(r"/opt/aios/data/documents/manifests/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json",i["manifest_path"]): raise Stop(APPROVED_BYTES_INVALID,"INPUT_MANIFEST")
     if i["registration_succeeded"]:
-        if not isinstance(i["registry_record_id"],int) or not 1<=i["registry_record_id"]<=9223372036854775807: raise Stop(APPROVED_BYTES_INVALID,"INPUT_REGISTRY")
+        if type(i["registry_record_id"]) is not int or not 1<=i["registry_record_id"]<=9223372036854775807: raise Stop(APPROVED_BYTES_INVALID,"INPUT_REGISTRY")
     elif i["registry_record_id"] is not None: raise Stop(APPROVED_BYTES_INVALID,"INPUT_REGISTRY")
     if i["event_delivery_succeeded"] and not i["event_publication_attempted"]: raise Stop(APPROVED_BYTES_INVALID,"INPUT_EVENT")
     if i["route_handoff_ready"] and not i["event_delivery_succeeded"]: raise Stop(APPROVED_BYTES_INVALID,"INPUT_EVENT")
@@ -385,13 +397,13 @@ def validate_approved_input_closed_schema(value: object) -> dict[str, object]:
     for item in f["items"]:
         keys={"line_number","candidate_material_description","canonical_display_name","size_description","specification","material_id","full_colly_count","qty_per_full_colly","partial_qty","total_qty","unit"}
         if not isinstance(item,dict) or set(item)!=keys: raise Stop(APPROVED_BYTES_INVALID,"INPUT_ITEM")
-        if not isinstance(item["line_number"],int) or not 1<=item["line_number"]<=500 or item["line_number"] in lines: raise Stop(APPROVED_BYTES_INVALID,"INPUT_ITEM")
+        if type(item["line_number"]) is not int or not 1<=item["line_number"]<=500 or item["line_number"] in lines: raise Stop(APPROVED_BYTES_INVALID,"INPUT_ITEM")
         lines.append(item["line_number"])
         for k in ("candidate_material_description","canonical_display_name","size_description","specification"):
             if item[k] is not None and (not isinstance(item[k],str) or not item[k] or len(item[k])>512 or any(ord(c)<32 or ord(c)==127 or 0xd800<=ord(c)<=0xdfff for c in item[k])): raise Stop(APPROVED_BYTES_INVALID,"INPUT_TEXT")
         if item["material_id"] is not None: validate_uuid4_canonical_lowercase(item["material_id"])
         c=item["full_colly_count"]
-        if not isinstance(c,int) or not 0<=c<=1000000: raise Stop(APPROVED_BYTES_INVALID,"INPUT_QTY")
+        if type(c) is not int or not 0<=c<=1000000: raise Stop(APPROVED_BYTES_INVALID,"INPUT_QTY")
         if c==0 and item["qty_per_full_colly"] is not None: raise Stop(APPROVED_BYTES_INVALID,"INPUT_QTY")
         if c>0: _decimal_string(item["qty_per_full_colly"],"1000000",False)
         _decimal_string(item["partial_qty"],"100000000",True); _decimal_string(item["total_qty"],"100000000",False)
@@ -600,10 +612,13 @@ def stage_and_publish(parent_fd: int, source: bytes, final: str, semantic: int, 
             os.close(fd)
             closed = True
             _WRITABLE_FDS.pop(fd, None)
+        artifact.writable_fd_closed = True
         stage_meta = verify_file(parent_fd, stage, source, semantic, digest)
         parent_meta = os.fstat(parent_fd)
         if stage_meta.st_dev != parent_meta.st_dev: raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "DEVICE", final)
+        artifact.stage_device_verified = True
         if any(dev == stage_meta.st_dev and ino == stage_meta.st_ino for _, dev, ino in _WRITABLE_FDS.values()): raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "WRITABLE_FD", final)
+        artifact.writable_fd_absent = True
         artifact.preverified = True
         os.link(stage, final, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
         artifact.published = True
@@ -611,6 +626,10 @@ def stage_and_publish(parent_fd: int, source: bytes, final: str, semantic: int, 
         final_meta = verify_file(parent_fd, final, source, semantic, digest)
         if final_meta.st_dev != parent_meta.st_dev or final_meta.st_dev != stage_meta.st_dev or final_meta.st_ino != stage_meta.st_ino:
             raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "INODE", final)
+        artifact.final_inode_verified = True
+        artifact.final_metadata = {"device": final_meta.st_dev, "inode": final_meta.st_ino, "uid": final_meta.st_uid, "gid": final_meta.st_gid, "mode": final_meta.mode, "size": final_meta.size}
+        artifact.semantic_prefix_hash_verified = True
+        artifact.transport_bytes_verified = True
         artifact.final_verified = True
         os.unlink(stage, dir_fd=parent_fd)
         os.fsync(parent_fd)
@@ -661,30 +680,83 @@ def verify_file(parent_fd: int, name: str, source: bytes, semantic: int, digest:
     return VerifiedFile(info.st_dev, info.st_ino, info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode), len(data))
 
 
+def _metadata(info: os.stat_result) -> dict[str, int]:
+    return {"device": info.st_dev, "inode": info.st_ino, "uid": info.st_uid,
+            "gid": info.st_gid, "mode": stat.S_IMODE(info.st_mode)}
+
+
+def result_record(state: ExecutionState, failure: GovernedStop) -> dict[str, object]:
+    record: dict[str, object] = {
+        "schema_version": "aios-stage-0.33c-p4s6-result-v1",
+        "authority_id": AUTHORITY_ID,
+        "authority_commit": state.authority_commit,
+        "executor_path": str(REL_EXECUTOR),
+        "executor_sha256": state.executor_sha,
+        "run_as": "root",
+        "timestamp_utc": utc_text(utc_now()),
+        "stage": failure.stage,
+        "classification": failure.classification,
+        "consumption_state": state.consumption_state,
+        "claim_exclusive": state.consumption_state != "UNUSED",
+        "durability_barrier_complete": state.consumption_state in {"DURABLY_CONSUMED", "EXECUTION_STARTED"},
+        "parent_metadata": state.parent_metadata,
+        "pre_targets_absent": state.pre_targets_absent,
+        "approval_freshness_valid": state.approval_freshness_valid,
+        "input_semantic_sha256": state.source_semantic_sha256[0] if state.source_semantic_sha256 else None,
+        "approval_semantic_sha256": state.source_semantic_sha256[1] if state.source_semantic_sha256 else None,
+        "input_transport_bytes": state.source_transport_bytes[0] if state.source_transport_bytes else None,
+        "approval_transport_bytes": state.source_transport_bytes[1] if state.source_transport_bytes else None,
+        "pair_reverified": state.input.final_verified and state.approval.final_verified and
+                           state.input.cleanup_complete and state.approval.cleanup_complete and
+                           failure.classification == "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED",
+        "artifact_role": failure.artifact or "NONE",
+        "errno_code": failure.errno_code,
+    }
+    for role in ("input", "approval"):
+        artifact = getattr(state, role)
+        record.update({
+            f"{role}_staging_verified": artifact.preverified,
+            f"{role}_writable_fd_closed": artifact.writable_fd_closed,
+            f"{role}_writable_fd_absent": artifact.writable_fd_absent,
+            f"{role}_stage_device_verified": artifact.stage_device_verified,
+            f"{role}_published": artifact.published,
+            f"{role}_verified": artifact.final_verified,
+            f"{role}_final_inode_verified": artifact.final_inode_verified,
+            f"{role}_final_metadata": artifact.final_metadata,
+            f"{role}_semantic_prefix_hash_verified": artifact.semantic_prefix_hash_verified,
+            f"{role}_transport_bytes_verified": artifact.transport_bytes_verified,
+            f"{role}_cleanup_complete": artifact.cleanup_complete,
+        })
+    if set(record) != RESULT_KEYS:
+        raise Stop(RESULT_EVIDENCE_WRITE_FAILED, "RESULT_SCHEMA")
+    return record
+
+
+RESULT_KEYS = frozenset({
+    "schema_version", "authority_id", "authority_commit", "executor_path", "executor_sha256",
+    "run_as", "timestamp_utc", "stage", "classification", "consumption_state",
+    "claim_exclusive", "durability_barrier_complete", "parent_metadata", "pre_targets_absent",
+    "approval_freshness_valid", "input_semantic_sha256", "approval_semantic_sha256",
+    "input_transport_bytes", "approval_transport_bytes", "pair_reverified", "artifact_role", "errno_code",
+    *(f"{role}_{field}" for role in ("input", "approval") for field in (
+        "staging_verified", "writable_fd_closed", "writable_fd_absent", "stage_device_verified",
+        "published", "verified", "final_inode_verified", "final_metadata",
+        "semantic_prefix_hash_verified", "transport_bytes_verified", "cleanup_complete")),
+})
+
+
 def write_failure_result(evidence_fd: int, state: ExecutionState, failure: GovernedStop) -> None:
-    record = {"schema_version":"aios-stage-0.33c-p4s6-result-v1", "authority_id":AUTHORITY_ID, "executor_sha256":state.executor_sha, "authority_commit":state.authority_commit, "timestamp_utc":utc_text(utc_now()), "stage":failure.stage, "classification":failure.classification, "consumption_state":state.consumption_state, "artifact_role":failure.artifact or "NONE", "input_published":state.input_published, "input_verified":state.input_final_verified, "approval_published":state.approval_published, "approval_verified":state.approval_final_verified, "errno_code":failure.errno_code}
-    fd = os.open(RESULT, os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC, 0o600, dir_fd=evidence_fd)
+    record = result_record(state, failure)
+    fd = os.open(RESULT, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=evidence_fd)
     try:
         try:
-            write_all(fd, json.dumps(record, sort_keys=True, separators=(",", ":")).encode()+b"\n")
+            write_all(fd, json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False).encode() + b"\n")
             os.fsync(fd)
         finally:
-            # Close once: retrying a failed close can close a reused descriptor.
             os.close(fd)
         os.fsync(evidence_fd)
     except (OSError, GovernedStop) as exc:
         raise Stop(RESULT_EVIDENCE_WRITE_FAILED, "RESULT", errno_code=getattr(exc, "errno", getattr(exc, "errno_code", None))) from exc
-
-def write_result(evidence_fd: int, claim: dict[str, object], classification: str) -> None:
-    result = {"schema_version":"aios-stage-0.33c-p4s6-result-v1","authority_id":AUTHORITY_ID,"executor_sha256":claim.get("executor_sha256", ""),"authority_commit":claim.get("authority_commit", ""),"timestamp_utc":utc_text(utc_now()),"stage":"COMPLETE","classification":classification,"consumption_state":"DURABLY_CONSUMED","artifact_role":"NONE","input_published":True,"input_verified":True,"approval_published":True,"approval_verified":True,"errno_code":None}
-    encoded = json.dumps(result, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-    fd = os.open(RESULT, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=evidence_fd)
-    try:
-        write_all(fd, encoded)
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-    os.fsync(evidence_fd)
 
 
 def write_result_with_secondary(evidence_fd: int, state: ExecutionState, primary: str, *, success: bool = False, failure: GovernedStop | None = None) -> tuple[str, str | None]:
@@ -726,7 +798,14 @@ def main() -> int:
         if evidence["manifest_id"] != MANIFEST_ID:
             raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
         # Both target-absence and expiry gates have passed; claim starts UNUSED -> CLAIMED -> DURABLY_CONSUMED.
+        if parse_utc(approval["package_payload"]["not_after_utc"]) <= utc_now():
+            raise Stop(APPROVAL_EXPIRED, "APPROVAL_TIME")
         state = ExecutionState(authority_commit=authority_commit, executor_sha=executor_sha)
+        state.parent_metadata = _metadata(os.fstat(parent_fd))
+        state.pre_targets_absent = True
+        state.approval_freshness_valid = True
+        state.source_semantic_sha256 = tuple(sha256(data[:-1]) for data in sources)
+        state.source_transport_bytes = tuple(len(data) for data in sources)
         try:
             durable_claim(evidence_fd, authority_commit, executor_sha, state)
             for index, (source, spec) in enumerate(zip(sources, FILES)):

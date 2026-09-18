@@ -14,6 +14,6 @@ class FilesystemTests(unittest.TestCase):
  def test_verify_returns_metadata(self):
   with tempfile.TemporaryDirectory() as d:
    fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); n="approved-input.json"; path=os.path.join(d,n); Path(path).write_bytes(b"{}\n"); os.chmod(path,0o440); os.chown(path,0,pwd.getpwnam("aiosadmin").pw_gid) if os.geteuid()==0 else None
-   if os.geteuid()!=0: self.skipTest("root metadata")
+   if os.geteuid()!=0: self.skipTest("ROOT_METADATA_TEST_SKIPPED_NON_ROOT")
    m=ex.verify_file(fd,n,b"{}\n",2,ex.sha256(b"{}")); self.assertGreater(m.st_ino,0); os.close(fd)
 if __name__=="__main__": unittest.main()

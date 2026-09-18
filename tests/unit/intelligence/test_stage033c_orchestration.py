@@ -46,12 +46,12 @@ class DurabilityClassificationResultTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); old=executor.RESULT; executor.RESULT="result.json"; s=self.state(authority_commit="a"*40,executor_sha="b"*64,consumption_state="DURABLY_CONSUMED")
             try:
-                executor.write_failure_result(fd,s,executor.GovernedStop(executor.APPROVED_BYTES_INVALID,"X")); obj=json.loads(Path(d,"result.json").read_text()); self.assertEqual(len(obj),14); self.assertNotIn("supplier",json.dumps(obj)); self.assertRaises(FileExistsError,executor.write_failure_result,fd,s,executor.GovernedStop(executor.APPROVED_BYTES_INVALID,"X"))
+                executor.write_failure_result(fd,s,executor.GovernedStop(executor.APPROVED_BYTES_INVALID,"X")); obj=json.loads(Path(d,"result.json").read_text()); self.assertEqual(set(obj),executor.RESULT_KEYS); self.assertNotIn("supplier",json.dumps(obj)); self.assertRaises(FileExistsError,executor.write_failure_result,fd,s,executor.GovernedStop(executor.APPROVED_BYTES_INVALID,"X"))
             finally: executor.RESULT=old; os.close(fd)
     def test_success_result_schema(self):
         with tempfile.TemporaryDirectory() as d:
             fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); old=executor.RESULT; executor.RESULT="result.json"
-            try: executor.write_result(fd,{"authority_commit":"a"*40,"executor_sha256":"b"*64},"STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED"); self.assertEqual(len(json.loads(Path(d,"result.json").read_text())),14)
+            try: s=self.state(authority_commit="a"*40,executor_sha="b"*64,consumption_state="EXECUTION_STARTED"); s.input.published=s.input.final_verified=s.input.cleanup_complete=True; s.approval.published=s.approval.final_verified=s.approval.cleanup_complete=True; executor.write_result_with_secondary(fd,s,"STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED",success=True); self.assertEqual(set(json.loads(Path(d,"result.json").read_text())),executor.RESULT_KEYS)
             finally: executor.RESULT=old; os.close(fd)
     def test_secondary_preserves_partial_primary(self):
         with tempfile.TemporaryDirectory() as d:
@@ -73,9 +73,7 @@ from types import SimpleNamespace
 UNCERTAIN = "CONSUMPTION_DURABILITY_UNCERTAIN"
 SUCCESS = "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED"
 PRE_CLEANUP = "APPROVED_INPUT_STAGING_PREPUBLICATION_CLEANUP_INCOMPLETE"
-KEYS = {"schema_version", "authority_id", "executor_sha256", "authority_commit",
-        "timestamp_utc", "stage", "classification", "consumption_state", "artifact_role",
-        "input_published", "input_verified", "approval_published", "approval_verified", "errno_code"}
+KEYS = executor.RESULT_KEYS
 
 class TempCase(unittest.TestCase):
     def setUp(self):
@@ -169,7 +167,7 @@ class SyntheticRun(TempCase):
         self.stack.enter_context(patch.object(executor.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid())))
         self.stack.enter_context(patch.object(executor.os, "fstat", side_effect=ownership_only))
         self.stack.enter_context(patch.object(executor.os, "fchown"))
-        self.stack.enter_context(patch.object(executor, "validate_frozen_package", return_value=({}, {"package_payload":{"evidence":{"manifest_id":executor.MANIFEST_ID}}}, {})))
+        self.stack.enter_context(patch.object(executor, "validate_frozen_package", return_value=({}, {"package_payload":{"evidence":{"manifest_id":executor.MANIFEST_ID},"not_after_utc":"2099-01-01T00:00:00.000000Z"}}, {})))
         self.states = []
         real_state = executor.ExecutionState
         def capture_state(*args, **kwargs):
@@ -292,10 +290,14 @@ class ClassificationMatrix(unittest.TestCase):
 class ResultEvidenceMatrix(TempCase):
     def write(self, success=False):
         if success:
-            executor.write_result(self.fd, {"authority_commit":"a"*40,"executor_sha256":"b"*64}, SUCCESS)
+            executor.write_result_with_secondary(self.fd, self.state, SUCCESS, success=True)
         else:
             executor.write_failure_result(self.fd, self.state, executor.GovernedStop(executor.APPROVED_BYTES_INVALID,"VALIDATE","input",errno.EIO))
         return (self.root / executor.RESULT).read_text()
+    def test_policy_exact_keys(self):
+        policy = (EXECUTOR_PATH.parent / "00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md").read_text()
+        block = policy.split("The result object has this exact closed top-level key set (one key per line):", 1)[1].split("```text\n", 1)[1].split("\n```", 1)[0]
+        self.assertEqual(set(block.splitlines()), KEYS)
     def test_01_exact_keys(self): self.assertEqual(set(json.loads(self.write())), KEYS)
     def test_02_no_extra_keys_success(self): self.assertEqual(set(json.loads(self.write(True))), KEYS)
     def test_03_failure_minimized(self):
@@ -420,6 +422,13 @@ class AdditionalRegressionTests(SyntheticRun):
             with self.assertRaises(executor.GovernedStop): executor.main()
         result = json.loads((self.evidence/executor.RESULT).read_bytes())
         self.assertEqual(result["classification"],executor.STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION)
+        self.assertEqual(set(result), executor.RESULT_KEYS)
+        self.assertIsNotNone(result["parent_metadata"])
+        self.assertTrue(result["approval_freshness_valid"])
+        self.assertEqual(result["input_semantic_sha256"], executor.sha256(self.payloads[0][:-1]))
+        self.assertEqual(result["approval_transport_bytes"], len(self.payloads[1]))
+        self.assertTrue(result["input_writable_fd_closed"])
+        self.assertTrue(result["input_cleanup_complete"])
         self.assertTrue(result["input_verified"]); self.assertFalse(result["approval_verified"])
     def test_input_cleanup_failure_is_cleanup_not_partial(self):
         real_unlink = os.unlink
@@ -454,6 +463,25 @@ class ResultWriterRegressionTests(TempCase):
         self.assertEqual(target.read_bytes(),b'unchanged')
 
 class IntegrationRegressionTests(SyntheticRun):
+    def test_success_result_contains_policy_metadata(self):
+        self.assertEqual(executor.main(), 0)
+        record = json.loads((self.evidence / executor.RESULT).read_bytes())
+        self.assertEqual(set(record), executor.RESULT_KEYS)
+        self.assertEqual(record["classification"], SUCCESS)
+        self.assertTrue(record["claim_exclusive"])
+        self.assertTrue(record["durability_barrier_complete"])
+        self.assertTrue(record["pre_targets_absent"])
+        self.assertTrue(record["approval_freshness_valid"])
+        self.assertEqual(set(record["parent_metadata"]), {"device", "inode", "uid", "gid", "mode"})
+        self.assertTrue(record["pair_reverified"])
+        for role, source in zip(("input", "approval"), self.payloads):
+            self.assertEqual(record[f"{role}_semantic_sha256"], executor.sha256(source[:-1]))
+            self.assertEqual(record[f"{role}_transport_bytes"], len(source))
+            for field in ("staging_verified", "writable_fd_closed", "writable_fd_absent", "stage_device_verified", "published", "verified", "final_inode_verified", "semantic_prefix_hash_verified", "transport_bytes_verified", "cleanup_complete"):
+                self.assertTrue(record[f"{role}_{field}"], (role, field))
+            self.assertEqual(record[f"{role}_final_metadata"]["size"], len(source))
+        for private in ("synthetic\":\"input", "synthetic\":\"approval", "supplier_name", "document_number", "candidate_material_description", "Traceback"):
+            self.assertNotIn(private, json.dumps(record))
     def test_success_evidence_failure_preserves_pair_and_blocks_retry(self):
         with patch.object(executor,"write_failure_result",side_effect=OSError(errno.EIO,"PRIVATE_EXCEPTION_DETAIL")), contextlib.redirect_stderr(io.StringIO()) as output:
             self.assertEqual(executor.main(),1)

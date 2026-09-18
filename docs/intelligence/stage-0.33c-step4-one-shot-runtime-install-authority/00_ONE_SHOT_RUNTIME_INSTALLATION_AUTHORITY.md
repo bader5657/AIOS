@@ -46,7 +46,7 @@ must remain absent and must not be created, modified, or consumed.
 | Binding | Frozen value |
 |---|---|
 | executor repository path | `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py` |
-| executor SHA-256 | `1d26ff439e1d1c86ac38d4adeed44fcd18a2cb65d4f1663c3e6d8124a15f4542` |
+| executor SHA-256 | `f3846641f7f6840eed5b1c22bfd34a7e28a39123ff90be70649260548fce4b4e` |
 | interpreter/runtime | `/opt/aios/runtime/venv/bin/python`, governed Python `3.12.3` |
 | run-as identity | Unix `root` (`euid=0`, account name `root`) |
 | arguments/input model | no arguments; closed constants and the two fixed private sources only |
@@ -276,6 +276,70 @@ created exclusively/no-follow as mode `0600`, durably file- and parent-`fsync`ed
 never overwrites an existing object, and never contains raw package or business
 content. Failure to create or complete final evidence after durable consumption remains
 `DURABLY_CONSUMED / EVIDENCE_INCOMPLETE` and never permits retry.
+
+The result object has this exact closed top-level key set (one key per line):
+
+```text
+approval_cleanup_complete
+approval_final_inode_verified
+approval_final_metadata
+approval_freshness_valid
+approval_published
+approval_semantic_prefix_hash_verified
+approval_semantic_sha256
+approval_stage_device_verified
+approval_staging_verified
+approval_transport_bytes
+approval_transport_bytes_verified
+approval_verified
+approval_writable_fd_absent
+approval_writable_fd_closed
+artifact_role
+authority_commit
+authority_id
+claim_exclusive
+classification
+consumption_state
+durability_barrier_complete
+errno_code
+executor_path
+executor_sha256
+input_cleanup_complete
+input_final_inode_verified
+input_final_metadata
+input_published
+input_semantic_prefix_hash_verified
+input_semantic_sha256
+input_stage_device_verified
+input_staging_verified
+input_transport_bytes
+input_transport_bytes_verified
+input_verified
+input_writable_fd_absent
+input_writable_fd_closed
+pair_reverified
+parent_metadata
+pre_targets_absent
+run_as
+schema_version
+stage
+timestamp_utc
+```
+
+`parent_metadata` is either `null` before capture or an exact object with
+`device`, `inode`, `uid`, `gid`, and `mode` integer keys. Each
+`*_final_metadata` is either `null` before final verification or an exact
+object with those five integer keys plus `size`. `errno_code` is an integer or
+`null`; source hashes and transport byte counts are `null` until both private
+sources have passed preflight. `pre_targets_absent` and
+`approval_freshness_valid` are `null` until checked. All other status checks
+are booleans: `false` means the gate was not reached or did not pass; `true`
+means it passed. `artifact_role` is one fixed final basename or `NONE`.
+`run_as` is `root`; `executor_path` is the frozen relative repository path.
+No hostname is recorded because this authority does not govern a hostname.
+The result records actual source hashes and byte counts and observed filesystem
+metadata; it does not include source bytes, package values, or raw exceptions.
+Both success and governed failure use this same schema.
 
 This filesystem-only authority permits no service restart, Telegram reload,
 service-environment change, `runtime.env` change, harness import-for-execution,
