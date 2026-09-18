@@ -1,0 +1,488 @@
+import importlib.util
+import json
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[3]
+EXECUTOR_PATH = ROOT / "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py"
+spec = importlib.util.spec_from_file_location("stage033c_orchestration_executor", EXECUTOR_PATH)
+executor = importlib.util.module_from_spec(spec)
+import sys
+sys.modules[spec.name] = executor
+spec.loader.exec_module(executor)
+
+class DurabilityClassificationResultTests(unittest.TestCase):
+    def state(self, **kwargs): return executor.ExecutionState(**kwargs)
+    def test_state_starts_unused(self): self.assertEqual(self.state().consumption_state, "UNUSED")
+    def test_claimed_is_uncertain(self): self.assertEqual(executor.derive_primary_classification(self.state(consumption_state="CLAIMED"), {}), "CONSUMPTION_DURABILITY_UNCERTAIN")
+    def test_preclaim_classifications(self):
+        for c in (executor.PRECONDITION_FAILED, executor.APPROVAL_EXPIRED, executor.TARGET_ALREADY_EXISTS, executor.APPROVED_BYTES_INVALID):
+            with self.subTest(c=c): self.assertEqual(executor.derive_primary_classification(self.state(), {"classification": c}), c)
+    def test_postdurable_staging_failure(self): self.assertEqual(executor.derive_primary_classification(self.state(consumption_state="DURABLY_CONSUMED"), {"stage":"staging"}), executor.APPROVED_INPUT_STAGING_FAILED)
+    def test_prepublication_cleanup_precedence(self): self.assertEqual(executor.derive_primary_classification(self.state(consumption_state="DURABLY_CONSUMED"), {"cleanup":"prepublication"}), "APPROVED_INPUT_STAGING_PREPUBLICATION_CLEANUP_INCOMPLETE")
+    def test_partial_precedence(self):
+        s=self.state(consumption_state="DURABLY_CONSUMED"); s.input.final_verified=True
+        for c in ({"stage":"staging"},{"classification":executor.TARGET_ALREADY_EXISTS},{"classification":executor.APPROVED_INPUT_FINAL_VERIFICATION_FAILED}): self.assertEqual(executor.derive_primary_classification(s,c),executor.STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION)
+    def test_cleanup_and_success_gate(self):
+        s=self.state(consumption_state="DURABLY_CONSUMED"); self.assertEqual(executor.derive_primary_classification(s,{"cleanup":"postpublication"}),executor.APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE); s.input.published=s.input.final_verified=s.input.cleanup_complete=True; s.approval.published=s.approval.final_verified=s.approval.cleanup_complete=True; self.assertNotEqual(executor.derive_primary_classification(s,{}),"STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED"); self.assertEqual(executor.derive_primary_classification(s,{"pair_reverified":True}),"STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED")
+    def test_durability_failures_no_staging_or_reset(self):
+        for mode in ("write","fsync","parent"):
+            with tempfile.TemporaryDirectory() as d:
+                fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); s=self.state(); old=executor.MARKER; executor.MARKER="marker.json"
+                try:
+                    ctx=patch.object(executor,"write_all",side_effect=OSError(5,"x")) if mode=="write" else patch.object(executor.os,"fsync",side_effect=([None,OSError(5,"x")] if mode=="parent" else OSError(5,"x")))
+                    with ctx,patch.object(executor,"stage_and_publish") as stage,self.assertRaises(executor.GovernedStop) as e: executor.durable_claim(fd,"a"*40,"b"*64,s)
+                    self.assertEqual(e.exception.classification,"CONSUMPTION_DURABILITY_UNCERTAIN"); self.assertEqual(s.consumption_state,"CLAIMED"); stage.assert_not_called(); self.assertTrue(Path(d,"marker.json").exists())
+                finally: executor.MARKER=old; os.close(fd)
+    def test_existing_marker_authority_consumed(self):
+        with tempfile.TemporaryDirectory() as d:
+            fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); old=executor.MARKER; executor.MARKER="marker.json"
+            try: Path(d,"marker.json").write_bytes(b"old"); self.assertRaises(executor.GovernedStop,executor.durable_claim,fd,"a"*40,"b"*64,self.state())
+            finally: executor.MARKER=old; os.close(fd)
+    def test_result_exact_schema_minimized_and_exclusive(self):
+        with tempfile.TemporaryDirectory() as d:
+            fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); old=executor.RESULT; executor.RESULT="result.json"; s=self.state(authority_commit="a"*40,executor_sha="b"*64,consumption_state="DURABLY_CONSUMED")
+            try:
+                executor.write_failure_result(fd,s,executor.GovernedStop(executor.APPROVED_BYTES_INVALID,"X")); obj=json.loads(Path(d,"result.json").read_text()); self.assertEqual(len(obj),14); self.assertNotIn("supplier",json.dumps(obj)); self.assertRaises(FileExistsError,executor.write_failure_result,fd,s,executor.GovernedStop(executor.APPROVED_BYTES_INVALID,"X"))
+            finally: executor.RESULT=old; os.close(fd)
+    def test_success_result_schema(self):
+        with tempfile.TemporaryDirectory() as d:
+            fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); old=executor.RESULT; executor.RESULT="result.json"
+            try: executor.write_result(fd,{"authority_commit":"a"*40,"executor_sha256":"b"*64},"STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED"); self.assertEqual(len(json.loads(Path(d,"result.json").read_text())),14)
+            finally: executor.RESULT=old; os.close(fd)
+    def test_secondary_preserves_partial_primary(self):
+        with tempfile.TemporaryDirectory() as d:
+            fd=os.open(d,os.O_RDONLY|os.O_DIRECTORY); s=self.state(consumption_state="DURABLY_CONSUMED")
+            try:
+                with patch.object(executor,"write_failure_result",side_effect=executor.GovernedStop(executor.RESULT_EVIDENCE_WRITE_FAILED,"RESULT")): p,q=executor.write_result_with_secondary(fd,s,executor.STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION)
+                self.assertEqual((p,q),(executor.STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION,executor.RESULT_EVIDENCE_WRITE_FAILED))
+            finally: os.close(fd)
+
+
+
+# B2 closure matrix. Recovery tests above remain intact.
+import contextlib
+import errno
+import io
+import stat
+from types import SimpleNamespace
+
+UNCERTAIN = "CONSUMPTION_DURABILITY_UNCERTAIN"
+SUCCESS = "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED"
+PRE_CLEANUP = "APPROVED_INPUT_STAGING_PREPUBLICATION_CLEANUP_INCOMPLETE"
+KEYS = {"schema_version", "authority_id", "executor_sha256", "authority_commit",
+        "timestamp_utc", "stage", "classification", "consumption_state", "artifact_role",
+        "input_published", "input_verified", "approval_published", "approval_verified", "errno_code"}
+
+class TempCase(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, self.fd)
+        self.stack = contextlib.ExitStack()
+        self.addCleanup(self.stack.close)
+        for name, value in (("MARKER", "claim.json"), ("RESULT", "result.json")):
+            self.stack.enter_context(patch.object(executor, name, value))
+        self.state = executor.ExecutionState(authority_commit="a" * 40, executor_sha="b" * 64)
+
+    def assert_nonretryable(self):
+        self.assertTrue((self.root / executor.MARKER).exists())
+        before = (self.root / executor.MARKER).read_bytes()
+        with self.assertRaises(executor.GovernedStop) as caught:
+            executor.durable_claim(self.fd, "a" * 40, "b" * 64, executor.ExecutionState())
+        self.assertEqual(caught.exception.classification, executor.AUTHORITY_CONSUMED)
+        self.assertEqual((self.root / executor.MARKER).read_bytes(), before)
+
+    @contextlib.contextmanager
+    def fault(self, mode):
+        real_open, real_close, real_fsync = os.open, os.close, os.fsync
+        opened = []
+        def opening(*args, **kwargs):
+            fd = real_open(*args, **kwargs)
+            opened.append(fd)
+            return fd
+        def closing(fd):
+            real_close(fd)
+            if mode == "close" and fd in opened:
+                raise OSError(errno.EIO, "PRIVATE_EXCEPTION_DETAIL")
+        def syncing(fd):
+            if (mode == "file" and fd != self.fd) or (mode == "parent" and fd == self.fd):
+                raise OSError(errno.EIO, "PRIVATE_EXCEPTION_DETAIL")
+            return real_fsync(fd)
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(executor.os, "open", side_effect=opening))
+            stack.enter_context(patch.object(executor.os, "close", side_effect=closing))
+            stack.enter_context(patch.object(executor.os, "fsync", side_effect=syncing))
+            if mode == "write":
+                stack.enter_context(patch.object(executor, "write_all", side_effect=OSError(errno.EIO, "PRIVATE_EXCEPTION_DETAIL")))
+            try:
+                yield opened
+            finally:
+                for fd in opened:
+                    try: real_close(fd)
+                    except OSError: pass
+
+class SyntheticRun(TempCase):
+    """Real temporary hard-links and bytes; only trust/ownership prerequisites stubbed.
+
+    Schema/manifest validation is exercised by the unchanged full-chain suite.
+    Every main() path is redirected before calling it; no production paths open.
+    """
+    def setUp(self):
+        super().setUp()
+        self.parent = self.root / "parent"
+        self.source = self.root / "source"
+        self.parent.mkdir(); self.source.mkdir()
+        (self.parent / executor.EVIDENCE_DIR).mkdir(mode=0o700)
+        self.evidence = self.parent / executor.EVIDENCE_DIR
+        # Claim and result fault helpers use this exact evidence directory FD.
+        os.close(self.fd)
+        self.fd = os.open(self.evidence, os.O_RDONLY | os.O_DIRECTORY)
+        self.payloads = (b'{"synthetic":"input"}\n', b'{"synthetic":"approval"}\n')
+        self.specs = tuple((name, len(data)-1, len(data), executor.sha256(data[:-1]))
+                           for name, data in zip(("approved-input.json", "approved-input-approval.json"), self.payloads))
+        for spec, data in zip(self.specs, self.payloads):
+            (self.source / spec[0]).write_bytes(data)
+            (self.source / spec[0]).chmod(0o400)
+        (self.root / "fixture-executor.py").write_bytes(b"synthetic executor bytes")
+        real_fstat = os.fstat
+        def ownership_only(fd):
+            value = real_fstat(fd)
+            if stat.S_ISREG(value.st_mode):
+                values = list(value); values[4] = 0; values[5] = 0 if stat.S_IMODE(value.st_mode) == 0o400 else value.st_gid
+                return os.stat_result(values)
+            return value
+        def open_fixture(path, *_):
+            self.assertIn(path, (self.parent, self.source))
+            return os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+        for name, value in (("REPOSITORY", self.root), ("REL_EXECUTOR", Path("fixture-executor.py")),
+                            ("RUNTIME_PARENT", self.parent), ("SOURCE_PARENT", self.source), ("FILES", self.specs)):
+            self.stack.enter_context(patch.object(executor, name, value))
+        self.stack.enter_context(patch.object(executor, "check_no_args_root"))
+        self.stack.enter_context(patch.object(executor, "verify_merged_authority", return_value="a"*40))
+        self.stack.enter_context(patch.object(executor, "open_dir", side_effect=open_fixture))
+        self.stack.enter_context(patch.object(executor.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid())))
+        self.stack.enter_context(patch.object(executor.os, "fstat", side_effect=ownership_only))
+        self.stack.enter_context(patch.object(executor.os, "fchown"))
+        self.stack.enter_context(patch.object(executor, "validate_frozen_package", return_value=({}, {"package_payload":{"evidence":{"manifest_id":executor.MANIFEST_ID}}}, {})))
+        self.states = []
+        real_state = executor.ExecutionState
+        def capture_state(*args, **kwargs):
+            state = real_state(*args, **kwargs); self.states.append(state); return state
+        self.stack.enter_context(patch.object(executor, "ExecutionState", side_effect=capture_state))
+
+    def assert_retry_blocked(self):
+        marker = self.evidence / executor.MARKER
+        self.assertTrue(marker.exists())
+        before = marker.read_bytes()
+        with patch.object(executor, "stage_and_publish") as stage:
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification, executor.AUTHORITY_CONSUMED)
+        stage.assert_not_called()
+        self.assertEqual(marker.read_bytes(), before)
+
+class DurabilityMatrix(SyntheticRun):
+    def failed_claim(self, mode):
+        # Match the actual evidence FD opened by main, not the fixture's separate FD.
+        real_fsync = os.fsync
+        real_close = os.close
+        marker_fds = []
+        real_open = os.open
+        def opening(path, *args, **kwargs):
+            fd = real_open(path, *args, **kwargs)
+            if path == executor.MARKER: marker_fds.append(fd)
+            return fd
+        def syncing(fd):
+            is_marker = fd in marker_fds
+            if (mode == "file" and is_marker) or (mode == "parent" and not is_marker):
+                raise OSError(errno.EIO, "PRIVATE_EXCEPTION_DETAIL")
+            real_fsync(fd)
+        def closing(fd):
+            real_close(fd)
+            if mode == "close" and fd in marker_fds: raise OSError(errno.EIO, "PRIVATE_EXCEPTION_DETAIL")
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(executor.os, "open", side_effect=opening))
+            stack.enter_context(patch.object(executor.os, "fsync", side_effect=syncing))
+            stack.enter_context(patch.object(executor.os, "close", side_effect=closing))
+            if mode == "write": stack.enter_context(patch.object(executor, "write_all", side_effect=OSError(errno.EIO, "PRIVATE_EXCEPTION_DETAIL")))
+            stage = stack.enter_context(patch.object(executor, "stage_and_publish"))
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        for fd in marker_fds:
+            try: real_close(fd)
+            except OSError: pass
+        self.assertEqual(caught.exception.classification, UNCERTAIN)
+        self.assertEqual(self.states[0].consumption_state, "CLAIMED")
+        return stage
+
+    def test_01_existing_marker(self):
+        (self.evidence / executor.MARKER).write_bytes(b"consumed")
+        self.assert_retry_blocked()
+    def test_02_marker_write(self): self.failed_claim("write")
+    def test_03_marker_fsync(self): self.failed_claim("file")
+    def test_04_marker_close(self): self.failed_claim("close")
+    def test_05_parent_fsync(self): self.failed_claim("parent")
+    def test_06_no_stage_after_write(self): self.failed_claim("write").assert_not_called()
+    def test_07_no_stage_after_fsync(self): self.failed_claim("file").assert_not_called()
+    def test_08_no_stage_after_close(self): self.failed_claim("close").assert_not_called()
+    def test_09_no_stage_after_parent(self): self.failed_claim("parent").assert_not_called()
+    def test_10_uncertain_marker_preserved_retry_prohibited(self):
+        self.failed_claim("write")
+        self.assert_retry_blocked()
+    def test_11_postdurable_failure_retry_prohibited(self):
+        with patch.object(executor, "stage_and_publish", side_effect=executor.GovernedStop(executor.APPROVED_INPUT_STAGING_FAILED, "STAGING")):
+            with self.assertRaises(executor.GovernedStop): executor.main()
+        self.assertEqual(self.states[0].consumption_state, "EXECUTION_STARTED")
+        self.assert_retry_blocked()
+    def test_12_not_started_before_staging(self):
+        real_claim = executor.durable_claim
+        def claim(*args):
+            value = real_claim(*args)
+            self.assertEqual(args[-1].consumption_state, "DURABLY_CONSUMED")
+            return value
+        with patch.object(executor, "durable_claim", side_effect=claim): self.assertEqual(executor.main(), 0)
+    def test_13_started_at_staging(self):
+        real_stage = executor.stage_and_publish
+        def stage(*args, **kwargs):
+            self.assertEqual(self.states[0].consumption_state, "EXECUTION_STARTED")
+            self.assertEqual(json.loads((self.evidence / executor.MARKER).read_bytes())["state"], "DURABLY_CONSUMED")
+            return real_stage(*args, **kwargs)
+        with patch.object(executor, "stage_and_publish", side_effect=stage): self.assertEqual(executor.main(), 0)
+
+class ClassificationMatrix(unittest.TestCase):
+    def setUp(self): self.state = executor.ExecutionState()
+    def expect(self, expected, context=None):
+        self.assertEqual(executor.derive_primary_classification(self.state, context), expected)
+    def complete(self):
+        self.state.consumption_state = "EXECUTION_STARTED"
+        for item in (self.state.input, self.state.approval):
+            item.published = item.final_verified = item.cleanup_complete = True
+    def partial(self, context):
+        self.state.consumption_state = "EXECUTION_STARTED"
+        self.state.input.published = self.state.input.final_verified = True
+        self.expect(executor.STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION, context)
+    def test_01_precondition(self): self.expect(executor.PRECONDITION_FAILED, {"classification":executor.PRECONDITION_FAILED})
+    def test_02_expired(self): self.expect(executor.APPROVAL_EXPIRED, {"classification":executor.APPROVAL_EXPIRED})
+    def test_03_target_exists(self): self.expect(executor.TARGET_ALREADY_EXISTS, {"classification":executor.TARGET_ALREADY_EXISTS})
+    def test_04_bytes_invalid(self): self.expect(executor.APPROVED_BYTES_INVALID, {"classification":executor.APPROVED_BYTES_INVALID})
+    def test_05_consumed(self): self.expect(executor.AUTHORITY_CONSUMED, {"classification":executor.AUTHORITY_CONSUMED})
+    def test_06_staging(self):
+        self.state.consumption_state = "DURABLY_CONSUMED"
+        self.expect(executor.APPROVED_INPUT_STAGING_FAILED, {"stage":"staging"})
+    def test_07_precleanup(self): self.expect(PRE_CLEANUP, {"stage":"staging", "cleanup":"prepublication"})
+    def test_08_partial_staging(self): self.partial({"stage":"staging"})
+    def test_09_partial_eexist(self): self.partial({"classification":executor.TARGET_ALREADY_EXISTS})
+    def test_10_partial_verify(self): self.partial({"classification":executor.APPROVED_INPUT_FINAL_VERIFICATION_FAILED})
+    def test_11_cleanup(self):
+        self.complete(); self.expect(executor.APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE, {"cleanup":"postpublication"})
+    def test_12_input_cleanup_blocks_success(self):
+        self.complete(); self.state.input.cleanup_complete = False
+        self.assertNotEqual(executor.derive_primary_classification(self.state, {"pair_reverified":True}), SUCCESS)
+    def test_13_approval_cleanup_blocks_success(self):
+        self.complete(); self.state.approval.cleanup_complete = False
+        self.assertNotEqual(executor.derive_primary_classification(self.state, {"pair_reverified":True}), SUCCESS)
+    def test_14_pair_reverification_required(self):
+        self.complete(); self.assertNotEqual(executor.derive_primary_classification(self.state), SUCCESS)
+        self.expect(SUCCESS, {"pair_reverified":True})
+
+class ResultEvidenceMatrix(TempCase):
+    def write(self, success=False):
+        if success:
+            executor.write_result(self.fd, {"authority_commit":"a"*40,"executor_sha256":"b"*64}, SUCCESS)
+        else:
+            executor.write_failure_result(self.fd, self.state, executor.GovernedStop(executor.APPROVED_BYTES_INVALID,"VALIDATE","input",errno.EIO))
+        return (self.root / executor.RESULT).read_text()
+    def test_01_exact_keys(self): self.assertEqual(set(json.loads(self.write())), KEYS)
+    def test_02_no_extra_keys_success(self): self.assertEqual(set(json.loads(self.write(True))), KEYS)
+    def test_03_failure_minimized(self):
+        obj = json.loads(self.write()); self.assertEqual(obj["artifact_role"],"input"); self.assertEqual(obj["errno_code"],errno.EIO)
+    def test_04_success_minimized(self):
+        obj = json.loads(self.write(True)); self.assertEqual(obj["classification"],SUCCESS); self.assertIsNone(obj["errno_code"])
+    def test_05_no_raw_input(self):
+        self.state.raw_input = '{"RAW_INPUT_SECRET":123}'
+        self.assertNotIn("RAW_INPUT_SECRET",self.write())
+    def test_06_no_raw_approval(self):
+        self.state.raw_approval = '{"RAW_APPROVAL_SECRET":456}'
+        self.assertNotIn("RAW_APPROVAL_SECRET",self.write())
+    def test_07_no_business_facts(self):
+        self.state.supplier_name = "PRIVATE_SUPPLIER"
+        text = self.write()
+        for value in ("PRIVATE_SUPPLIER","supplier","quantities","document_number","items","credentials"): self.assertNotIn(value,text)
+    def test_08_no_traceback(self): self.assertNotIn("Traceback",self.write())
+    def test_09_no_exception_repr(self): self.assertNotIn("GovernedStop(",self.write())
+    def test_10_exclusive_nofollow_flags_and_mode(self):
+        with patch.object(executor.os,"open",wraps=os.open) as opening: self.write()
+        call = opening.call_args
+        for flag in (os.O_WRONLY,os.O_CREAT,os.O_EXCL,os.O_NOFOLLOW,os.O_CLOEXEC): self.assertTrue(call.args[1] & flag)
+        self.assertEqual(stat.S_IMODE((self.root/executor.RESULT).stat().st_mode),0o600)
+    def test_11_existing_result_preserved(self):
+        before = self.write()
+        with self.assertRaises((executor.GovernedStop,FileExistsError)): self.write()
+        self.assertEqual((self.root/executor.RESULT).read_text(),before)
+    def result_fault(self, mode, primary=UNCERTAIN):
+        self.state.consumption_state = "CLAIMED"
+        with self.fault(mode), contextlib.redirect_stderr(io.StringIO()) as stderr:
+            outcome = executor.write_result_with_secondary(self.fd,self.state,primary)
+        self.assertEqual(outcome,(primary,executor.RESULT_EVIDENCE_WRITE_FAILED))
+        self.assertEqual(stderr.getvalue(),executor.RESULT_EVIDENCE_WRITE_FAILED+"\n")
+    def test_12_file_fsync_failure(self): self.result_fault("file")
+    def test_13_close_failure(self): self.result_fault("close")
+    def test_14_parent_fsync_failure(self): self.result_fault("parent")
+    def test_15_primary_durability_survives(self): self.result_fault("write")
+    def test_16_primary_partial_survives(self): self.result_fault("write",executor.STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION)
+    def test_17_secondary_no_traceback_or_repr(self): self.result_fault("parent",executor.APPROVED_INPUT_STAGING_FAILED)
+    def test_18_evidence_failure_no_retry(self):
+        executor.durable_claim(self.fd,"a"*40,"b"*64,self.state)
+        with patch.object(executor,"write_failure_result",side_effect=OSError(errno.EIO,"PRIVATE_EXCEPTION_DETAIL")), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(executor.write_result_with_secondary(self.fd,self.state,executor.APPROVED_INPUT_STAGING_FAILED),(executor.APPROVED_INPUT_STAGING_FAILED,executor.RESULT_EVIDENCE_WRITE_FAILED))
+        self.assert_nonretryable()
+
+class TemporaryOrchestrationTests(SyntheticRun):
+    def test_partial_install_real_hardlinks(self):
+        real_link = os.link
+        linked = {}
+        def link(src,dst,**kwargs):
+            if dst == self.specs[1][0]: raise FileExistsError(errno.EEXIST,"synthetic collision")
+            real_link(src,dst,**kwargs)
+            linked[dst] = (self.parent/dst).stat().st_ino
+        with patch.object(executor.os,"link",side_effect=link):
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification,executor.STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION)
+        first = self.parent/self.specs[0][0]
+        self.assertEqual(first.read_bytes(),self.payloads[0]); self.assertEqual(first.stat().st_ino,linked[first.name])
+        self.assertFalse(self.states[0].approval.final_verified)
+        self.assert_retry_blocked()
+    def test_postverification_cleanup_real_hardlinks(self):
+        real_unlink = os.unlink
+        def unlink(path,*args,**kwargs):
+            if str(path).startswith(".approved-input-approval.json.stage-"): raise OSError(errno.EACCES,"synthetic unlink")
+            return real_unlink(path,*args,**kwargs)
+        with patch.object(executor.os,"unlink",side_effect=unlink):
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification,executor.APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE)
+        final = self.parent/self.specs[1][0]
+        residual = list(self.parent.glob(".approved-input-approval.json.stage-*"))
+        self.assertEqual(len(residual),1); self.assertEqual(final.stat().st_ino,residual[0].stat().st_ino)
+        self.assertEqual(final.read_bytes(),self.payloads[1]); self.assert_retry_blocked()
+    def test_prepublication_cleanup_failure(self):
+        real_unlink = os.unlink
+        def unlink(path,*args,**kwargs):
+            if str(path).startswith(".approved-input.json.stage-"): raise OSError(errno.EACCES,"synthetic unlink")
+            return real_unlink(path,*args,**kwargs)
+        with patch.object(executor.os,"link",side_effect=OSError(errno.EIO,"synthetic publish")), patch.object(executor.os,"unlink",side_effect=unlink):
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification,PRE_CLEANUP)
+        self.assertFalse((self.parent/self.specs[0][0]).exists())
+        self.assertEqual(len(list(self.parent.glob(".approved-input.json.stage-*"))),1)
+        self.assert_retry_blocked()
+    def test_success_reverifies_pair_after_both_published(self):
+        real_verify = executor.verify_file
+        pair_checks = []
+        def verify(fd,name,*args):
+            if name in (self.specs[0][0],self.specs[1][0]) and all((self.parent/s[0]).exists() for s in self.specs): pair_checks.append(name)
+            return real_verify(fd,name,*args)
+        with patch.object(executor,"verify_file",side_effect=verify): self.assertEqual(executor.main(),0)
+        self.assertEqual(pair_checks[-2:],[self.specs[0][0],self.specs[1][0]])
+    def test_generic_staging_failure_with_successful_cleanup(self):
+        with patch.object(executor,"write_all",side_effect=[None,OSError(errno.EIO,"synthetic write"),None]):
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification,executor.APPROVED_INPUT_STAGING_FAILED)
+        self.assertFalse(list(self.parent.glob(".*.stage-*")))
+        self.assert_retry_blocked()
+
+class AdditionalRegressionTests(SyntheticRun):
+    def test_claim_write_failure_closes_writable_fd(self):
+        real_open = os.open
+        opened = []
+        def opening(path,*args,**kwargs):
+            fd = real_open(path,*args,**kwargs)
+            if path == executor.MARKER: opened.append(fd)
+            return fd
+        try:
+            with patch.object(executor.os,"open",side_effect=opening), patch.object(executor,"write_all",side_effect=OSError(errno.EIO,"private")):
+                with self.assertRaises(executor.GovernedStop): executor.main()
+            self.assertEqual(len(opened),1)
+            with self.assertRaises(OSError): os.fstat(opened[0])
+        finally:
+            for fd in opened:
+                try: os.close(fd)
+                except OSError: pass
+    def test_partial_result_records_actual_input_state(self):
+        real_link = os.link
+        def link(src,dst,**kwargs):
+            if dst == self.specs[1][0]: raise OSError(errno.EIO,"private")
+            return real_link(src,dst,**kwargs)
+        with patch.object(executor.os,"link",side_effect=link):
+            with self.assertRaises(executor.GovernedStop): executor.main()
+        result = json.loads((self.evidence/executor.RESULT).read_bytes())
+        self.assertEqual(result["classification"],executor.STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION)
+        self.assertTrue(result["input_verified"]); self.assertFalse(result["approval_verified"])
+    def test_input_cleanup_failure_is_cleanup_not_partial(self):
+        real_unlink = os.unlink
+        def unlink(path,*args,**kwargs):
+            if str(path).startswith(".approved-input.json.stage-"): raise OSError(errno.EACCES,"private")
+            return real_unlink(path,*args,**kwargs)
+        with patch.object(executor.os,"unlink",side_effect=unlink):
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification,executor.APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE)
+        self.assertEqual((self.parent/self.specs[0][0]).read_bytes(),self.payloads[0])
+        self.assert_retry_blocked()
+
+class ResultWriterRegressionTests(TempCase):
+    def test_short_write_closes_result_fd(self):
+        opened = []
+        real_open = os.open
+        def opening(*args,**kwargs):
+            fd=real_open(*args,**kwargs); opened.append(fd); return fd
+        try:
+            with patch.object(executor.os,"open",side_effect=opening), patch.object(executor.os,"write",return_value=0), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(executor.write_result_with_secondary(self.fd,self.state,UNCERTAIN),(UNCERTAIN,executor.RESULT_EVIDENCE_WRITE_FAILED))
+            with self.assertRaises(OSError): os.fstat(opened[0])
+        finally:
+            for fd in opened:
+                try: os.close(fd)
+                except OSError: pass
+    def test_symlink_result_does_not_touch_target(self):
+        target=self.root/'existing'; target.write_bytes(b'unchanged')
+        (self.root/executor.RESULT).symlink_to(target)
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(executor.write_result_with_secondary(self.fd,self.state,UNCERTAIN),(UNCERTAIN,executor.RESULT_EVIDENCE_WRITE_FAILED))
+        self.assertEqual(target.read_bytes(),b'unchanged')
+
+class IntegrationRegressionTests(SyntheticRun):
+    def test_success_evidence_failure_preserves_pair_and_blocks_retry(self):
+        with patch.object(executor,"write_failure_result",side_effect=OSError(errno.EIO,"PRIVATE_EXCEPTION_DETAIL")), contextlib.redirect_stderr(io.StringIO()) as output:
+            self.assertEqual(executor.main(),1)
+        self.assertEqual(output.getvalue(),executor.RESULT_EVIDENCE_WRITE_FAILED+'\n')
+        for spec,data in zip(self.specs,self.payloads): self.assertEqual((self.parent/spec[0]).read_bytes(),data)
+        self.assert_retry_blocked()
+    def test_pair_reverification_failure_never_success(self):
+        real_verify=executor.verify_file
+        def verify(fd,name,*args):
+            if self.states and self.states[0].current_stage == 'PAIR_REVERIFY': raise OSError(errno.EIO,'PRIVATE_EXCEPTION_DETAIL')
+            return real_verify(fd,name,*args)
+        with patch.object(executor,'verify_file',side_effect=verify):
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification,executor.APPROVED_INPUT_FINAL_VERIFICATION_FAILED)
+        self.assertNotEqual(json.loads((self.evidence/executor.RESULT).read_bytes())['classification'],SUCCESS)
+        self.assert_retry_blocked()
+    def test_approval_final_verification_partial(self):
+        real_verify=executor.verify_file
+        def verify(fd,name,*args):
+            if name == self.specs[1][0]: raise OSError(errno.EIO,'PRIVATE_EXCEPTION_DETAIL')
+            return real_verify(fd,name,*args)
+        with patch.object(executor,'verify_file',side_effect=verify):
+            with self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification,executor.STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION)
+        record=json.loads((self.evidence/executor.RESULT).read_bytes())
+        self.assertEqual(record['errno_code'],errno.EIO)
+        self.assertEqual(record['artifact_role'],self.specs[1][0])
+        self.assertTrue(record['approval_published']); self.assertFalse(record['approval_verified'])
+        self.assert_retry_blocked()
+
+if __name__ == '__main__':
+    unittest.main()

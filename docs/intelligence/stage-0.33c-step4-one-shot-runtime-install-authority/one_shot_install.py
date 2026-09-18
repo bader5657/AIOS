@@ -102,12 +102,12 @@ def derive_primary_classification(state: ExecutionState, failure_context: object
     context = failure_context if isinstance(failure_context, dict) else {}
     if state.consumption_state == "CLAIMED":
         return "CONSUMPTION_DURABILITY_UNCERTAIN"
+    if context.get("cleanup") == "postpublication":
+        return APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE
     if state.input.final_verified and not state.approval.final_verified and state.consumption_state in {"DURABLY_CONSUMED", "EXECUTION_STARTED"}:
         return STEP4_APPROVED_INPUT_PARTIAL_INSTALLATION
     if context.get("cleanup") == "prepublication":
         return "APPROVED_INPUT_STAGING_PREPUBLICATION_CLEANUP_INCOMPLETE"
-    if context.get("cleanup") == "postpublication":
-        return APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE
     if context.get("stage") == "staging":
         return APPROVED_INPUT_STAGING_FAILED
     if context.get("classification"):
@@ -562,7 +562,10 @@ def durable_claim(evidence_fd: int, authority_commit: str, executor_sha: str, st
     try:
         write_all(fd, encoded); os.fsync(fd)
     except (OSError, GovernedStop) as exc:
-        raise Stop("CONSUMPTION_DURABILITY_UNCERTAIN", "CLAIM", errno_code=getattr(exc, "errno_code", None)) from exc
+        # The created marker is never removed, even if its content is incomplete.
+        try: os.close(fd)
+        except OSError: pass
+        raise Stop("CONSUMPTION_DURABILITY_UNCERTAIN", "CLAIM", errno_code=getattr(exc, "errno", getattr(exc, "errno_code", None))) from exc
     try:
         os.close(fd)
     except OSError as exc:
@@ -575,29 +578,67 @@ def durable_claim(evidence_fd: int, authority_commit: str, executor_sha: str, st
     return record
 
 
-def stage_and_publish(parent_fd: int, source: bytes, final: str, semantic: int, digest: str) -> None:
+def stage_and_publish(parent_fd: int, source: bytes, final: str, semantic: int, digest: str, artifact: ArtifactState | None = None) -> None:
+    artifact = artifact if artifact is not None else ArtifactState()
     stage = make_stage_name(final)
-    fd = os.open(stage, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent_fd); _WRITABLE_FDS[fd] = (final, 0, 0)
+    stage_identity = None
+    closed = False
     try:
-        write_all(fd, source)
-        os.fsync(fd)
-        os.fchown(fd, 0, pwd.getpwnam("aiosadmin").pw_gid)
-        os.fchmod(fd, 0o440)
-        os.fsync(fd)
-    finally:
-        os.close(fd); _WRITABLE_FDS.pop(fd, None)
-    stage_meta = verify_file(parent_fd, stage, source, semantic, digest)
-    parent_meta = os.fstat(parent_fd)
-    if stage_meta.st_dev != parent_meta.st_dev: raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "DEVICE", final)
-    if any(dev == stage_meta.st_dev and ino == stage_meta.st_ino for _, dev, ino in _WRITABLE_FDS.values()): raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "WRITABLE_FD", final)
-    os.link(stage, final, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
-    os.fsync(parent_fd)
-    final_meta = verify_file(parent_fd, final, source, semantic, digest)
-    if final_meta.st_dev != parent_meta.st_dev or final_meta.st_dev != stage_meta.st_dev or final_meta.st_ino != stage_meta.st_ino:
-        raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "INODE", final)
-    os.unlink(stage, dir_fd=parent_fd)
-    os.fsync(parent_fd)
-    verify_file(parent_fd, final, source, semantic, digest)
+        fd = os.open(stage, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent_fd)
+        artifact.staged = True
+        _WRITABLE_FDS[fd] = (final, 0, 0)
+        try:
+            info = os.fstat(fd)
+            stage_identity = (info.st_dev, info.st_ino)
+            _WRITABLE_FDS[fd] = (final, *stage_identity)
+            write_all(fd, source)
+            os.fsync(fd)
+            os.fchown(fd, 0, pwd.getpwnam("aiosadmin").pw_gid)
+            os.fchmod(fd, 0o440)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+            closed = True
+            _WRITABLE_FDS.pop(fd, None)
+        stage_meta = verify_file(parent_fd, stage, source, semantic, digest)
+        parent_meta = os.fstat(parent_fd)
+        if stage_meta.st_dev != parent_meta.st_dev: raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "DEVICE", final)
+        if any(dev == stage_meta.st_dev and ino == stage_meta.st_ino for _, dev, ino in _WRITABLE_FDS.values()): raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "WRITABLE_FD", final)
+        artifact.preverified = True
+        os.link(stage, final, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
+        artifact.published = True
+        os.fsync(parent_fd)
+        final_meta = verify_file(parent_fd, final, source, semantic, digest)
+        if final_meta.st_dev != parent_meta.st_dev or final_meta.st_dev != stage_meta.st_dev or final_meta.st_ino != stage_meta.st_ino:
+            raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "INODE", final)
+        artifact.final_verified = True
+        os.unlink(stage, dir_fd=parent_fd)
+        os.fsync(parent_fd)
+        if not absent(parent_fd, stage): raise Stop(APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE, "CLEANUP", final)
+        artifact.cleanup_complete = True
+        verify_file(parent_fd, final, source, semantic, digest)
+    except (OSError, GovernedStop) as exc:
+        code = getattr(exc, "errno", getattr(exc, "errno_code", None))
+        if artifact.final_verified and not artifact.cleanup_complete:
+            classification = APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE
+        elif artifact.published:
+            artifact.final_verified = False
+            classification = APPROVED_INPUT_FINAL_VERIFICATION_FAILED
+        else:
+            classification = APPROVED_INPUT_STAGING_FAILED
+            if artifact.staged:
+                try:
+                    # Clean only our exact, still-identical unpublished staging inode.
+                    info = os.stat(stage, dir_fd=parent_fd, follow_symlinks=False)
+                    if not closed or stage_identity != (info.st_dev, info.st_ino):
+                        raise Stop("unsafe staging cleanup", "CLEANUP", final)
+                    os.unlink(stage, dir_fd=parent_fd)
+                    os.fsync(parent_fd)
+                    if not absent(parent_fd, stage): raise Stop("staging remains", "CLEANUP", final)
+                    artifact.cleanup_complete = True
+                except (OSError, GovernedStop):
+                    classification = "APPROVED_INPUT_STAGING_PREPUBLICATION_CLEANUP_INCOMPLETE"
+        raise Stop(classification, "CLEANUP" if "CLEANUP" in classification else "STAGING", final, code) from exc
 
 
 def verify_file(parent_fd: int, name: str, source: bytes, semantic: int, digest: str) -> VerifiedFile:
@@ -624,12 +665,15 @@ def write_failure_result(evidence_fd: int, state: ExecutionState, failure: Gover
     record = {"schema_version":"aios-stage-0.33c-p4s6-result-v1", "authority_id":AUTHORITY_ID, "executor_sha256":state.executor_sha, "authority_commit":state.authority_commit, "timestamp_utc":utc_text(utc_now()), "stage":failure.stage, "classification":failure.classification, "consumption_state":state.consumption_state, "artifact_role":failure.artifact or "NONE", "input_published":state.input_published, "input_verified":state.input_final_verified, "approval_published":state.approval_published, "approval_verified":state.approval_final_verified, "errno_code":failure.errno_code}
     fd = os.open(RESULT, os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC, 0o600, dir_fd=evidence_fd)
     try:
-        write_all(fd, json.dumps(record, sort_keys=True, separators=(",", ":")).encode()+b"\n"); os.fsync(fd); os.close(fd)
-    except OSError as exc:
-        try: os.close(fd)
-        except OSError: pass
-        raise Stop(RESULT_EVIDENCE_WRITE_FAILED, "RESULT", errno_code=exc.errno) from exc
-    os.fsync(evidence_fd)
+        try:
+            write_all(fd, json.dumps(record, sort_keys=True, separators=(",", ":")).encode()+b"\n")
+            os.fsync(fd)
+        finally:
+            # Close once: retrying a failed close can close a reused descriptor.
+            os.close(fd)
+        os.fsync(evidence_fd)
+    except (OSError, GovernedStop) as exc:
+        raise Stop(RESULT_EVIDENCE_WRITE_FAILED, "RESULT", errno_code=getattr(exc, "errno", getattr(exc, "errno_code", None))) from exc
 
 def write_result(evidence_fd: int, claim: dict[str, object], classification: str) -> None:
     result = {"schema_version":"aios-stage-0.33c-p4s6-result-v1","authority_id":AUTHORITY_ID,"executor_sha256":claim.get("executor_sha256", ""),"authority_commit":claim.get("authority_commit", ""),"timestamp_utc":utc_text(utc_now()),"stage":"COMPLETE","classification":classification,"consumption_state":"DURABLY_CONSUMED","artifact_role":"NONE","input_published":True,"input_verified":True,"approval_published":True,"approval_verified":True,"errno_code":None}
@@ -643,14 +687,21 @@ def write_result(evidence_fd: int, claim: dict[str, object], classification: str
     os.fsync(evidence_fd)
 
 
-def write_result_with_secondary(evidence_fd: int, state: ExecutionState, primary: str, *, success: bool = False) -> tuple[str, str | None]:
-    failure = GovernedStop(primary, "COMPLETE" if success else state.current_stage)
+def write_result_with_secondary(evidence_fd: int, state: ExecutionState, primary: str, *, success: bool = False, failure: GovernedStop | None = None) -> tuple[str, str | None]:
+    failure = GovernedStop(primary, "COMPLETE" if success else state.current_stage, failure.artifact if failure else None, failure.errno_code if failure else None)
     try:
         write_failure_result(evidence_fd, state, failure)
-    except GovernedStop:
+    except (GovernedStop, OSError):
         print(RESULT_EVIDENCE_WRITE_FAILED, file=sys.stderr)
         return primary, RESULT_EVIDENCE_WRITE_FAILED
     return primary, None
+
+def sync_artifact_evidence(state: ExecutionState) -> None:
+    for role in ("input", "approval"):
+        artifact = getattr(state, role)
+        for field in ("staged", "published", "final_verified", "cleanup_complete"):
+            setattr(state, f"{role}_{field}", getattr(artifact, field))
+
 
 def main() -> int:
     check_no_args_root()
@@ -676,32 +727,34 @@ def main() -> int:
             raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
         # Both target-absence and expiry gates have passed; claim starts UNUSED -> CLAIMED -> DURABLY_CONSUMED.
         state = ExecutionState(authority_commit=authority_commit, executor_sha=executor_sha)
-        claim = durable_claim(evidence_fd, authority_commit, executor_sha, state)
-        for index, (source, spec) in enumerate(zip(sources, FILES)):
-            state.current_stage = "INPUT" if index == 0 else "APPROVAL"
-            state.consumption_state = "EXECUTION_STARTED"
-            (state.input if index == 0 else state.approval).staged = True
-            try:
-                stage_and_publish(parent_fd, source, spec[0], spec[1], spec[3])
-            except GovernedStop as failure:
-                context = {"stage": "staging", "cleanup": "prepublication" if state.current_stage == "INPUT" and state.input.staged and not state.input.published else None}
-                primary = derive_primary_classification(state, context)
-                failure = GovernedStop(primary, failure.stage, spec[0], failure.errno_code)
-                try: write_failure_result(evidence_fd, state, failure)
-                except GovernedStop: print(RESULT_EVIDENCE_WRITE_FAILED, file=sys.stderr)
-                raise failure
-            if index == 0:
-                state.input.staged = state.input.preverified = state.input.published = state.input.final_verified = state.input.cleanup_complete = True
-                state.input_published = state.input_final_verified = state.input_cleanup_complete = True
-            else:
-                state.approval.staged = state.approval.preverified = state.approval.published = state.approval.final_verified = state.approval.cleanup_complete = True
-                state.approval_published = state.approval_final_verified = state.approval_cleanup_complete = True
         try:
-            write_result(evidence_fd, claim, "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED")
-        except GovernedStop:
-            print(RESULT_EVIDENCE_WRITE_FAILED, file=sys.stderr)
-            return 1
-        return 0
+            durable_claim(evidence_fd, authority_commit, executor_sha, state)
+            for index, (source, spec) in enumerate(zip(sources, FILES)):
+                state.current_stage = "INPUT" if index == 0 else "APPROVAL"
+                state.consumption_state = "EXECUTION_STARTED"
+                artifact = state.input if index == 0 else state.approval
+                stage_and_publish(parent_fd, source, spec[0], spec[1], spec[3], artifact)
+            state.current_stage = "PAIR_REVERIFY"
+            for index, (source, spec) in enumerate(zip(sources, FILES)):
+                try:
+                    verify_file(parent_fd, spec[0], source, spec[1], spec[3])
+                except (GovernedStop, OSError) as exc:
+                    (state.input if index == 0 else state.approval).final_verified = False
+                    raise Stop(APPROVED_INPUT_FINAL_VERIFICATION_FAILED, "PAIR_REVERIFY", spec[0], getattr(exc, "errno", None)) from exc
+            primary = derive_primary_classification(state, {"pair_reverified": True})
+        except (GovernedStop, OSError) as failure:
+            classification = getattr(failure, "classification", APPROVED_INPUT_STAGING_FAILED)
+            context = {"classification": classification}
+            if classification == "APPROVED_INPUT_STAGING_PREPUBLICATION_CLEANUP_INCOMPLETE": context["cleanup"] = "prepublication"
+            if classification == APPROVED_INPUT_STAGING_CLEANUP_INCOMPLETE: context["cleanup"] = "postpublication"
+            primary = derive_primary_classification(state, context)
+            sync_artifact_evidence(state)
+            governed = GovernedStop(primary, state.current_stage, getattr(failure, "artifact", None), getattr(failure, "errno", getattr(failure, "errno_code", None)))
+            write_result_with_secondary(evidence_fd, state, primary, failure=governed)
+            raise governed from failure
+        sync_artifact_evidence(state)
+        _, secondary = write_result_with_secondary(evidence_fd, state, primary, success=primary == "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED")
+        return 0 if primary == "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED" and secondary is None else 1
     finally:
         os.close(evidence_fd)
         os.close(source_fd)
