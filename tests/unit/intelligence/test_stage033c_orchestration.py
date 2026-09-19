@@ -14,6 +14,27 @@ import sys
 sys.modules[spec.name] = executor
 spec.loader.exec_module(executor)
 
+class PackageBindingReconciliationTests(unittest.TestCase):
+    INPUT = ("approved-input.json", 1327, 1328, "e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d")
+    APPROVAL = ("approved-input-approval.json", 3579, 3580, "2ea9e735d7a5183a3e247abf57438d6e095fd7e9858d5ce688d221f7e9050f26")
+    OLD_APPROVAL = ("approved-input-approval.json", 3549, 3550, "266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57")
+    APPROVAL_TRANSPORT_SHA256 = "1d24f693154e0e8c2ac4504b9e81086662670c870e785c4f0d4d79c3ded16ac8"
+
+    def test_regenerated_approval_binding_is_executable(self):
+        self.assertEqual(executor.FILES, (self.INPUT, self.APPROVAL))
+        self.assertEqual(executor.FILES[1][1:3], (3579, 3580))
+        self.assertEqual(executor.FILES[1][3], self.APPROVAL[3])
+
+    def test_old_unavailable_approval_binding_is_rejected(self):
+        self.assertNotIn(self.OLD_APPROVAL, executor.FILES)
+        self.assertNotEqual(executor.FILES[1][1], 3549)
+        self.assertNotEqual(executor.FILES[1][2], 3550)
+        self.assertNotEqual(executor.FILES[1][3], self.OLD_APPROVAL[3])
+
+    def test_transport_digest_is_not_a_new_executable_constant(self):
+        source = EXECUTOR_PATH.read_text(encoding="utf-8")
+        self.assertNotIn(self.APPROVAL_TRANSPORT_SHA256, source)
+
 class DurabilityClassificationResultTests(unittest.TestCase):
     def state(self, **kwargs): return executor.ExecutionState(**kwargs)
     def test_state_starts_unused(self): self.assertEqual(self.state().consumption_state, "UNUSED")
@@ -207,6 +228,71 @@ class PreclaimMatrix(SyntheticRun):
         claim.assert_not_called(); stage.assert_not_called()
         self.assertFalse((self.evidence / executor.MARKER).exists())
         self.assertFalse(list(self.parent.glob('*.stage-*')))
+
+    def assert_real_source_rejected_before_claim_staging_publication(self):
+        with patch.object(executor, "durable_claim") as claim, patch.object(executor, "stage_and_publish") as stage, patch.object(executor.os, "link") as publish, self.assertRaises(executor.GovernedStop) as caught:
+            executor.main()
+        self.assertEqual(caught.exception.classification, executor.APPROVED_BYTES_INVALID)
+        self.assertNotEqual(caught.exception.classification, "private source byte contract mismatch")
+        self.assertNotEqual(caught.exception.classification, "UNKNOWN")
+        self.assertNotEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
+        self.assertEqual(claim.call_count, 0)
+        self.assertEqual(stage.call_count, 0)
+        self.assertEqual(publish.call_count, 0)
+        self.assertFalse((self.evidence / executor.MARKER).exists())
+
+    def bind_current_approval_contract(self, data):
+        approval = PackageBindingReconciliationTests.APPROVAL
+        self.specs = (self.specs[0], approval)
+        self.stack.enter_context(patch.object(executor, "FILES", self.specs))
+        path = self.source / approval[0]
+        path.chmod(0o600)
+        path.write_bytes(data)
+        path.chmod(0o400)
+
+    def test_old_semantic_byte_count_rejected_by_real_source_path(self):
+        data = b"x" * 3549 + b"\n"
+        self.assertEqual(len(data[:-1]), 3549)
+        self.bind_current_approval_contract(data)
+        self.assert_real_source_rejected_before_claim_staging_publication()
+
+    def test_old_transport_byte_count_rejected_by_real_source_path(self):
+        data = b"y" * 3549 + b"\n"
+        self.assertEqual(len(data), 3550)
+        self.bind_current_approval_contract(data)
+        self.assert_real_source_rejected_before_claim_staging_publication()
+
+    def test_current_approval_binding_accepted_by_real_source_path(self):
+        prefix, suffix = b'{"padding":"', b'"}'
+        semantic = prefix + b"n" * (3579 - len(prefix) - len(suffix)) + suffix
+        data = semantic + b"\n"
+        self.assertEqual((len(semantic), len(data)), (3579, 3580))
+        self.bind_current_approval_contract(data)
+        expected = PackageBindingReconciliationTests.APPROVAL[3]
+        real_sha256 = executor.sha256
+        def governed_digest(value):
+            if value == semantic:
+                return expected
+            return real_sha256(value)
+        source_fd = os.open(self.source, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, source_fd)
+        with patch.object(executor, "sha256", side_effect=governed_digest):
+            accepted = executor.read_source(source_fd, *executor.FILES[1])
+        self.assertEqual(accepted, data)
+        self.assertEqual(governed_digest(semantic), expected)
+        self.assertEqual(len(real_sha256(data)), 64)
+
+    def test_old_semantic_sha_rejected_by_real_source_path(self):
+        semantic = b"z" * 3579
+        self.bind_current_approval_contract(semantic + b"\n")
+        real_sha256 = executor.sha256
+        old_digest = PackageBindingReconciliationTests.OLD_APPROVAL[3]
+        def semantic_digest(data):
+            if data == semantic:
+                return old_digest
+            return real_sha256(data)
+        with patch.object(executor, "sha256", side_effect=semantic_digest):
+            self.assert_real_source_rejected_before_claim_staging_publication()
 
 class DurabilityMatrix(SyntheticRun):
     def failed_claim(self, mode):

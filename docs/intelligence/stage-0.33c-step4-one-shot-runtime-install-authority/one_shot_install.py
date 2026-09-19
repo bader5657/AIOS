@@ -38,7 +38,7 @@ HARNESS_SHA256 = "b9fc9fb22724184696eabf02525bcc0a626bdff5ce3943ed31ba2e21130f5c
 MANIFEST_ID = "9801b5e4-453d-429a-b51f-e8ffaa17a2c9"
 FILES = (
     ("approved-input.json", 1327, 1328, "e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d"),
-    ("approved-input-approval.json", 3549, 3550, "266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57"),
+    ("approved-input-approval.json", 3579, 3580, "2ea9e735d7a5183a3e247abf57438d6e095fd7e9858d5ce688d221f7e9050f26"),
 )
 
 INPUT_TYPES={"text","image","voice","document","pdf","doc","spreadsheet","video","audio","web_link","youtube_link","unknown"}
@@ -626,8 +626,16 @@ def read_source(source_fd: int, name: str, semantic: int, transport: int, digest
             data += chunk
     finally:
         os.close(fd)
-    if len(data) != transport or data[semantic:] != b"\n" or sha256(data[:semantic]) != digest:
-        raise Stop("private source byte contract mismatch")
+    # Keep the cause private while exposing the single governed pre-claim
+    # classification for every source-binding mismatch.
+    if len(data) != transport:
+        raise Stop(APPROVED_BYTES_INVALID, "SOURCE_BYTES")
+    if semantic != transport - 1 or len(data[:semantic]) != semantic:
+        raise Stop(APPROVED_BYTES_INVALID, "SOURCE_BYTES")
+    if data[semantic:] != b"\n":
+        raise Stop(APPROVED_BYTES_INVALID, "SOURCE_BYTES")
+    if sha256(data[:semantic]) != digest:
+        raise Stop(APPROVED_BYTES_INVALID, "SOURCE_BYTES")
     exact_json(data[:semantic])
     return data
 
