@@ -41,17 +41,36 @@ A later, separately authorized execution must:
 
 1. open `/` and then `run` through retained directory descriptors using
    directory-only, close-on-exec, no-follow resolution;
-2. verify the resolved `/run` entry and opened descriptor have identical
-   device/inode identity and meet the prerequisite above;
+2. record the retained `/run` descriptor's device, inode, owner, group, and
+   mode; verify the resolved `/run` entry and opened descriptor have identical
+   device/inode identity and meet the prerequisite above, and keep that
+   descriptor open across creation and all verification;
 3. establish again that the `aios` entry is absent without following links;
 4. create only `aios` relative to the retained `/run` descriptor, exclusively,
    with initial mode `0700` and no overwrite or replacement behavior;
 5. apply and verify exact `root:root/0700` metadata without recursive changes;
-6. `fsync` the created directory and the retained `/run` parent descriptor
+6. immediately record the created child's device, inode, owner, group, and mode
+   as creation evidence, requiring a directory at exact `root:root/0700`;
+7. `fsync` the created directory and the retained `/run` parent descriptor
    where the host filesystem supports those durability operations;
-7. close creation descriptors, reopen `aios` read-only with directory-only,
-   close-on-exec, no-follow flags, and independently recheck type, owner, group,
-   mode, device, and inode against the created identity.
+8. independently re-resolve absolute `/run` with directory-only, close-on-exec,
+   no-follow semantics; require it to remain a real non-symlink directory at
+   `root:root/0755`, and require its device/inode to match the still-open
+   retained pre-creation `/run` descriptor exactly;
+9. close the child's creation descriptor and reopen the name `aios` read-only
+   relative to the retained `/run` directory descriptor, using directory-only,
+   close-on-exec, no-follow flags rather than an absolute pathname;
+10. require the reopened child descriptor's device/inode to match the recorded
+    created-child identity exactly, and independently recheck that it is a real
+    non-symlink directory at exact `root:root/0700`; and
+11. retain the recorded parent and child identities in the bounded creation
+    evidence and close every descriptor after verification.
+
+Successful completion therefore proves that the retained `/run` parent
+identity remained stable, absolute `/run` did not change identity, and `aios`
+reopened relative to that retained parent resolves to the exact created inode.
+Together these comparisons explicitly rule out pathname substitution between
+creation and verification.
 
 Any uncertainty, collision, path substitution, metadata mismatch, durability
 failure, or identity change is a stop. The execution must not chmod or chown
