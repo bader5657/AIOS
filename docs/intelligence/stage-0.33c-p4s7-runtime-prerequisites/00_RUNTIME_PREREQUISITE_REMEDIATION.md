@@ -116,8 +116,25 @@ Only this complete binding set may be used after executable reconciliation:
 | `approved_at_utc` | `2026-09-19T21:24:52.273127Z` |
 | `not_after_utc` | `2026-09-26T21:24:52.273127Z` |
 
-Model B remains package-local validation. PostgreSQL reads and writes are
-prohibited.
+Model B remains package-local validation under the general equality contract:
+
+```text
+approval.package_payload.evidence.registry_record_id
+==
+approved_input.ingestion_result.registry_record_id
+```
+
+The exact regenerated-package state independently verified in P4S7-R5 and
+P4S7-R5-R1 is `null == null`:
+
+```text
+approval.package_payload.evidence.registry_record_id = null
+approved_input.ingestion_result.registry_record_id = null
+registration_succeeded = false
+```
+
+No PostgreSQL lookup is required or authorized. External Registry truth remains
+out of scope, and PostgreSQL reads and writes are prohibited.
 
 ## Private source materialization contract
 
