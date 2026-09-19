@@ -14,6 +14,27 @@ import sys
 sys.modules[spec.name] = executor
 spec.loader.exec_module(executor)
 
+class PackageBindingReconciliationTests(unittest.TestCase):
+    INPUT = ("approved-input.json", 1327, 1328, "e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d")
+    APPROVAL = ("approved-input-approval.json", 3579, 3580, "2ea9e735d7a5183a3e247abf57438d6e095fd7e9858d5ce688d221f7e9050f26")
+    OLD_APPROVAL = ("approved-input-approval.json", 3549, 3550, "266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57")
+    APPROVAL_TRANSPORT_SHA256 = "1d24f693154e0e8c2ac4504b9e81086662670c870e785c4f0d4d79c3ded16ac8"
+
+    def test_regenerated_approval_binding_is_executable(self):
+        self.assertEqual(executor.FILES, (self.INPUT, self.APPROVAL))
+        self.assertEqual(executor.FILES[1][1:3], (3579, 3580))
+        self.assertEqual(executor.FILES[1][3], self.APPROVAL[3])
+
+    def test_old_unavailable_approval_binding_is_rejected(self):
+        self.assertNotIn(self.OLD_APPROVAL, executor.FILES)
+        self.assertNotEqual(executor.FILES[1][1], 3549)
+        self.assertNotEqual(executor.FILES[1][2], 3550)
+        self.assertNotEqual(executor.FILES[1][3], self.OLD_APPROVAL[3])
+
+    def test_transport_digest_is_not_a_new_executable_constant(self):
+        source = EXECUTOR_PATH.read_text(encoding="utf-8")
+        self.assertNotIn(self.APPROVAL_TRANSPORT_SHA256, source)
+
 class DurabilityClassificationResultTests(unittest.TestCase):
     def state(self, **kwargs): return executor.ExecutionState(**kwargs)
     def test_state_starts_unused(self): self.assertEqual(self.state().consumption_state, "UNUSED")
@@ -207,6 +228,13 @@ class PreclaimMatrix(SyntheticRun):
         claim.assert_not_called(); stage.assert_not_called()
         self.assertFalse((self.evidence / executor.MARKER).exists())
         self.assertFalse(list(self.parent.glob('*.stage-*')))
+
+    def test_package_binding_failure_stops_before_claim_and_staging(self):
+        failure = executor.Stop(executor.APPROVED_BYTES_INVALID, "SOURCE_BYTES")
+        with patch.object(executor, "read_source", side_effect=failure), patch.object(executor, "durable_claim") as claim, patch.object(executor, "stage_and_publish") as stage, self.assertRaises(executor.GovernedStop) as caught: executor.main()
+        self.assertEqual(caught.exception.classification, executor.APPROVED_BYTES_INVALID)
+        claim.assert_not_called(); stage.assert_not_called()
+        self.assertFalse((self.evidence / executor.MARKER).exists())
 
 class DurabilityMatrix(SyntheticRun):
     def failed_claim(self, mode):

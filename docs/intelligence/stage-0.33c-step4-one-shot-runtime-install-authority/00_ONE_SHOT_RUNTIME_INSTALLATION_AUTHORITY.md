@@ -36,9 +36,9 @@ must remain absent and must not be created, modified, or consumed.
 | input semantic bytes | `1327` |
 | input transport bytes | `1328` |
 | input semantic-prefix SHA-256 | `e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d` |
-| approval semantic bytes | `3549` |
-| approval transport bytes | `3550` |
-| approval semantic-prefix SHA-256 | `266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57` |
+| approval semantic bytes | `3579` |
+| approval transport bytes | `3580` |
+| approval semantic-prefix SHA-256 | `2ea9e735d7a5183a3e247abf57438d6e095fd7e9858d5ce688d221f7e9050f26` |
 | harness SHA-256, binding context only | `b9fc9fb22724184696eabf02525bcc0a626bdff5ce3943ed31ba2e21130f5cad` |
 
 ## Frozen executor and merged-authority binding
@@ -46,7 +46,7 @@ must remain absent and must not be created, modified, or consumed.
 | Binding | Frozen value |
 |---|---|
 | executor repository path | `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py` |
-| executor SHA-256 | `b82591be0d8f4f9876a8925e4428c3c0dc85589431733dfca178f86b3e415412` |
+| executor SHA-256 | `592af2eb62a1cf1ff93b4da50de16f9986df6cb4d5c001e6ea5c28d20ae3ec97` |
 | interpreter/runtime | `/opt/aios/runtime/venv/bin/python`, governed Python `3.12.3` |
 | run-as identity | Unix `root` (`euid=0`, account name `root`) |
 | arguments/input model | no arguments; closed constants and the two fixed private sources only |
@@ -103,9 +103,9 @@ substitution from raw business facts are prohibited.
 
 For the input, bytes `[0:1327]` are the frozen semantic object, their SHA-256 is
 the frozen input digest, byte `[1327]` is exactly `0x0A`, total length is exactly
-1,328, and no later byte exists. For the approval, bytes `[0:3549]` are the
+1,328, and no later byte exists. For the approval, bytes `[0:3579]` are the
 frozen semantic object, their SHA-256 is the frozen approval digest, byte
-`[3549]` is exactly `0x0A`, total length is exactly 3,550, and no later byte
+`[3579]` is exactly `0x0A`, total length is exactly 3,580, and no later byte
 exists. Neither semantic digest is a transport-file SHA, and no transport SHA
 is invented or frozen.
 
@@ -236,7 +236,7 @@ The exact per-object checks are:
 | Final target | Owner/group | Mode | Semantic prefix | Transport | Terminal byte | Frozen semantic-prefix SHA-256 |
 |---|---|---:|---:|---:|---|---|
 | `approved-input.json` | `root:aiosadmin` | `0440` | `1327` | `1328` | byte `[1327] = 0x0A` | `e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d` |
-| `approved-input-approval.json` | `root:aiosadmin` | `0440` | `3549` | `3550` | byte `[3549] = 0x0A` | `266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57` |
+| `approved-input-approval.json` | `root:aiosadmin` | `0440` | `3579` | `3580` | byte `[3579] = 0x0A` | `2ea9e735d7a5183a3e247abf57438d6e095fd7e9858d5ce688d221f7e9050f26` |
 
 After each publication, `fsync` the parent, independently open the final target
 read-only/no-follow, and reverify regular non-symlink type, device, owner/group,
