@@ -626,8 +626,16 @@ def read_source(source_fd: int, name: str, semantic: int, transport: int, digest
             data += chunk
     finally:
         os.close(fd)
-    if len(data) != transport or data[semantic:] != b"\n" or sha256(data[:semantic]) != digest:
-        raise Stop("private source byte contract mismatch")
+    # Keep the cause private while exposing the single governed pre-claim
+    # classification for every source-binding mismatch.
+    if len(data) != transport:
+        raise Stop(APPROVED_BYTES_INVALID, "SOURCE_BYTES")
+    if semantic != transport - 1 or len(data[:semantic]) != semantic:
+        raise Stop(APPROVED_BYTES_INVALID, "SOURCE_BYTES")
+    if data[semantic:] != b"\n":
+        raise Stop(APPROVED_BYTES_INVALID, "SOURCE_BYTES")
+    if sha256(data[:semantic]) != digest:
+        raise Stop(APPROVED_BYTES_INVALID, "SOURCE_BYTES")
     exact_json(data[:semantic])
     return data
 

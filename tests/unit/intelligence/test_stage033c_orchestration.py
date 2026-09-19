@@ -229,12 +229,70 @@ class PreclaimMatrix(SyntheticRun):
         self.assertFalse((self.evidence / executor.MARKER).exists())
         self.assertFalse(list(self.parent.glob('*.stage-*')))
 
-    def test_package_binding_failure_stops_before_claim_and_staging(self):
-        failure = executor.Stop(executor.APPROVED_BYTES_INVALID, "SOURCE_BYTES")
-        with patch.object(executor, "read_source", side_effect=failure), patch.object(executor, "durable_claim") as claim, patch.object(executor, "stage_and_publish") as stage, self.assertRaises(executor.GovernedStop) as caught: executor.main()
+    def assert_real_source_rejected_before_claim_staging_publication(self):
+        with patch.object(executor, "durable_claim") as claim, patch.object(executor, "stage_and_publish") as stage, patch.object(executor.os, "link") as publish, self.assertRaises(executor.GovernedStop) as caught:
+            executor.main()
         self.assertEqual(caught.exception.classification, executor.APPROVED_BYTES_INVALID)
-        claim.assert_not_called(); stage.assert_not_called()
+        self.assertNotEqual(caught.exception.classification, "private source byte contract mismatch")
+        self.assertNotEqual(caught.exception.classification, "UNKNOWN")
+        self.assertNotEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
+        self.assertEqual(claim.call_count, 0)
+        self.assertEqual(stage.call_count, 0)
+        self.assertEqual(publish.call_count, 0)
         self.assertFalse((self.evidence / executor.MARKER).exists())
+
+    def bind_current_approval_contract(self, data):
+        approval = PackageBindingReconciliationTests.APPROVAL
+        self.specs = (self.specs[0], approval)
+        self.stack.enter_context(patch.object(executor, "FILES", self.specs))
+        path = self.source / approval[0]
+        path.chmod(0o600)
+        path.write_bytes(data)
+        path.chmod(0o400)
+
+    def test_old_semantic_byte_count_rejected_by_real_source_path(self):
+        data = b"x" * 3549 + b"\n"
+        self.assertEqual(len(data[:-1]), 3549)
+        self.bind_current_approval_contract(data)
+        self.assert_real_source_rejected_before_claim_staging_publication()
+
+    def test_old_transport_byte_count_rejected_by_real_source_path(self):
+        data = b"y" * 3549 + b"\n"
+        self.assertEqual(len(data), 3550)
+        self.bind_current_approval_contract(data)
+        self.assert_real_source_rejected_before_claim_staging_publication()
+
+    def test_current_approval_binding_accepted_by_real_source_path(self):
+        prefix, suffix = b'{"padding":"', b'"}'
+        semantic = prefix + b"n" * (3579 - len(prefix) - len(suffix)) + suffix
+        data = semantic + b"\n"
+        self.assertEqual((len(semantic), len(data)), (3579, 3580))
+        self.bind_current_approval_contract(data)
+        expected = PackageBindingReconciliationTests.APPROVAL[3]
+        real_sha256 = executor.sha256
+        def governed_digest(value):
+            if value == semantic:
+                return expected
+            return real_sha256(value)
+        source_fd = os.open(self.source, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, source_fd)
+        with patch.object(executor, "sha256", side_effect=governed_digest):
+            accepted = executor.read_source(source_fd, *executor.FILES[1])
+        self.assertEqual(accepted, data)
+        self.assertEqual(governed_digest(semantic), expected)
+        self.assertEqual(len(real_sha256(data)), 64)
+
+    def test_old_semantic_sha_rejected_by_real_source_path(self):
+        semantic = b"z" * 3579
+        self.bind_current_approval_contract(semantic + b"\n")
+        real_sha256 = executor.sha256
+        old_digest = PackageBindingReconciliationTests.OLD_APPROVAL[3]
+        def semantic_digest(data):
+            if data == semantic:
+                return old_digest
+            return real_sha256(data)
+        with patch.object(executor, "sha256", side_effect=semantic_digest):
+            self.assert_real_source_rejected_before_claim_staging_publication()
 
 class DurabilityMatrix(SyntheticRun):
     def failed_claim(self, mode):
