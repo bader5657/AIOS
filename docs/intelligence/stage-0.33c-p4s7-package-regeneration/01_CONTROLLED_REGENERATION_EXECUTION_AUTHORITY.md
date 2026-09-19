@@ -1,6 +1,6 @@
 # Stage 0.33C-P4S7-R3 Controlled Regeneration Execution Authority
 
-Classification: `P4S7_CONTROLLED_REGENERATION_EXECUTION_AUTHORITY_READY_FOR_REVIEW`.
+Classification: `P4S7_PR282_TF_A_AMENDED_READY_FOR_REREVIEW`.
 Authority ID: `1284ecc0-54d9-4df8-9d30-791710770f9b`.
 
 ## Activation and one-shot scope
@@ -31,12 +31,18 @@ following SHA-256 identities are part of the revision check:
 | `core/app/material_receipts/candidate_create_authorization.py` | `94ef0fcfac459f14b3316a5fb35f3d4832b9cad3146162a685e9208f8f2fe47d` |
 | `core/storage/document_manifest.py` | `7887e074c162917ffed809354abfddcd1e5193bf0ecedfafbb47efebf4da42e3` |
 
-The reviewed PR #278 installer remains
+TF-A governance is merged through PR #283 at merge commit
+`7a07a48f4ad197d0a54f6d58e07e9b79f2dd7748`. The amended installer is merged
+through PR #284 at merge commit
+`4889a1ecfd53df46e43fb5d368b035b6f89bb596`. The only reviewed installer is
 `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py`,
-SHA-256 `bc9ad237ed3a35d763ee2e609712bda26c7f8b05742847789cc2f4b3bb88af0d`.
-This authority permits no change to that file or its semantics. The installer
+SHA-256 `b82591be0d8f4f9876a8925e4428c3c0dc85589431733dfca178f86b3e415412`.
+Execution must prove both merge commits are ancestors of its clean, reviewed
+repository checkout and must independently hash the installer to that exact
+digest before claim. A stale pre-TF-A installer is prohibited. This authority
+permits no change to the reviewed installer file or semantics. The installer
 still binds the unavailable old package values; a separate later frozen-binding
-amendment must reconcile that fact before any runtime use.
+amendment must reconcile those package-specific values before any runtime use.
 
 ## Bound source and facts
 
@@ -103,17 +109,55 @@ are those in P4S7-R2 and the schema revision. Values are only
 `EVIDENCE_DERIVED` or `PROJECT_OWNER_APPROVED`, supported field by field;
 missing or extra pointers stop the attempt.
 
-Compute independently from actual canonical objects and freeze the input
-semantic SHA-256, input transport SHA-256, canonical trusted-facts SHA-256,
-canonical `package_payload` SHA-256, complete approval semantic SHA-256, and
-complete approval transport SHA-256. The payload hash covers only the payload
-without LF, avoiding self-hashing. Record actual input and approval semantic
-and transport byte counts. Check the approval's embedded input hashes/counts,
-trusted-facts hash, payload hash, evidence binding, and item count against
-independent calculations. The approval transport hash, which is not a member
-of the closed approval wrapper, is frozen in the regeneration summary. The
-historical hashes and 1,327/1,328 or 3,549/3,550 byte counts are not targets;
-matching lengths by coincidence does not establish old-byte identity.
+The authoritative facts-hash contract is **TF-A — DTO-projection facts hash**.
+After the harness-native input has passed its closed-schema validation, project
+its trusted facts without business-value drift into the governed
+`TrustedReceiptFacts` and `TrustedReceiptItemFacts` DTOs, then compute
+`trusted_facts_sha256` using the merged PR #283 canonical deterministic DTO
+projection contract. It is the semantic approved-facts binding. It is not and
+must never be the digest of the raw `trusted_receipt_facts` JSON subobject.
+
+For the TF-A projection, parse the validated harness-native UTC timestamp to
+the aware UTC semantic datetime and serialize it through the governed
+`datetime.isoformat()` representation. Thus a harness-native value such as
+`2030-01-02T03:04:05.000000Z` projects as
+`2030-01-02T03:04:05+00:00`, while
+`2030-01-02T03:04:05.123456Z` projects as
+`2030-01-02T03:04:05.123456+00:00`. The harness-native six-digit-Z lexical form
+remains bound only through the exact input byte hashes; it is not substituted
+into the TF-A DTO projection.
+
+Keep the three hash domains explicit and separate:
+
+- `trusted_facts_sha256` is the canonical deterministic DTO-projection digest
+  and semantic approved-facts binding;
+- `input_semantic_sha256` is the SHA-256 of the exact canonical approved-input
+  semantic bytes without LF; and
+- `input_transport_sha256` is the SHA-256 of those exact semantic bytes plus
+  exactly one terminal `0x0A` LF.
+
+Compute these three hashes independently from the actual validated objects and
+bytes. Also compute and freeze the canonical `package_payload` SHA-256,
+complete approval semantic SHA-256, and complete approval transport SHA-256.
+The payload hash covers only the payload without LF, avoiding self-hashing.
+Record actual input and approval semantic and transport byte counts. Check the
+approval's embedded input hashes/counts, TF-A facts hash, payload hash, evidence
+binding, and item count against independent calculations. The approval
+transport hash, which is not a member of the closed approval wrapper, is frozen
+in the regeneration summary. The historical hashes and 1,327/1,328 or
+3,549/3,550 byte counts are not targets; matching lengths by coincidence does
+not establish old-byte identity.
+
+The merged PR #284 proof baseline is mandatory evidence for this contract: all
+five receipt fields and all eleven fields of each item project without drift;
+item order, line numbers, null and non-null identifiers, Decimal quantities,
+units, and nullable document fields are preserved; zero- and nonzero-
+microsecond timestamp mappings are exact; normalization-sensitive Unicode is
+not normalized, ASCII-escaped, or replaced; TF-A and raw-subobject digests are
+distinct; repeated projection bytes and digests are deterministic; and the
+three hash roles above remain separate. This reference records reviewed test
+proof only. It does not claim that regeneration has executed or that any new
+package bytes exist.
 
 ## Exact private review workspace and one-shot claim
 
@@ -218,11 +262,12 @@ contact PostgreSQL, invoke the harness, create a candidate or
 `authorization.json`, or authorize Step 5. It does not close Step 4 or perform
 any separately governed duplicate preflight.
 
-The required order remains: PR #281 merge; this authority PR; independent
-review; human merge; exactly one controlled regeneration attempt; independent
-package verification; separate package-specific frozen-binding amendment;
-independent review and human merge; separate runtime checkout and evidence-mode
-remediation; separately authorized private-source materialization; repeat
-P4S7 verification; separate runtime-install execution authority, review, and
-human merge; then at most one runtime installation attempt. No stages may be
-collapsed.
+The required order now remains: merged PR #281 governance; merged PR #283 TF-A
+governance; merged PR #284 installer amendment; this amended PR #282; fresh
+independent review; human merge; exactly one controlled regeneration attempt;
+independent package verification; separate package-specific frozen-binding
+amendment; independent review and human merge; separate runtime checkout and
+evidence-mode remediation; separately authorized private-source
+materialization; repeat P4S7 verification; separate runtime-install execution
+authority, review, and human merge; then at most one runtime installation
+attempt. No stages may be collapsed.
