@@ -4,7 +4,8 @@ import json
 import tempfile
 import unittest
 import sys
-from datetime import date
+import unicodedata
+from datetime import date, datetime
 from pathlib import Path
 from decimal import Decimal
 from unittest.mock import patch
@@ -109,14 +110,21 @@ class TfADtoProjectionHashTests(unittest.TestCase):
 
     def test_05_zero_microsecond_uses_governed_isoformat(self):
         trusted = self.fixture()["input"]["trusted_receipt_facts"]
-        trusted["received_at"] = "2026-08-18T10:11:12.000000Z"
+        trusted["received_at"] = "2030-01-02T03:04:05.000000Z"
         captured = []
         with patch(
             "core.app.material_receipts.candidate_create_authorization.trusted_facts_sha256",
             side_effect=lambda facts: captured.append(facts) or trusted_facts_sha256(facts),
         ):
             m.trusted_facts_dto_sha256(trusted)
-        self.assertEqual(captured[0].received_at.isoformat(), "2026-08-18T10:11:12+00:00")
+        projected = captured[0]
+        self.assertEqual(projected.received_at.isoformat(), "2030-01-02T03:04:05+00:00")
+        self.assertEqual(self.dto_value(projected)["received_at"],
+                         "2030-01-02T03:04:05+00:00")
+        source_datetime = m.parse_utc("2030-01-02T03:04:05.000000Z")
+        dto_datetime = datetime.fromisoformat("2030-01-02T03:04:05+00:00")
+        self.assertEqual(source_datetime, dto_datetime)
+        self.assertEqual(projected.received_at, source_datetime)
 
     def test_06_nonzero_microseconds_are_deterministic(self):
         trusted = self.fixture()["input"]["trusted_receipt_facts"]
@@ -310,3 +318,48 @@ class TfADtoProjectionHashTests(unittest.TestCase):
                 matrix.validate(fixture)
         self.assertEqual(caught.exception.classification, m.APPROVED_BYTES_INVALID)
         self.assertEqual(caught.exception.stage, "TRUSTED_FACTS_HASH")
+
+    def test_26_normalization_sensitive_unicode_is_preserved_exactly(self):
+        nfc = "é"
+        nfd = "e\u0301"
+        self.assertEqual(unicodedata.normalize("NFC", nfd), nfc)
+        self.assertNotEqual(nfc, nfd)
+
+        trusted_by_form = {}
+        facts_by_form = {}
+        bytes_by_form = {}
+        digest_by_form = {}
+        for form, value in (("NFC", nfc), ("NFD", nfd)):
+            with self.subTest(unicode_form=form):
+                trusted = self.rich_trusted()
+                trusted["supplier_name"] = value
+                facts = self.projected(trusted)
+                encoded = self.dto_bytes(facts)
+                digest = m.trusted_facts_dto_sha256(trusted)
+
+                self.assertEqual(facts.supplier_name, trusted["supplier_name"])
+                self.assertEqual(facts.supplier_name, value)
+                self.assertIn(value.encode("utf-8"), encoded)
+                self.assertNotIn(b"\\ufffd", encoded)
+                self.assertNotIn(b"\xef\xbf\xbd", encoded)
+                self.assertNotIn(b"\\u00e9", encoded)
+                self.assertNotIn(b"\\u0301", encoded)
+
+                trusted_by_form[form] = trusted
+                facts_by_form[form] = facts
+                bytes_by_form[form] = encoded
+                digest_by_form[form] = digest
+
+        self.assertEqual(facts_by_form["NFD"].supplier_name, "e\u0301")
+        self.assertEqual(facts_by_form["NFD"].supplier_name.encode("utf-8"),
+                         b"e\xcc\x81")
+        self.assertNotEqual(facts_by_form["NFD"].supplier_name,
+                            facts_by_form["NFC"].supplier_name)
+        self.assertNotEqual(bytes_by_form["NFC"], bytes_by_form["NFD"])
+        self.assertNotEqual(digest_by_form["NFC"], digest_by_form["NFD"])
+        self.assertEqual(
+            set(trusted_by_form["NFC"]) - {"supplier_name"},
+            set(trusted_by_form["NFD"]) - {"supplier_name"},
+        )
+        for key in set(trusted_by_form["NFC"]) - {"supplier_name"}:
+            self.assertEqual(trusted_by_form["NFC"][key], trusted_by_form["NFD"][key])
