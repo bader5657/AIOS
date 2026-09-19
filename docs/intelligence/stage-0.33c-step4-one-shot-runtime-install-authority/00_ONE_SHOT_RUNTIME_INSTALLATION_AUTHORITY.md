@@ -46,7 +46,7 @@ must remain absent and must not be created, modified, or consumed.
 | Binding | Frozen value |
 |---|---|
 | executor repository path | `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py` |
-| executor SHA-256 | `bc9ad237ed3a35d763ee2e609712bda26c7f8b05742847789cc2f4b3bb88af0d` |
+| executor SHA-256 | `b82591be0d8f4f9876a8925e4428c3c0dc85589431733dfca178f86b3e415412` |
 | interpreter/runtime | `/opt/aios/runtime/venv/bin/python`, governed Python `3.12.3` |
 | run-as identity | Unix `root` (`euid=0`, account name `root`) |
 | arguments/input model | no arguments; closed constants and the two fixed private sources only |
@@ -71,9 +71,19 @@ replacement, hash mismatch, absent containing merge, or post-review executor
 change stops before claim. A later clean deployment remains bound to the
 original containing merge, not merely moving `main`.
 
-The executor and Python standard library are the complete helper dependency
-surface. Network, PostgreSQL, service-control, harness, candidate, and
-`authorization.json` behavior are prohibited.
+PR #283 (merge commit `7a07a48f4ad197d0a54f6d58e07e9b79f2dd7748`)
+governs `trusted_facts_sha256` as the TF-A canonical deterministic
+`TrustedReceiptFacts` DTO-projection digest. The installer maps the already
+validated harness-native UTC timestamp to the same aware UTC datetime and uses
+the existing `trusted_facts_sha256` helper; it does not hash the raw
+`trusted_receipt_facts` subobject. This facts approval binding remains distinct
+from the independently checked exact semantic-input and LF-inclusive transport
+hashes. The approval schema and its single facts digest are unchanged.
+
+The executor, Python standard library, and the repository-governed
+`candidate_input`/`candidate_create_authorization` TF-A DTO/hash helpers are the
+complete helper dependency surface. Network, PostgreSQL, service-control,
+harness, candidate, and `authorization.json` behavior are prohibited.
 
 The future executor may obtain bytes only from these two fixed private,
 execution-side source paths:

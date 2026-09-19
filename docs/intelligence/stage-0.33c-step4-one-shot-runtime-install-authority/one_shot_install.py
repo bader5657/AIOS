@@ -319,6 +319,55 @@ def validate_registry_binding(approved_input: dict[str, object], approval: dict[
         raise Stop(APPROVED_BYTES_INVALID, "REGISTRY_BINDING")
 
 
+def trusted_facts_dto_sha256(trusted: dict[str, object]) -> str:
+    """Project validated harness facts into the authoritative TF-A DTO hash."""
+
+    try:
+        from decimal import Decimal
+        from core.app.material_receipts.candidate_create_authorization import (
+            trusted_facts_sha256,
+        )
+        from core.app.material_receipts.candidate_input import (
+            TrustedReceiptFacts,
+            TrustedReceiptItemFacts,
+        )
+
+        received_at = validate_utc_microsecond_z(trusted["received_at"])
+        document_date = (
+            dt.date.fromisoformat(trusted["document_date"])
+            if trusted["document_date"] is not None
+            else None
+        )
+        items = tuple(
+            TrustedReceiptItemFacts(
+                line_number=item["line_number"],
+                candidate_material_description=item["candidate_material_description"],
+                canonical_display_name=item["canonical_display_name"],
+                size_description=item["size_description"],
+                specification=item["specification"],
+                material_id=(uuid.UUID(item["material_id"]) if item["material_id"] else None),
+                full_colly_count=item["full_colly_count"],
+                qty_per_full_colly=(Decimal(item["qty_per_full_colly"]) if item["qty_per_full_colly"] is not None else None),
+                partial_qty=Decimal(item["partial_qty"]),
+                total_qty=Decimal(item["total_qty"]),
+                unit=item["unit"],
+            )
+            for item in trusted["items"]
+        )
+        facts = TrustedReceiptFacts(
+            supplier_name=trusted["supplier_name"],
+            document_number=trusted["document_number"],
+            document_date=document_date,
+            received_at=received_at,
+            items=items,
+        )
+        return trusted_facts_sha256(facts)
+    except GovernedStop:
+        raise
+    except Exception as exc:
+        raise Stop(APPROVED_BYTES_INVALID, "TRUSTED_FACTS_PROJECTION") from exc
+
+
 def validate_frozen_package(input_transport: bytes, approval_transport: bytes, *, manifest_root: Path | None = None, retained_root: Path | None = None) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
     if not input_transport.endswith(b"\n") or input_transport.endswith(b"\n\n"):
         raise Stop(APPROVED_BYTES_INVALID, "INPUT_TRANSPORT")
@@ -341,8 +390,9 @@ def validate_frozen_package(input_transport: bytes, approval_transport: bytes, *
             payload["input_transport_sha256"] != sha256(input_transport)):
         raise Stop(APPROVED_BYTES_INVALID, "INPUT_HASH")
     trusted = input_obj["trusted_receipt_facts"]
-    trusted_bytes = json.dumps(trusted, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
-    if payload["trusted_facts_sha256"] != sha256(trusted_bytes):
+    # TF-A binds semantic DTO facts. The two checks above independently bind
+    # exact semantic input bytes and exact transport bytes (including the LF).
+    if payload["trusted_facts_sha256"] != trusted_facts_dto_sha256(trusted):
         raise Stop(APPROVED_BYTES_INVALID, "TRUSTED_FACTS_HASH")
     if payload["item_count"] != len(trusted["items"]):
         raise Stop(APPROVED_BYTES_INVALID, "ITEM_COUNT")
