@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -38,7 +39,20 @@ def activation(executor_sha, merge, head):
     }
 
 
-class GitGraphCase(unittest.TestCase):
+class ZeroSideEffectProof:
+    def assert_main_precondition_without_side_effects(self):
+        with patch.object(executor, "durable_claim") as claim, \
+             patch.object(executor, "stage_and_publish") as staging, \
+             patch.object(executor.os, "link") as publication:
+            with self.assertRaises(executor.GovernedStop) as caught:
+                executor.main()
+        self.assertEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
+        self.assertEqual(claim.call_count, 0, "claim count")
+        self.assertEqual(staging.call_count, 0, "staging count")
+        self.assertEqual(publication.call_count, 0, "publication count")
+
+
+class GitGraphCase(ZeroSideEffectProof, unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -78,6 +92,13 @@ class GitGraphCase(unittest.TestCase):
         )
         for item in self.patches:
             item.start(); self.addCleanup(item.stop)
+        self.main_patches = (
+            patch.object(executor, "check_no_args_root"),
+            patch.object(executor, "read_activation_record", return_value=self.activation),
+            patch.object(executor, "verify_actual_interpreter"),
+        )
+        for item in self.main_patches:
+            item.start(); self.addCleanup(item.stop)
 
     def assert_precondition(self):
         with self.assertRaises(executor.GovernedStop) as caught:
@@ -89,28 +110,28 @@ class GitGraphCase(unittest.TestCase):
 
     def test_wrong_head_rejected(self):
         self.activation["expected_runtime_head"] = self.merge
-        self.assert_precondition()
+        self.assert_main_precondition_without_side_effects()
 
     def test_modified_tracked_file_rejected(self):
         (self.repo / "runtime-proof").write_text("dirty\n")
-        self.assert_precondition()
+        self.assert_main_precondition_without_side_effects()
 
     def test_staged_change_rejected(self):
         (self.repo / "runtime-proof").write_text("staged\n")
         git(self.repo, "add", "runtime-proof")
-        self.assert_precondition()
+        self.assert_main_precondition_without_side_effects()
 
     def test_untracked_file_rejected(self):
         (self.repo / "untracked").write_text("dirt\n")
-        self.assert_precondition()
+        self.assert_main_precondition_without_side_effects()
 
     def test_repository_resolution_failure_rejected(self):
         with patch.object(executor, "REPOSITORY", self.repo / "missing"):
-            self.assert_precondition()
+            self.assert_main_precondition_without_side_effects()
 
     def test_invalid_merge_sha_rejected(self):
         self.activation["authority_merge_sha"] = "f" * 40
-        self.assert_precondition()
+        self.assert_main_precondition_without_side_effects()
 
     def test_merge_not_ancestor_rejected(self):
         git(self.repo, "checkout", "--orphan", "unrelated")
@@ -123,7 +144,7 @@ class GitGraphCase(unittest.TestCase):
         unrelated = git(self.repo, "rev-parse", "HEAD")
         git(self.repo, "checkout", self.head)
         self.activation["authority_merge_sha"] = unrelated
-        self.assert_precondition()
+        self.assert_main_precondition_without_side_effects()
 
     def test_reviewed_authority_document_must_match_merge_lineage(self):
         self.activation["authority_merge_sha"] = self.head
@@ -133,51 +154,60 @@ class GitGraphCase(unittest.TestCase):
         changed = git(self.repo, "rev-parse", "HEAD")
         self.activation["authority_merge_sha"] = changed
         self.activation["expected_runtime_head"] = changed
-        self.assert_precondition()
+        self.assert_main_precondition_without_side_effects()
 
 
-class ActivationSchemaTests(unittest.TestCase):
+class ActivationSchemaTests(ZeroSideEffectProof, unittest.TestCase):
     def setUp(self):
-        self.sha = "a" * 64
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.repo = Path(self.tmp.name)
+        (self.repo / "fixture-executor.py").write_bytes(b"fixture executor")
+        self.sha = hashlib.sha256((self.repo / "fixture-executor.py").read_bytes()).hexdigest()
         self.valid = activation(self.sha, "b" * 40, "c" * 40)
+        self.stack = ExitStack(); self.addCleanup(self.stack.close)
+        self.stack.enter_context(patch.object(executor, "REPOSITORY", self.repo))
+        self.stack.enter_context(patch.object(executor, "REL_EXECUTOR", Path("fixture-executor.py")))
+        self.stack.enter_context(patch.object(executor, "check_no_args_root"))
+        self.stack.enter_context(patch.object(executor, "verify_actual_interpreter"))
 
-    def reject(self, changed):
-        value = dict(self.valid); value.update(changed)
-        with self.assertRaises(executor.GovernedStop) as caught:
-            executor.validate_activation_schema(value, self.sha)
-        self.assertEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
+    def run_activation(self, value):
+        with patch.object(executor, "read_activation_record", return_value=value):
+            self.assert_main_precondition_without_side_effects()
 
     def test_valid_schema_accepted(self):
         executor.validate_activation_schema(self.valid, self.sha)
 
     def test_wrong_pr_number_rejected(self):
-        self.reject({"pr_number": 288})
+        self.run_activation({**self.valid, "pr_number": 288})
 
     def test_wrong_reviewed_head_rejected(self):
-        self.reject({"reviewed_head_sha": "d" * 40})
+        self.run_activation({**self.valid, "reviewed_head_sha": "d" * 40})
 
     def test_wrong_executor_sha_rejected(self):
-        self.reject({"executor_sha256": "e" * 64})
+        self.run_activation({**self.valid, "executor_sha256": "e" * 64})
 
     def test_malformed_and_unknown_schema_rejected(self):
-        for value in ({}, {**self.valid, "unknown": True}):
-            with self.subTest(value=value):
-                with self.assertRaises(executor.GovernedStop):
-                    executor.validate_activation_schema(value, self.sha)
+        self.run_activation({**self.valid, "unknown": True})
 
     def test_activation_absent_stops_main_before_claim(self):
-        with patch.object(executor, "check_no_args_root"), \
-             patch.object(executor, "read_activation_record", side_effect=executor.Stop(executor.PRECONDITION_FAILED, "ACTIVATION")), \
-             patch.object(executor, "durable_claim") as claim:
-            with self.assertRaises(executor.GovernedStop): executor.main()
-        claim.assert_not_called()
+        real_read = executor.read_activation_record
+        missing = self.repo / "activation-record-does-not-exist.json"
+        with patch.object(executor, "read_activation_record", side_effect=lambda: real_read(missing)):
+            self.assert_main_precondition_without_side_effects()
 
 
-class InterpreterTests(unittest.TestCase):
+class InterpreterTests(ZeroSideEffectProof, unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.python = Path(self.tmp.name) / "python"
         self.python.symlink_to(Path(os.__file__).resolve())
+        (Path(self.tmp.name) / "fixture-executor.py").write_bytes(b"fixture executor")
+        self.stack = ExitStack(); self.addCleanup(self.stack.close)
+        self.stack.enter_context(patch.object(executor, "REPOSITORY", Path(self.tmp.name)))
+        self.stack.enter_context(patch.object(executor, "REL_EXECUTOR", Path("fixture-executor.py")))
+        self.stack.enter_context(patch.object(executor, "check_no_args_root"))
+        self.stack.enter_context(patch.object(executor, "read_activation_record", return_value={}))
+        self.stack.enter_context(patch.object(executor, "verify_merged_authority", return_value="a" * 40))
 
     def test_correct_path_and_version_accepted(self):
         with patch.object(executor, "EXPECTED_INTERPRETER", str(self.python)):
@@ -185,13 +215,13 @@ class InterpreterTests(unittest.TestCase):
 
     def test_wrong_interpreter_path_rejected(self):
         with patch.object(executor, "EXPECTED_INTERPRETER", str(self.python)):
-            with self.assertRaises(executor.GovernedStop):
-                executor.verify_actual_interpreter(str(self.python) + "-other", (3, 12, 3))
+            self.assert_main_precondition_without_side_effects()
 
     def test_wrong_python_version_rejected(self):
-        with patch.object(executor, "EXPECTED_INTERPRETER", str(self.python)):
-            with self.assertRaises(executor.GovernedStop):
-                executor.verify_actual_interpreter(str(self.python), (3, 12, 4))
+        wrong = tuple(sys.version_info[:2]) + (sys.version_info.micro + 1,)
+        with patch.object(executor, "EXPECTED_INTERPRETER", sys.executable), \
+             patch.object(executor, "EXPECTED_PYTHON_VERSION", wrong):
+            self.assert_main_precondition_without_side_effects()
 
 
 class SourceLinkCountTests(unittest.TestCase):
@@ -227,6 +257,38 @@ class SourceLinkCountTests(unittest.TestCase):
                     with self.assertRaises(executor.GovernedStop) as caught:
                         executor.read_source(self.fd, name, semantic, transport, digest)
                     self.assertEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
+
+
+    def test_multiple_links_main_path_has_zero_side_effects(self):
+        (self.root / "fixture-executor.py").write_bytes(b"fixture executor")
+        parent = self.root / "parent"; parent.mkdir()
+        (parent / executor.EVIDENCE_DIR).mkdir()
+        real_fstat = os.fstat
+
+        def metadata(fd):
+            value = real_fstat(fd)
+            if stat.S_ISREG(value.st_mode):
+                values = list(value); values[3] = 2; values[4] = 0; values[5] = 0
+                return os.stat_result(values)
+            return value
+
+        def open_fixture(path, *args, **kwargs):
+            return os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(executor, "REPOSITORY", self.root))
+            stack.enter_context(patch.object(executor, "REL_EXECUTOR", Path("fixture-executor.py")))
+            stack.enter_context(patch.object(executor, "RUNTIME_PARENT", parent))
+            stack.enter_context(patch.object(executor, "SOURCE_PARENT", self.root))
+            stack.enter_context(patch.object(executor, "FILES", tuple(item[:4] for item in self.specs)))
+            stack.enter_context(patch.object(executor, "check_no_args_root"))
+            stack.enter_context(patch.object(executor, "read_activation_record", return_value={}))
+            stack.enter_context(patch.object(executor, "verify_merged_authority", return_value="a" * 40))
+            stack.enter_context(patch.object(executor, "verify_actual_interpreter"))
+            stack.enter_context(patch.object(executor, "open_dir", side_effect=open_fixture))
+            stack.enter_context(patch.object(executor.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid())))
+            stack.enter_context(patch.object(executor.os, "fstat", side_effect=metadata))
+            ZeroSideEffectProof.assert_main_precondition_without_side_effects(self)
 
 
 if __name__ == "__main__":
