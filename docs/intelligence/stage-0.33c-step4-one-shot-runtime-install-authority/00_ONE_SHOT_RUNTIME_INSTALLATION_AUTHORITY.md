@@ -46,7 +46,7 @@ must remain absent and must not be created, modified, or consumed.
 | Binding | Frozen value |
 |---|---|
 | executor repository path | `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py` |
-| executor SHA-256 | `c1aa32502dff875eaf889c0644655b8c5f4a2fa0361f5a0622b976580e9bc61b` |
+| executor SHA-256 | `1042693ec4af0f95068426e67954ea9ba4477012b1e18a88bd125469d100df87` |
 | interpreter/runtime | `/opt/aios/runtime/venv/bin/python`, governed Python `3.12.3` |
 | run-as identity | Unix `root` (`euid=0`, account name `root`) |
 | arguments/input model | no arguments; closed constants and the two fixed private sources only |
@@ -84,6 +84,48 @@ The executor, Python standard library, and the repository-governed
 `candidate_input`/`candidate_create_authorization` TF-A DTO/hash helpers are the
 complete helper dependency surface. Network, PostgreSQL, service-control,
 harness, candidate, and `authorization.json` behavior are prohibited.
+
+## R13A final pre-claim activation and runtime truth
+
+The installer remains unusable until the fixed activation record
+`/opt/aios/runtime/intelligence/production-candidate-create/stage-0.33c/p4s7-r13-post-merge-activation.json`
+exists and validates. The record is not created by this amendment. A future
+separately governed activation action must publish it exclusively without
+replacement as a regular, non-symlink, single-link `root:root` file with mode
+`0400`.
+
+The activation record has exactly these members and no others:
+`schema_version`, `authority_id`, `pr_number`, `reviewed_head_sha`,
+`authority_merge_sha`, `expected_runtime_head`, `executor_sha256`,
+`policy_reference`, and `activated_at_utc`. It requires schema
+`aios-stage-0.33c-p4s7-r13-post-merge-activation-v1`, this authority identifier,
+PR number `289`, reviewed head
+`209618b845c844ad08915853fa1dfa07c1c9897a`, this policy path, the final
+policy-bound executor SHA, three canonical lowercase commit/SHA identities, and
+a canonical microsecond UTC activation timestamp.
+
+Before claim, the executor itself uses `/usr/bin/git -C /opt/aios-src` with a
+fixed minimal `PATH` and fails closed if Git or repository truth is unavailable.
+It proves the supplied authority merge is a real commit and an ancestor of the
+expected runtime HEAD; proves the R13 authority document at reviewed PR #289
+head is byte-identical at that merge commit; requires `git rev-parse HEAD` to
+equal `expected_runtime_head`; and requires
+`git status --porcelain=v1 --untracked-files=all` to be empty. This is complete
+repository cleanliness, including staged, tracked, and untracked dirt.
+
+The executor also requires its actual `sys.executable` to be exactly
+`/opt/aios/runtime/venv/bin/python`, safely resolves that identity, and requires
+the actual running version tuple to be exactly `3.12.3`. Package metadata does
+not satisfy either runtime gate. Both private source files are accepted only
+after no-follow open/fstat establishes link count exactly one, without weakening
+any existing type, owner, group, mode, byte, or digest check.
+
+The fail-closed order is activation existence and closed schema; merge ancestry
+and reviewed-authority binding; exact runtime HEAD; complete clean tree; actual
+interpreter and version; both source link counts and metadata; all preserved
+package, path, freshness, one-shot, staging, publication, cleanup, and evidence
+gates; then claim. Every new failure is `PRECONDITION_FAILED` before claim and
+therefore consumes no retry state and creates no staging or publication object.
 
 The future executor may obtain bytes only from these two fixed private,
 execution-side source paths:

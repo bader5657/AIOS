@@ -28,7 +28,9 @@ BASELINE = "ca7940b8b94237611a37189e0bed10b002167e78"
 REPOSITORY = Path("/opt/aios-src")
 REL_EXECUTOR = Path("docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py")
 REL_POLICY = Path("docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md")
+REL_R13_AUTHORITY = Path("docs/intelligence/stage-0.33c-p4s7-runtime-install-execution-authority/00_FINAL_ONE_SHOT_RUNTIME_INSTALL_AUTHORITY.md")
 RUNTIME_PARENT = Path("/opt/aios/runtime/intelligence/production-candidate-create/stage-0.33c")
+ACTIVATION_RECORD = RUNTIME_PARENT / "p4s7-r13-post-merge-activation.json"
 SOURCE_PARENT = Path("/run/aios/stage-0.33c-p4s5-source")
 RETAINED_DATA_ROOT = Path("/opt/aios/data/documents")
 EVIDENCE_DIR = "runtime-sync-evidence"
@@ -44,6 +46,16 @@ FILES = (
 INPUT_TYPES={"text","image","voice","document","pdf","doc","spreadsheet","video","audio","web_link","youtube_link","unknown"}
 PIPELINE_COMPAT={"pdf":"document","doc":"document","spreadsheet":"document","web_link":"text","youtube_link":"text"}
 EVENT_FAILURE_CODES={"TIMEOUT","UNAVAILABLE","REJECTED","UNKNOWN"}
+EXPECTED_INTERPRETER = "/opt/aios/runtime/venv/bin/python"
+EXPECTED_PYTHON_VERSION = (3, 12, 3)
+R13_PR_NUMBER = 289
+R13_REVIEWED_HEAD = "209618b845c844ad08915853fa1dfa07c1c9897a"
+ACTIVATION_SCHEMA_VERSION = "aios-stage-0.33c-p4s7-r13-post-merge-activation-v1"
+ACTIVATION_KEYS = frozenset({
+    "schema_version", "authority_id", "pr_number", "reviewed_head_sha",
+    "authority_merge_sha", "expected_runtime_head", "executor_sha256",
+    "policy_reference", "activated_at_utc",
+})
 
 
 class GovernedStop(RuntimeError):
@@ -511,49 +523,109 @@ def check_no_args_root() -> None:
 
 
 def run_git(*args: str) -> str:
-    completed = subprocess.run(
-        ("/usr/bin/git", "-C", str(REPOSITORY), *args),
-        check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL, text=True, env={"PATH": "/usr/bin:/bin"},
-    )
-    return completed.stdout.strip()
+    try:
+        completed = subprocess.run(
+            ("/usr/bin/git", "-C", str(REPOSITORY), *args),
+            check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, env={"PATH": "/usr/bin:/bin"},
+        )
+    except (OSError, subprocess.CalledProcessError, UnicodeError) as exc:
+        raise Stop(PRECONDITION_FAILED, "RUNTIME_REPOSITORY", errno_code=getattr(exc, "errno", None)) from exc
+    return completed.stdout.rstrip("\n")
 
 
-def verify_merged_authority(executor_sha: str) -> str:
-    policy = (REPOSITORY / REL_POLICY).read_text(encoding="utf-8")
+def _git_bytes(*args: str) -> bytes:
+    try:
+        return subprocess.run(
+            ("/usr/bin/git", "-C", str(REPOSITORY), *args),
+            check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin"},
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise Stop(PRECONDITION_FAILED, "RUNTIME_REPOSITORY", errno_code=getattr(exc, "errno", None)) from exc
+
+
+def read_activation_record(path: Path = ACTIVATION_RECORD) -> dict[str, object]:
+    try:
+        data, info = _read_regular_nofollow(path, "ACTIVATION")
+    except GovernedStop as exc:
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION", errno_code=exc.errno_code) from exc
+    if (info.st_uid != 0 or info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o400 or
+            info.st_nlink != 1):
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION")
+    try:
+        activation = exact_json(data)
+    except GovernedStop as exc:
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA") from exc
+    if not isinstance(activation, dict) or set(activation) != ACTIVATION_KEYS:
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA")
+    return activation
+
+
+def validate_activation_schema(activation: dict[str, object], executor_sha: str) -> None:
+    sha_fields = ("reviewed_head_sha", "authority_merge_sha", "expected_runtime_head", "executor_sha256")
+    if (not isinstance(activation, dict) or set(activation) != ACTIVATION_KEYS or
+            activation.get("schema_version") != ACTIVATION_SCHEMA_VERSION or
+            activation.get("authority_id") != AUTHORITY_ID or
+            activation.get("pr_number") != R13_PR_NUMBER or
+            activation.get("reviewed_head_sha") != R13_REVIEWED_HEAD or
+            activation.get("executor_sha256") != executor_sha or
+            activation.get("policy_reference") != str(REL_POLICY) or
+            any(not isinstance(activation.get(key), str) or
+                re.fullmatch(r"[0-9a-f]{40}" if key != "executor_sha256" else r"[0-9a-f]{64}", activation[key]) is None
+                for key in sha_fields)):
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA")
+    try:
+        parse_utc(activation.get("activated_at_utc"))
+    except GovernedStop as exc:
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA") from exc
+
+
+def verify_actual_interpreter(executable: str = sys.executable, version_info: object = sys.version_info) -> None:
+    if executable != EXPECTED_INTERPRETER:
+        raise Stop(PRECONDITION_FAILED, "INTERPRETER")
+    try:
+        actual = Path(executable).resolve(strict=True)
+        expected = Path(EXPECTED_INTERPRETER).resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise Stop(PRECONDITION_FAILED, "INTERPRETER", errno_code=getattr(exc, "errno", None)) from exc
+    if actual != expected or tuple(version_info[:3]) != EXPECTED_PYTHON_VERSION:
+        raise Stop(PRECONDITION_FAILED, "INTERPRETER")
+
+
+def verify_merged_authority(executor_sha: str, activation: dict[str, object]) -> str:
+    validate_activation_schema(activation, executor_sha)
+    try:
+        policy = (REPOSITORY / REL_POLICY).read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise Stop(PRECONDITION_FAILED, "POLICY_BINDING", errno_code=getattr(exc, "errno", None)) from exc
     match = re.search(r"\| executor SHA-256 \| `([0-9a-f]{64})` \|", policy)
     if match is None or match.group(1) != executor_sha:
-        raise Stop("executor is not hash-bound by authority policy")
+        raise Stop(PRECONDITION_FAILED, "POLICY_BINDING")
     if AUTHORITY_ID not in policy or "P4S6_BLOCKERS_REMEDIATED_READY_FOR_REREVIEW" not in policy:
-        raise Stop("authority policy identity/classification absent")
-    if run_git("status", "--porcelain", "--", str(REL_EXECUTOR), str(REL_POLICY)):
-        raise Stop("authority artifacts are not a clean repository revision")
+        raise Stop(PRECONDITION_FAILED, "POLICY_BINDING")
+    merge_sha = str(activation["authority_merge_sha"])
+    expected_head = str(activation["expected_runtime_head"])
+    run_git("cat-file", "-e", f"{merge_sha}^{{commit}}")
+    run_git("cat-file", "-e", f"{expected_head}^{{commit}}")
+    run_git("merge-base", "--is-ancestor", merge_sha, expected_head)
+    reviewed_authority = _git_bytes("show", f"{R13_REVIEWED_HEAD}:{REL_R13_AUTHORITY}")
+    merged_authority = _git_bytes("show", f"{merge_sha}:{REL_R13_AUTHORITY}")
+    if reviewed_authority != merged_authority:
+        raise Stop(PRECONDITION_FAILED, "AUTHORITY_MERGE")
     head = run_git("rev-parse", "HEAD")
-    if run_git("merge-base", "--is-ancestor", BASELINE, head) != "":
-        # merge-base --is-ancestor intentionally has no stdout on success.
-        raise Stop("unexpected merge-base output")
-    head_blob = subprocess.run(
-        ("/usr/bin/git", "-C", str(REPOSITORY), "show", f"{head}:{REL_EXECUTOR}"),
-        check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-    ).stdout
-    if head_blob != (REPOSITORY / REL_EXECUTOR).read_bytes():
-        raise Stop("executor differs from checked-out authority revision")
-    merges = run_git("rev-list", "--first-parent", "--merges", head).splitlines()
-    for commit in merges:
-        try:
-            blob = subprocess.run(
-                ("/usr/bin/git", "-C", str(REPOSITORY), "show", f"{commit}:{REL_EXECUTOR}"),
-                check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            ).stdout
-            merged_policy = subprocess.run(
-                ("/usr/bin/git", "-C", str(REPOSITORY), "show", f"{commit}:{REL_POLICY}"),
-                check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            ).stdout.decode("utf-8")
-        except (subprocess.CalledProcessError, UnicodeError):
-            continue
-        if sha256(blob) == executor_sha and f"`{executor_sha}`" in merged_policy and AUTHORITY_ID in merged_policy:
-            return commit
-    raise Stop("no merged authority commit contains the reviewed executor and policy binding")
+    if head != expected_head:
+        raise Stop(PRECONDITION_FAILED, "RUNTIME_HEAD")
+    if run_git("status", "--porcelain=v1", "--untracked-files=all"):
+        raise Stop(PRECONDITION_FAILED, "RUNTIME_CLEANLINESS")
+    head_blob = _git_bytes("show", f"{head}:{REL_EXECUTOR}")
+    try:
+        executor_bytes = (REPOSITORY / REL_EXECUTOR).read_bytes()
+    except OSError as exc:
+        raise Stop(PRECONDITION_FAILED, "EXECUTOR_HEAD", errno_code=exc.errno) from exc
+    if head_blob != executor_bytes:
+        raise Stop(PRECONDITION_FAILED, "EXECUTOR_HEAD")
+    return merge_sha
 
 
 def open_dir(path: Path, uid: int, gid: int, mode: int, *, check_components: bool = False) -> int:
@@ -616,8 +688,9 @@ def read_source(source_fd: int, name: str, semantic: int, transport: int, digest
     fd = os.open(name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=source_fd)
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o400:
-            raise Stop("unsafe private source metadata")
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_gid != 0 or
+                stat.S_IMODE(info.st_mode) != 0o400 or info.st_nlink != 1):
+            raise Stop(PRECONDITION_FAILED, "SOURCE_METADATA")
         data = b""
         while len(data) <= transport:
             chunk = os.read(fd, transport + 1 - len(data))
@@ -864,21 +937,28 @@ def sync_artifact_evidence(state: ExecutionState) -> None:
 
 def main() -> int:
     check_no_args_root()
-    executor_bytes = (REPOSITORY / REL_EXECUTOR).read_bytes()
+    activation = read_activation_record()
+    try:
+        executor_bytes = (REPOSITORY / REL_EXECUTOR).read_bytes()
+    except OSError as exc:
+        raise Stop(PRECONDITION_FAILED, "EXECUTOR", errno_code=exc.errno) from exc
     executor_sha = sha256(executor_bytes)
-    authority_commit = verify_merged_authority(executor_sha)
+    authority_commit = verify_merged_authority(executor_sha, activation)
+    verify_actual_interpreter()
     aios = pwd.getpwnam("aiosadmin")
     parent_fd = open_dir(RUNTIME_PARENT, 0, aios.pw_gid, 0o750, check_components=True)
     source_fd = open_dir(SOURCE_PARENT, 0, 0, 0o700)
-    evidence_fd = os.open(EVIDENCE_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
+    evidence_fd = None
     try:
+        # Link-count and source metadata checks precede every package/target gate.
+        sources = [read_source(source_fd, *spec) for spec in FILES]
+        evidence_fd = os.open(EVIDENCE_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
         info = os.fstat(evidence_fd)
         if info.st_uid != aios.pw_uid or info.st_gid != aios.pw_gid or stat.S_IMODE(info.st_mode) != 0o700:
             raise Stop("unsafe consumption directory")
         if not absent(evidence_fd, MARKER) or not absent(evidence_fd, RESULT):
             raise Stop("AUTHORITY_CONSUMED")
         preflight_install_names(parent_fd)
-        sources = [read_source(source_fd, *spec) for spec in FILES]
         input_obj, approval, manifest = validate_frozen_package(sources[0], sources[1])
         evidence = approval["package_payload"]["evidence"]
         if evidence["manifest_id"] != MANIFEST_ID:
@@ -921,7 +1001,8 @@ def main() -> int:
         _, secondary = write_result_with_secondary(evidence_fd, state, primary, success=primary == "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED")
         return 0 if primary == "STEP4_APPROVED_INPUT_INSTALLATION_VERIFIED" and secondary is None else 1
     finally:
-        os.close(evidence_fd)
+        if evidence_fd is not None:
+            os.close(evidence_fd)
         os.close(source_fd)
         os.close(parent_fd)
 
