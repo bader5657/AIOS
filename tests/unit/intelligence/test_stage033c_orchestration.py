@@ -183,7 +183,9 @@ class SyntheticRun(TempCase):
                             ("RUNTIME_PARENT", self.parent), ("SOURCE_PARENT", self.source), ("FILES", self.specs)):
             self.stack.enter_context(patch.object(executor, name, value))
         self.stack.enter_context(patch.object(executor, "check_no_args_root"))
+        self.stack.enter_context(patch.object(executor, "read_activation_record", return_value={}))
         self.stack.enter_context(patch.object(executor, "verify_merged_authority", return_value="a"*40))
+        self.stack.enter_context(patch.object(executor, "verify_actual_interpreter"))
         self.stack.enter_context(patch.object(executor, "open_dir", side_effect=open_fixture))
         self.stack.enter_context(patch.object(executor.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid())))
         self.stack.enter_context(patch.object(executor.os, "fstat", side_effect=ownership_only))
