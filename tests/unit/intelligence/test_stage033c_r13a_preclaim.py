@@ -126,8 +126,30 @@ class GitGraphCase(ZeroSideEffectProof, unittest.TestCase):
         self.assert_main_precondition_without_side_effects()
 
     def test_repository_resolution_failure_rejected(self):
-        with patch.object(executor, "REPOSITORY", self.repo / "missing"):
-            self.assert_main_precondition_without_side_effects()
+        # Prove readable prerequisites and repository truth before fault injection.
+        self.assertEqual(hashlib.sha256(self.exec_path.read_bytes()).hexdigest(), self.digest)
+        self.assertEqual(executor.verify_merged_authority(self.digest, self.activation), self.merge)
+        command = ("/usr/bin/git", "-C", str(self.repo), "cat-file", "-e", f"{self.merge}^{{commit}}")
+        git_failure = subprocess.CalledProcessError(128, command)
+        with ExitStack() as stack:
+            git_path = stack.enter_context(patch.object(executor, "run_git", wraps=executor.run_git))
+            git_command = stack.enter_context(patch.object(executor.subprocess, "run", side_effect=git_failure))
+            claim = stack.enter_context(patch.object(executor, "durable_claim"))
+            staging = stack.enter_context(patch.object(executor, "stage_and_publish"))
+            publication = stack.enter_context(patch.object(executor.os, "link"))
+            with self.assertRaises(executor.GovernedStop) as caught:
+                executor.main()
+        git_path.assert_called_once_with("cat-file", "-e", f"{self.merge}^{{commit}}")
+        git_command.assert_called_once_with(
+            command, check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, env={"PATH": "/usr/bin:/bin"},
+        )
+        self.assertEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
+        self.assertEqual(caught.exception.stage, "RUNTIME_REPOSITORY")
+        self.assertIs(caught.exception.__cause__, git_failure)
+        self.assertEqual(claim.call_count, 0, "claim count")
+        self.assertEqual(staging.call_count, 0, "staging count")
+        self.assertEqual(publication.call_count, 0, "publication count")
 
     def test_invalid_merge_sha_rejected(self):
         self.activation["authority_merge_sha"] = "f" * 40
