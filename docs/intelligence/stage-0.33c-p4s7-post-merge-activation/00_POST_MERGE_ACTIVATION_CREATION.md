@@ -1,9 +1,13 @@
-# Stage 0.33C-P4S7-R18 Post-Merge Activation Record Creation Governance
+# Stage 0.33C-P4S7-R20 Post-Merge Activation Record Creation Governance
 
-Classification: `P4S7_POST_MERGE_ACTIVATION_CREATION_READY_FOR_REVIEW`
+Classification: `P4S7_ACTIVATION_GOVERNANCE_RECONCILED_READY_FOR_REVIEW`
 
-Creation readiness: **BLOCKED pending an authoritative activation serialization
-contract**. Ready for review does not mean ready for activation creation.
+The former serialization-definition blocker is **resolved** by merged PR #293's
+canonical contract and merged PR #294's enforcement, now present in the runtime
+executor. Activation creation remains **BLOCKED pending
+independent review and human merge of this updated PR #292, fresh privileged
+private-source verification, and all immediate pre-creation gates below**.
+Review readiness does not mean activation-creation authorization.
 
 ## Scope and authoritative evidence
 
@@ -13,27 +17,32 @@ result evidence, final runtime target, staging object, candidate, or
 private sources, contact PostgreSQL, invoke the harness, restart services, or
 authorize Step 5. No merge or runtime synchronization is performed by this stage.
 
-The supplied P4S7-R17 PASS is the authoritative prior verification baseline,
-including its independent-review acceptance and previously verified private
-source state. R18 does not represent those historical observations as newly
-performed verification. GitHub reports PR #289 merged by human account
+The supplied P4S7-R19 PASS is the authoritative runtime baseline. It binds
+runtime HEAD `abb11a25dd7810c4742ae2a724f0c1bd89de3efd`, actual and
+policy-bound executor SHA-256
+`f649b19c09c9d719b11577b14bfad0ce458f5c4dd6ccfd88c6727594787c81aa`,
+canonical activation serialization enforcement present, and the activation
+record absent. Earlier R17 independent-review acceptance and private-source
+verification are historical evidence, not newly performed privileged checks.
+GitHub reports PR #289 merged by human account
 `bader5657`, at the exact reviewed head and merge below. Its reviews and comments
 collections are empty; independent-review acceptance is inherited from the
 supplied R17 baseline, not inferred from a GitHub approval event.
 
-Read-only R18 inspection on 2026-09-24 independently confirmed:
+Read-only R20 inspection on 2026-09-26 (Asia/Jakarta) confirmed:
 
-- `/opt/aios-src` HEAD is `a22ac1f13954040d6182ab2fa0614952f3e4f2b6`;
+- `/opt/aios-src` HEAD is `abb11a25dd7810c4742ae2a724f0c1bd89de3efd`;
 - `git status --porcelain=v1 --untracked-files=all` is empty;
-- all three composite merge commits below are ancestors of that HEAD;
-- the actual executor SHA-256 equals the current policy-bound SHA-256 below;
-- activation, final target, claim, result companion, and governed staging names
-  are absent from the inspected runtime and evidence directories.
+- the actual executor SHA-256 equals the policy-bound SHA-256 below;
+- the runtime activation reader requires canonical semantic-byte equality,
+  exactly one terminal LF, exact integer `pr_number`, and ASCII six-digit-`Z`
+  timestamp; and
+- the activation record is absent.
 
-The root-only private source directory was inaccessible to the inspecting
-account. No private-source bytes were read or permissions weakened. Historical
-R17 acceptance is not a substitute for fresh privileged operator evidence at
-the future creation gate.
+The root-only private source directory was inaccessible to the earlier R18
+inspecting account. This R20 inspection did not read private-source bytes or
+weaken permissions. Historical R17 acceptance is not a substitute for fresh
+privileged operator evidence at the future creation gate.
 
 ## Fixed path, purpose, and closed schema
 
@@ -55,12 +64,16 @@ Exactly these nine keys are required; no missing, extra, or duplicate keys:
 | `pr_number` | JSON integer `289` |
 | `reviewed_head_sha` | `209618b845c844ad08915853fa1dfa07c1c9897a` |
 | `authority_merge_sha` | `a22ac1f13954040d6182ab2fa0614952f3e4f2b6` |
-| `expected_runtime_head` | `a22ac1f13954040d6182ab2fa0614952f3e4f2b6` |
-| `executor_sha256` | `1042693ec4af0f95068426e67954ea9ba4477012b1e18a88bd125469d100df87` |
+| `expected_runtime_head` | `abb11a25dd7810c4742ae2a724f0c1bd89de3efd` |
+| `executor_sha256` | `f649b19c09c9d719b11577b14bfad0ce458f5c4dd6ccfd88c6727594787c81aa` |
 | `policy_reference` | `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md` |
-| `activated_at_utc` | Generate only during future creation from actual UTC, formatted `YYYY-MM-DDTHH:MM:SS.ffffffZ`; never prefill, backdate, or reuse. |
+| `activated_at_utc` | Generate only during future creation from actual UTC, formatted `YYYY-MM-DDTHH:MM:SS.ffffffZ` with ASCII digits and uppercase `Z`; never prefill, backdate, or reuse. |
 
-All values except `pr_number` are JSON strings. The identifier is the existing
+All values except `pr_number` are JSON strings. `pr_number` must have exact JSON
+integer type and value `289`: booleans, `289.0`, exponent notation, and strings
+are invalid. The timestamp must be a valid UTC calendar time with exactly six
+fractional digits; offsets, missing fractions, and non-ASCII digits are invalid.
+The identifier is the existing
 executor `AUTHORITY_ID`, not a newly generated identifier. Schema, identity,
 policy path, and metadata come from the current executor constants and
 `read_activation_record` / `validate_activation_schema` contract.
@@ -70,9 +83,10 @@ policy path, and metadata come from the current executor constants and
 Every gate must pass immediately before creation; uncertainty, inaccessible
 evidence, mismatch, or residue means STOP without cleanup or creation.
 
-1. Require independent review and human merge of this governance, resolution of
-   the serialization blocker below through reviewed governance, and evidence of
-   PR #289 independent review at the frozen reviewed head and human merge.
+1. Require fresh independent review and human merge of this updated PR #292.
+   Require the merged PR #293 canonical contract and merged PR #294 enforcement
+   to remain incorporated in the runtime executor. Require evidence of PR #289
+   independent review at the frozen reviewed head and human merge.
 2. Use local `/usr/bin/git -C /opt/aios-src` proof that the authority merge and
    expected HEAD are commits, and `merge-base --is-ancestor` succeeds for the
    authority merge against expected HEAD. Require actual HEAD exactly equal to
@@ -84,6 +98,8 @@ evidence, mismatch, or residue means STOP without cleanup or creation.
    | PR #290 | `327732e611b6d6bb3b88c33775e320d2d5173862` |
    | PR #291 | `c58dcb92f49c529c00d6aeb09efe7fab7d00a47e` |
    | PR #289 | `a22ac1f13954040d6182ab2fa0614952f3e4f2b6` |
+   | PR #293 canonical serialization contract | `c8e2bdf9180ce71cc1dda5139ae786756e2dd22a` |
+   | PR #294 enforcement | `abb11a25dd7810c4742ae2a724f0c1bd89de3efd` |
 
    No component may be omitted. Compare the bytes of
    `docs/intelligence/stage-0.33c-p4s7-runtime-install-execution-authority/00_FINAL_ONE_SHOT_RUNTIME_INSTALL_AUTHORITY.md`
@@ -95,8 +111,14 @@ evidence, mismatch, or residue means STOP without cleanup or creation.
    digest above. Require runtime executor bytes equal the HEAD blob. Preserve
    the executor's policy authority-ID and classification checks. STOP on any
    mismatch; do not modify the executor or policy to make it pass.
-5. Require actual UTC `now < 2026-09-26T21:24:52.273127Z`. Equality, expiry,
-   unreadable time, or invalid time is STOP. No renewal or extension is granted.
+5. Require fresh approval-freshness proof from the exact unchanged private
+   approval source, including its governed `not_after_utc`, immediately before
+   activation creation. The previously governed bound expiry is
+   `2026-09-26T21:24:52.273127Z`; require actual UTC
+   `now < 2026-09-26T21:24:52.273127Z` and `now < not_after_utc` as read and
+   validated from the private approval. Equality, expiry, unreadable time,
+   inaccessible approval, mismatch, or invalid time is STOP. Creation neither
+   reserves freshness nor grants renewal, replacement, or extension.
 6. Verify absence with no-follow directory-relative lookup, treating dangling
    symlinks and all other existing entry types as present. Under the fixed
    activation parent, require both `approved-input.json` and
@@ -117,7 +139,9 @@ evidence, mismatch, or residue means STOP without cleanup or creation.
    non-symlink `root:root` directory mode `0700`; both source files must remain
    regular, non-symlink, single-link `root:root` files mode `0400`. Evidence must
    identify verification time and results without exposing private content.
-   Inaccessible or stale evidence is STOP, not assumed validity. Never weaken
+   This is a new privileged verification performed immediately before creation;
+   R17 or R19 historical acceptance does not satisfy it. Inaccessible or stale
+   evidence is STOP, not assumed validity. Never weaken
    permissions or regenerate/modify private sources.
 10. Require path-component safety and the existing directory contracts: runtime
     parent `root:aiosadmin` mode `0750`, evidence directory
@@ -127,32 +151,35 @@ Merging this document into repository main must not silently advance the runtime
 checkout. The expected runtime HEAD remains frozen. Any runtime advance is a
 STOP requiring separate governance; never rewrite the frozen value opportunistically.
 
-## Serialization finding and creation blocker
+## Canonical serialization and enforced reader contract
 
-The current activation reader calls `exact_json(data)`, which decodes UTF-8 and
-uses `json.loads` with duplicate-member rejection. It checks the closed schema
-and metadata but does **not** require canonical byte serialization, a particular
-key order, byte count, transport hash, or a terminal LF. There is no activation
-writer in this contract from which an exact serializer can be derived.
+The [merged PR #293 canonical serialization contract](../stage-0.33c-p4s7-activation-serialization/00_ACTIVATION_CANONICAL_SERIALIZATION_CONTRACT.md)
+resolves the former definition gap. The merged runtime executor now enforces it
+in `read_activation_record` before any claim. Its semantic bytes are exactly:
 
-Elsewhere the executor canonicalizes package objects with
-`json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()`.
-Its claim/result writers append LF. Neither behavior establishes activation
-transport semantics. This governance does not borrow either as an asserted
-activation requirement.
+```python
+semantic_bytes = json.dumps(
+    activation, ensure_ascii=False, sort_keys=True,
+    separators=(",", ":"), allow_nan=False,
+).encode("utf-8")
+transport_bytes = semantic_bytes + b"\n"
+```
 
-Consequently the requested exact existing activation canonical serializer is
-not derivable. Activation creation MUST STOP until independently reviewed and
-human-merged governance explicitly resolves the canonical serializer and
-whether transport LF is required, consistently with the frozen executor. Do not
-invent transport semantics, silently pick a serializer, or append an LF merely
-because other artifacts use one. If resolution changes executor bytes, separate
-governance must reconcile all frozen SHA bindings before creation can proceed.
+The semantic JSON has no BOM or surrounding whitespace. Disk transport has
+**exactly one terminal ASCII LF** (`0x0A`), with no CRLF, second LF, or space
+before LF. The LF is transport framing and is excluded from the semantic-byte
+comparison. Do not strip or normalize invalid bytes. The reader rejects
+duplicate members, non-UTF-8, missing or extra keys, wrong value types, invalid
+timestamp, and noncanonical semantic bytes with `PRECONDITION_FAILED` before
+claim. The reader also preserves no-follow regular-file checks and requires
+single-link `root:root` mode `0400`. No additional activation key or separate
+activation hash field is introduced. These rules are now final governed
+creation requirements, not a pending serialization decision.
 
 ## Future exclusive publication and verification
 
-This section governs a future, separately executed action only after all gates,
-including serialization resolution, pass. It is not an executable creation script.
+This section governs a future, separately executed action only after every
+pre-creation gate passes. It is not an executable creation script.
 
 1. As root, open the validated parent directory with no-follow traversal and
    retain its descriptor. Check absence, then exclusively create the exact
@@ -160,9 +187,9 @@ including serialization resolution, pass. It is not an executable creation scrip
    `0400`, under restrictive umask. No alternate path or temporary replacement.
    Existing entries cause STOP even if their contents appear correct.
 2. Generate the timestamp only now and produce the complete nine-key object
-   using the resolved exact canonical serializer. Append exactly one terminal
-   LF only if that resolved contract requires transport LF. Derive expected
-   byte length and SHA-256 from those exact bytes, including any required LF.
+   using the exact canonical serializer above. Append exactly one terminal
+   LF. Derive expected byte length and SHA-256 from those exact transport
+   bytes, including the LF; these verification values are not schema fields.
 3. Completely write the bytes, handling short writes. Verify by descriptor that
    the inode is regular, UID `0`, GID `0`, mode `0400`, link count `1`. These exact
    values come from `read_activation_record`, not an inferred permission model.
@@ -172,8 +199,10 @@ including serialization resolution, pass. It is not an executable creation scrip
 5. Reopen the exact basename `O_RDONLY | O_NOFOLLOW | O_CLOEXEC` relative to the
    same parent. Verify inode/device identity against the created inode, regular
    type, UID/GID/mode/link count, exact length and EOF, complete-byte equality,
-   SHA-256, UTF-8/duplicate-free closed schema, all frozen values, canonical
-   serialization, and creation-time UTC timestamp. Require no writable fd remains.
+   SHA-256, UTF-8/duplicate-free closed schema, all frozen values, exact integer
+   `pr_number`, canonical semantic-byte equality, exactly-one-LF transport,
+   and creation-time ASCII six-digit-`Z` UTC timestamp. Require no writable fd
+   remains.
 6. Record bounded verification evidence separately through the later stage's
    governed evidence mechanism; never write installation claim/result companions
    as activation evidence. No evidence path is authorized by this document.
@@ -189,17 +218,17 @@ Activation governance → independent review → human merge → activation crea
 execution → independent activation verification → final pre-attempt verification
 → exactly one runtime-install attempt.
 
-No stage may be collapsed. The serializer blocker must be resolved before the
-creation execution stage. Independent activation verification must repeat the
+No stage may be collapsed. Independent activation verification must repeat the
 binding, byte, metadata, durability-evidence, and no-side-effect checks. Final
 pre-attempt verification must freshly repeat all current installer gates,
-including approval freshness, private sources, actual interpreter/version,
-runtime truth, targets, staging and UNUSED claim/result state. Creation does not
+including approval freshness at that later gate, private sources, actual
+interpreter/version, runtime truth, targets, staging and UNUSED claim/result
+state. Creation does not
 reserve freshness or consume the installation authority.
 
 The later one-shot installation retains its independent post-execution
 verification and Step-4 closure requirements. PostgreSQL, harness invocation,
 candidate creation, `authorization.json`, service restart, and Step 5 remain
-unauthorized. This R18 stage stops after publishing the narrow governance PR;
-the next official action is independent review, including disposition of the
-explicit serialization blocker. No automatic merge.
+unauthorized. This R20 stage stops after updating the narrow governance PR.
+The next official action is fresh independent review of updated PR #292,
+followed only by human merge if accepted. No automatic merge or activation.
