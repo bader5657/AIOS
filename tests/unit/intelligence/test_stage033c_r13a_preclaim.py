@@ -129,7 +129,7 @@ class GitGraphCase(ZeroSideEffectProof, unittest.TestCase):
         # Prove readable prerequisites and repository truth before fault injection.
         self.assertEqual(hashlib.sha256(self.exec_path.read_bytes()).hexdigest(), self.digest)
         self.assertEqual(executor.verify_merged_authority(self.digest, self.activation), self.merge)
-        command = ("/usr/bin/git", "-C", str(self.repo), "cat-file", "-e", f"{self.merge}^{{commit}}")
+        command = ("/usr/bin/git", "-c", "safe.directory=/opt/aios-src", "-C", str(self.repo), "cat-file", "-e", f"{self.merge}^{{commit}}")
         git_failure = subprocess.CalledProcessError(128, command)
         with ExitStack() as stack:
             git_path = stack.enter_context(patch.object(executor, "run_git", wraps=executor.run_git))
@@ -155,6 +155,39 @@ class GitGraphCase(ZeroSideEffectProof, unittest.TestCase):
         self.activation["authority_merge_sha"] = "f" * 40
         self.assert_main_precondition_without_side_effects()
 
+    def test_byte_git_failure_stops_before_claim(self):
+        real_run = subprocess.run
+
+        def fail_show(command, **kwargs):
+            if "show" in command:
+                raise subprocess.CalledProcessError(128, command)
+            return real_run(command, **kwargs)
+
+        self.assertEqual(executor.verify_merged_authority(self.digest, self.activation), self.merge)
+        with patch.object(executor.subprocess, "run", side_effect=fail_show), \
+             patch.object(executor, "_git_bytes", wraps=executor._git_bytes) as byte_git:
+            self.assert_main_precondition_without_side_effects()
+        byte_git.assert_called_once_with("show", f"{self.reviewed}:{executor.REL_R13_AUTHORITY}")
+
+    def test_executor_head_mismatch_even_when_status_is_clean(self):
+        # Git's assume-unchanged bit can hide a local executor edit from status.
+        git(self.repo, "update-index", "--assume-unchanged", str(executor.REL_EXECUTOR))
+        self.exec_path.write_bytes(b"locally replaced executor\n")
+        self.digest = hashlib.sha256(self.exec_path.read_bytes()).hexdigest()
+        self.policy_path.write_text(
+            f"{executor.AUTHORITY_ID}\nP4S6_BLOCKERS_REMEDIATED_READY_FOR_REREVIEW\n"
+            f"| executor SHA-256 | `{self.digest}` |\n"
+        )
+        git(self.repo, "add", str(executor.REL_POLICY))
+        git(self.repo, "commit", "-m", "bind local executor digest")
+        self.activation["executor_sha256"] = self.digest
+        self.activation["expected_runtime_head"] = git(self.repo, "rev-parse", "HEAD")
+        self.assertEqual(executor.run_git("status", "--porcelain=v1", "--untracked-files=all"), "")
+        with self.assertRaises(executor.GovernedStop) as caught:
+            executor.verify_merged_authority(self.digest, self.activation)
+        self.assertEqual(caught.exception.stage, "EXECUTOR_HEAD")
+        self.assert_main_precondition_without_side_effects()
+
     def test_merge_not_ancestor_rejected(self):
         git(self.repo, "checkout", "--orphan", "unrelated")
         for child in self.repo.iterdir():
@@ -177,6 +210,81 @@ class GitGraphCase(ZeroSideEffectProof, unittest.TestCase):
         self.activation["authority_merge_sha"] = changed
         self.activation["expected_runtime_head"] = changed
         self.assert_main_precondition_without_side_effects()
+
+
+class GitSafeDirectoryTests(unittest.TestCase):
+    def test_both_helpers_freeze_exact_path_and_minimal_environment(self):
+        self.assertEqual(executor.REPOSITORY, Path("/opt/aios-src"))
+        for helper, output in ((executor.run_git, "head\n"), (executor._git_bytes, b"head\n")):
+            with self.subTest(helper=helper.__name__), \
+                 patch.object(executor.subprocess, "run", return_value=SimpleNamespace(stdout=output)) as run:
+                helper("rev-parse", "HEAD")
+                expected = dict(check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin"})
+                if helper is executor.run_git:
+                    expected["text"] = True
+                run.assert_called_once_with(
+                    ("/usr/bin/git", "-c", "safe.directory=/opt/aios-src", "-C",
+                     "/opt/aios-src", "rev-parse", "HEAD"), **expected,
+                )
+
+    def test_wrong_owned_repository_is_not_added_to_trust(self):
+        # Git's test hook exercises the ownership guard without root/chown.
+        real_run = subprocess.run
+
+        def different_owner(command, **kwargs):
+            self.assertEqual(kwargs["env"], {"PATH": "/usr/bin:/bin"})
+            kwargs["env"] = {**kwargs["env"], "GIT_TEST_ASSUME_DIFFERENT_OWNER": "1"}
+            return real_run(command, **kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            git(directory, "init")
+            with patch.object(executor, "REPOSITORY", Path(directory)), \
+                 patch.object(executor.subprocess, "run", side_effect=different_owner):
+                for helper in (executor.run_git, executor._git_bytes):
+                    with self.subTest(helper=helper.__name__), self.assertRaises(executor.GovernedStop) as caught:
+                        helper("rev-parse", "--git-dir")
+                    self.assertEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
+                    self.assertEqual(caught.exception.stage, "RUNTIME_REPOSITORY")
+                    self.assertEqual(caught.exception.__cause__.returncode, 128)
+
+    def test_exact_governed_repository_ownership_and_no_config_mutation(self):
+        # Read-only host proof. Portable CI still checks exact argv above.
+        if not Path("/opt/aios-src/.git").exists():
+            self.skipTest("governed host repository is not installed")
+        configs = (Path("/etc/gitconfig"), Path.home() / ".gitconfig",
+                   Path.home() / ".config/git/config", Path("/opt/aios-src/.git/config"))
+
+        def snapshot():
+            return {str(path): (path.read_bytes(), path.stat().st_mtime_ns)
+                    if path.exists() else None for path in configs}
+
+        before = snapshot()
+        env = {"PATH": "/usr/bin:/bin", "GIT_TEST_ASSUME_DIFFERENT_OWNER": "1"}
+        command = ("/usr/bin/git", "-C", "/opt/aios-src", "rev-parse", "HEAD")
+        rejected = subprocess.run(command, env=env, capture_output=True)
+        self.assertEqual(rejected.returncode, 128)
+        self.assertIn(b"detected dubious ownership", rejected.stderr)
+        real_run = subprocess.run
+
+        def different_owner(command, **kwargs):
+            self.assertEqual(kwargs["env"], {"PATH": "/usr/bin:/bin"})
+            return real_run(command, **{**kwargs, "env": env})
+
+        with patch.object(executor.subprocess, "run", side_effect=different_owner):
+            head = executor.run_git("rev-parse", "HEAD")
+            self.assertRegex(head, r"^[0-9a-f]{40}$")
+            self.assertEqual(executor._git_bytes("rev-parse", "HEAD"), head.encode() + b"\n")
+        # A subsequent unamended process still rejects this same repository.
+        self.assertEqual(subprocess.run(command, env=env, capture_output=True).returncode, 128)
+        self.assertEqual(snapshot(), before)
+
+    def test_policy_digest_matches_executor_bytes(self):
+        import re
+        policy = (ROOT / executor.REL_POLICY).read_text()
+        match = re.search(r"\| executor SHA-256 \| `([0-9a-f]{64})` \|", policy)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), hashlib.sha256(EXECUTOR.read_bytes()).hexdigest())
 
 
 class ActivationSchemaTests(ZeroSideEffectProof, unittest.TestCase):
