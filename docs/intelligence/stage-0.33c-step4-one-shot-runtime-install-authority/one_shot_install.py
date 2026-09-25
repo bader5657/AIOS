@@ -508,7 +508,7 @@ def utc_text(value: dt.datetime) -> str:
 
 
 def parse_utc(value: object) -> dt.datetime:
-    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z", value):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z", value):
         raise Stop("invalid approval expiry")
     parsed = dt.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=dt.timezone.utc)
     return parsed
@@ -561,7 +561,9 @@ def read_activation_record(path: Path = ACTIVATION_RECORD) -> dict[str, object]:
         raise Stop(PRECONDITION_FAILED, "ACTIVATION")
     try:
         activation = exact_json(semantic_bytes)
-    except GovernedStop as exc:
+    except (GovernedStop, ValueError, RecursionError, OverflowError) as exc:
+        # Includes UTF-8/JSON errors and the integer/recursion parser limits.
+        # Process-control exceptions must continue to propagate.
         raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA") from exc
     if not isinstance(activation, dict) or set(activation) != ACTIVATION_KEYS:
         raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA")

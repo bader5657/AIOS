@@ -35,7 +35,7 @@ def valid():
         "expected_runtime_head": "c" * 40,
         "executor_sha256": "d" * 64,
         "policy_reference": str(executor.REL_POLICY),
-        "activated_at_utc": "2026-09-20T00:00:00.000000Z",
+        "activated_at_utc": "2026-09-24T00:00:00.000000Z",
     }
 
 
@@ -72,6 +72,8 @@ def assert_preclaim_stop():
         # No later repository/runtime access is allowed to mask a reader failure.
         authority = stack.enter_context(patch.object(
             executor, "verify_merged_authority", side_effect=AssertionError("past reader")))
+        repository_read = stack.enter_context(patch.object(
+            Path, "read_bytes", side_effect=AssertionError("past reader")))
         with pytest.raises(executor.GovernedStop) as caught:
             executor.main()
         assert caught.value.classification == executor.PRECONDITION_FAILED
@@ -79,12 +81,15 @@ def assert_preclaim_stop():
         for label, counter in zip(("claim", "staging", "publication"), counters):
             assert counter.call_count == 0, label
         authority.assert_not_called()
+        repository_read.assert_not_called()
+        return caught.value
 
 
 MALFORMED = {
     "reordered_keys": lambda v: json.dumps(v, separators=(",", ":")).encode() + b"\n",
     "spaces": lambda v: json.dumps(v, sort_keys=True).encode() + b"\n",
     "indentation": lambda v: json.dumps(v, sort_keys=True, indent=2).encode() + b"\n",
+    "leading_space": lambda v: b" " + canonical(v) + b"\n",
     "crlf": lambda v: canonical(v) + b"\r\n",
     "missing_lf": lambda v: canonical(v),
     "double_lf": lambda v: canonical(v) + b"\n\n",
@@ -99,6 +104,7 @@ MALFORMED = {
     "bytes_after_lf": lambda v: canonical(v) + b"\nx\n",
     "trailing_tab": lambda v: canonical(v) + b"\t\n",
     "escaped_ascii": lambda v: canonical(v).replace(b"authority_id", b"\\u0061uthority_id") + b"\n",
+    "invalid_json": lambda v: b"{\n",
 }
 
 
@@ -124,11 +130,87 @@ def test_pr_number_exact_int_main_rejection(value, valid, reader):
     "2026-09-20T00:00:00.000000z",
     "2026-09-20T00:00:00.000000+07:00",
     "2026-02-30T00:00:00.000000Z",
+    "2026-13-01T00:00:00.000000Z",
+    "2026-09-24T25:00:00.000000Z",
 ])
 def test_timestamp_main_rejection(value, valid, reader):
     path, _ = reader
     write_transport(path, canonical({**valid, "activated_at_utc": value}) + b"\n")
     assert_preclaim_stop()
+
+
+@pytest.mark.parametrize("index", [0, 5, 8, 11, 14, 17, 20],
+                         ids=["year", "month", "day", "hour", "minute", "second", "fraction"])
+@pytest.mark.parametrize("zero", ["٠", "０"], ids=["arabic_indic", "fullwidth"])
+def test_unicode_timestamp_digits_main_rejection(index, zero, valid, reader):
+    timestamp = valid["activated_at_utc"]
+    replacement = chr(ord(zero) + int(timestamp[index]))
+    timestamp = timestamp[:index] + replacement + timestamp[index + 1:]
+    path, _ = reader
+    write_transport(path, canonical({**valid, "activated_at_utc": timestamp}) + b"\n")
+    assert_preclaim_stop()
+
+
+def test_exponent_notation_main_rejection(valid, reader):
+    semantic = canonical(valid).replace(b'"pr_number":289', b'"pr_number":2.89e2')
+    parsed = executor.exact_json(semantic)
+    assert parsed == valid
+    assert type(parsed["pr_number"]) is float
+    assert canonical(parsed) != semantic
+    path, _ = reader
+    write_transport(path, semantic + b"\n")
+    # The related exact-int schema gate rejects this alternate spelling before
+    # byte comparison; no unrelated prerequisite is allowed to mask rejection.
+    assert_preclaim_stop()
+
+
+@pytest.mark.parametrize("case", ["integer_limit", "recursion_limit"])
+def test_real_parser_limit_main_rejection(case, valid, reader):
+    path, _ = reader
+    if case == "integer_limit":
+        previous = sys.get_int_max_str_digits()
+        sys.set_int_max_str_digits(4300)
+        semantic = canonical(valid).replace(b'"pr_number":289', b'"pr_number":' + b"9" * 5000)
+        error = ValueError
+    else:
+        # Python 3.12's C JSON decoder has a separate recursion limit.
+        depth = 10000
+        semantic = b"[" * depth + b"0" + b"]" * depth
+        error = RecursionError
+    try:
+        with pytest.raises(error):
+            executor.exact_json(semantic)
+        write_transport(path, semantic + b"\n")
+        stop = assert_preclaim_stop()
+        assert isinstance(stop.__cause__, error)
+    finally:
+        if case == "integer_limit":
+            sys.set_int_max_str_digits(previous)
+
+
+@pytest.mark.parametrize("error", [ValueError, RecursionError, OverflowError])
+def test_parser_exception_boundary_main_rejection(error, valid, reader):
+    path, _ = reader
+    write_transport(path, canonical(valid) + b"\n")
+    with patch.object(executor, "exact_json", side_effect=error("parser failure")):
+        stop = assert_preclaim_stop()
+    assert isinstance(stop.__cause__, error)
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt, SystemExit])
+def test_parser_process_control_propagates(error, valid, reader):
+    path, _ = reader
+    write_transport(path, canonical(valid) + b"\n")
+    with ExitStack() as stack:
+        counters = [stack.enter_context(patch.object(owner, name)) for owner, name in (
+            (executor, "durable_claim"), (executor, "stage_and_publish"),
+            (executor.os, "link"), (Path, "read_bytes"),
+        )]
+        stack.enter_context(patch.object(executor, "exact_json", side_effect=error))
+        with pytest.raises(error):
+            executor.main()
+        for counter in counters:
+            counter.assert_not_called()
 
 
 def test_canonical_transport_accepted(valid, reader):
@@ -139,6 +221,35 @@ def test_canonical_transport_accepted(valid, reader):
     assert len(result) == 9
     assert type(result["pr_number"]) is int
     executor.validate_activation_schema(result, valid["executor_sha256"])
+
+
+def test_canonical_transport_reaches_main_authority_gate(valid, reader):
+    path, _ = reader
+    fixture_executor = b"synthetic executor bytes"
+    valid = {**valid, "executor_sha256": executor.sha256(fixture_executor)}
+    write_transport(path, canonical(valid) + b"\n")
+
+    class AuthorityGateReached(Exception):
+        pass
+
+    def authority_gate(digest, activation):
+        assert activation == valid
+        executor.validate_activation_schema(activation, digest)
+        raise AuthorityGateReached
+
+    with ExitStack() as stack:
+        counters = [stack.enter_context(patch.object(owner, name)) for owner, name in (
+            (executor, "durable_claim"), (executor, "stage_and_publish"),
+            (executor.os, "link"),
+        )]
+        stack.enter_context(patch.object(Path, "read_bytes", return_value=fixture_executor))
+        gate = stack.enter_context(patch.object(executor, "verify_merged_authority",
+                                               side_effect=authority_gate))
+        with pytest.raises(AuthorityGateReached):
+            executor.main()
+        gate.assert_called_once()
+        for counter in counters:
+            counter.assert_not_called()
 
 
 @pytest.mark.parametrize("case", ["symlink", "directory", "mode", "nlink", "uid", "gid"])
