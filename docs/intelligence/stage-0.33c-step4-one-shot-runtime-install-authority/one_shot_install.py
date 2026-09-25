@@ -525,7 +525,7 @@ def check_no_args_root() -> None:
 def run_git(*args: str) -> str:
     try:
         completed = subprocess.run(
-            ("/usr/bin/git", "-C", str(REPOSITORY), *args),
+            ("/usr/bin/git", "-c", "safe.directory=/opt/aios-src", "-C", str(REPOSITORY), *args),
             check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, env={"PATH": "/usr/bin:/bin"},
         )
@@ -537,7 +537,7 @@ def run_git(*args: str) -> str:
 def _git_bytes(*args: str) -> bytes:
     try:
         return subprocess.run(
-            ("/usr/bin/git", "-C", str(REPOSITORY), *args),
+            ("/usr/bin/git", "-c", "safe.directory=/opt/aios-src", "-C", str(REPOSITORY), *args),
             check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin"},
         ).stdout
