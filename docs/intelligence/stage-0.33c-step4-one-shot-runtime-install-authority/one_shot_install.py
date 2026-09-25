@@ -508,7 +508,7 @@ def utc_text(value: dt.datetime) -> str:
 
 
 def parse_utc(value: object) -> dt.datetime:
-    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z", value):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z", value):
         raise Stop("invalid approval expiry")
     parsed = dt.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=dt.timezone.utc)
     return parsed
@@ -547,17 +547,37 @@ def _git_bytes(*args: str) -> bytes:
 
 def read_activation_record(path: Path = ACTIVATION_RECORD) -> dict[str, object]:
     try:
-        data, info = _read_regular_nofollow(path, "ACTIVATION")
+        transport_bytes, info = _read_regular_nofollow(path, "ACTIVATION")
     except GovernedStop as exc:
         raise Stop(PRECONDITION_FAILED, "ACTIVATION", errno_code=exc.errno_code) from exc
     if (info.st_uid != 0 or info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o400 or
             info.st_nlink != 1):
         raise Stop(PRECONDITION_FAILED, "ACTIVATION")
+    if (len(transport_bytes) < 2 or transport_bytes[-1:] != b"\n" or
+            transport_bytes[-2:-1] in (b"\n", b"\r", b" ", b"\t")):
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION")
+    semantic_bytes = transport_bytes[:-1]
+    if semantic_bytes.startswith(b"\xef\xbb\xbf"):
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION")
     try:
-        activation = exact_json(data)
-    except GovernedStop as exc:
+        activation = exact_json(semantic_bytes)
+    except (GovernedStop, ValueError, RecursionError, OverflowError) as exc:
+        # Includes UTF-8/JSON errors and the integer/recursion parser limits.
+        # Process-control exceptions must continue to propagate.
         raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA") from exc
     if not isinstance(activation, dict) or set(activation) != ACTIVATION_KEYS:
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA")
+    # Validate values here; verify_merged_authority independently binds the digest
+    # to the actual executor and policy before any claim.
+    validate_activation_schema(activation, activation["executor_sha256"])
+    try:
+        canonical = json.dumps(
+            activation, ensure_ascii=False, sort_keys=True,
+            separators=(",", ":"), allow_nan=False,
+        ).encode("utf-8")
+    except (ValueError, TypeError, UnicodeError) as exc:
+        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA") from exc
+    if canonical != semantic_bytes:
         raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA")
     return activation
 
@@ -567,6 +587,7 @@ def validate_activation_schema(activation: dict[str, object], executor_sha: str)
     if (not isinstance(activation, dict) or set(activation) != ACTIVATION_KEYS or
             activation.get("schema_version") != ACTIVATION_SCHEMA_VERSION or
             activation.get("authority_id") != AUTHORITY_ID or
+            type(activation.get("pr_number")) is not int or
             activation.get("pr_number") != R13_PR_NUMBER or
             activation.get("reviewed_head_sha") != R13_REVIEWED_HEAD or
             activation.get("executor_sha256") != executor_sha or
@@ -577,7 +598,7 @@ def validate_activation_schema(activation: dict[str, object], executor_sha: str)
         raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA")
     try:
         parse_utc(activation.get("activated_at_utc"))
-    except GovernedStop as exc:
+    except (GovernedStop, ValueError) as exc:
         raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA") from exc
 
 
