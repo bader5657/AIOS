@@ -1,5 +1,17 @@
 # Stage 0.33C-P4S6 One-Shot Runtime Package Installation Authority
 
+## R32 active recovery binding amendment
+
+The active executor now binds recovery authority
+`7bc638e2-e1f4-4e87-a54a-4d0df031b130`. Historical authority, approval,
+activation, and evidence below remain historical only. The executor digest
+in the binding table is rebound by R32. See the
+[R32 amendment](../stage-0.33c-p4s7-r32-recovery-bindings/00_RECOVERY_EXECUTOR_PACKAGE_BINDING_AMENDMENT.md)
+for the active split-source package bindings. No recovery activation path or
+version is frozen; execution fails closed before private reads or claim.
+The historical activation cannot activate recovery. No installation or Step 5
+is authorized by this amendment.
+
 ## Authority identity, activation, and scope
 
 Authority identifier: `9d29c855-0f23-4539-a9b9-2e17dc89c49d`.
@@ -46,7 +58,7 @@ must remain absent and must not be created, modified, or consumed.
 | Binding | Frozen value |
 |---|---|
 | executor repository path | `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py` |
-| executor SHA-256 | `3eec6a3b0cf0e1d9a768c15bf445876d3a463f38528a8fb4046ea27ba750ed97` |
+| executor SHA-256 | `da020dff0974acf0bb7fc22bc1b54f17d149ee8f11ace67420eb16cca73cd6be` |
 | interpreter/runtime | `/opt/aios/runtime/venv/bin/python`, governed Python `3.12.3` |
 | run-as identity | Unix `root` (`euid=0`, account name `root`) |
 | arguments/input model | no arguments; closed constants and the two fixed private sources only |
