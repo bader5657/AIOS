@@ -1,4 +1,8 @@
+import asyncio
 import hashlib
+import os
+import stat
+from threading import Event
 import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -62,7 +66,7 @@ def test_valid_capture_canonical_hash_and_consumption(tmp_path):
     assert not raw.endswith(b"\n\n")
     assert path.name.split(".")[1] == hashlib.sha256(raw).hexdigest()
     assert path.stat().st_mode & 0o777 == 0o600
-    assert not (tmp_path / "consumed").exists()
+    assert not list((tmp_path / "consumed").glob("*.json"))
     assert auth.decode_evidence(raw) == expected
     receipt = json.loads(verify(path, tmp_path).read_bytes())
     assert receipt["telegram_user_id"] == 961959058
@@ -92,21 +96,21 @@ def test_failed_verification_never_consumes(tmp_path, changes):
     path = capture(tmp_path, **changes)
     with pytest.raises(ValueError):
         verify(path, tmp_path)
-    assert not (tmp_path / "consumed").exists()
+    assert not list((tmp_path / "consumed").glob("*.json"))
 
 
 def test_expired_receipt_does_not_consume(tmp_path):
     path = auth.retain_update(update(), root=tmp_path, received_at=RECEIVED.replace(hour=2))
     with pytest.raises(ValueError):
         auth.verify_and_consume(path, BINDING, root=tmp_path, verified_at=RECEIVED.replace(hour=2))
-    assert not (tmp_path / "consumed").exists()
+    assert not list((tmp_path / "consumed").glob("*.json"))
 
 
 @pytest.mark.parametrize("text", ["ordinary private text", TEXT.lower(), TEXT + "\n", " " + TEXT,
                                   "AIOS-PO-AUTH-PR305-short", "status", None])
 def test_only_exact_challenge_format_is_captured(tmp_path, text):
     assert capture(tmp_path, text=text) is None
-    assert list(tmp_path.iterdir()) == []
+    assert not list(tmp_path.glob("*.json"))
 
 
 def test_no_credential_or_unrelated_private_data_retention(tmp_path):
@@ -122,7 +126,7 @@ def test_malformed_update_does_not_publish(tmp_path, field):
     delattr(message, field)
     with pytest.raises(ValueError):
         auth.retain_update(SimpleNamespace(update_id=1, message=message), root=tmp_path)
-    assert list(tmp_path.iterdir()) == []
+    assert not list(tmp_path.glob("*.json"))
 
 
 @pytest.mark.parametrize("location", [(), ("message",), ("message", "from"), ("message", "chat")])
@@ -157,9 +161,9 @@ def test_noncanonical_or_invalid_types_rejected(tmp_path, mutate):
 def test_transport_tampering_rejected(tmp_path):
     path = capture(tmp_path)
     path.write_bytes(path.read_bytes().replace(b'"update_id":901', b'"update_id":902'))
-    with pytest.raises(ValueError, match="digest"):
+    with pytest.raises(ValueError, match="completion|digest"):
         verify(path, tmp_path)
-    assert not (tmp_path / "consumed").exists()
+    assert not list((tmp_path / "consumed").glob("*.json"))
 
 
 def test_replay_and_concurrent_consumption_have_one_winner(tmp_path):
@@ -176,18 +180,27 @@ def test_replay_and_concurrent_consumption_have_one_winner(tmp_path):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(attempt, paths))
     assert sum(result is not None for result in results) == 1
-    before = next((tmp_path / "consumed").iterdir()).read_bytes()
+    before = next((tmp_path / "consumed").glob("*.json")).read_bytes()
     with pytest.raises(FileExistsError):
         verify(paths[0], tmp_path)
-    assert next((tmp_path / "consumed").iterdir()).read_bytes() == before
+    assert next((tmp_path / "consumed").glob("*.json")).read_bytes() == before
 
 
 def test_evidence_filename_collision_never_overwrites(tmp_path, monkeypatch):
-    monkeypatch.setattr(auth, "uuid4", lambda: "00000000-0000-4000-8000-000000000001")
     path = capture(tmp_path)
     before = path.read_bytes()
-    with pytest.raises(FileExistsError):
+    actual = auth.uuid4
+    calls = 0
+
+    def collision():
+        nonlocal calls
+        calls += 1
+        return path.name.split(".")[0] if calls == 1 else actual()
+
+    monkeypatch.setattr(auth, "uuid4", collision)
+    with pytest.raises(auth.PublicationError) as error:
         capture(tmp_path)
+    assert error.value.state == auth.PublicationState.NOT_PUBLISHED
     assert path.read_bytes() == before
 
 
@@ -197,17 +210,17 @@ def test_failed_fsync_does_not_publish(tmp_path, monkeypatch):
     monkeypatch.setattr(auth.os, "fsync", fail)
     with pytest.raises(OSError):
         capture(tmp_path)
-    assert list(tmp_path.iterdir()) == []
+    assert not list(tmp_path.glob("*.json"))
 
 
 def test_old_incomplete_manifest_cannot_be_promoted(tmp_path):
     path = tmp_path / "old.json"
     path.write_text('{"telegram_user_id":961959058,"metadata":{"character_count":62}}')
     before = path.read_bytes()
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, OSError)):
         verify(path, tmp_path)
     assert path.read_bytes() == before
-    assert not (tmp_path / "consumed").exists()
+    assert not list((tmp_path / "consumed").glob("*.json"))
 
 
 @pytest.mark.parametrize("binding", [replace(BINDING, pr_number=304), replace(BINDING, head="bad"),
@@ -215,7 +228,7 @@ def test_old_incomplete_manifest_cannot_be_promoted(tmp_path):
 def test_invalid_subject_binding_never_consumes(tmp_path, binding):
     with pytest.raises(ValueError):
         verify(capture(tmp_path), tmp_path, binding)
-    assert not (tmp_path / "consumed").exists()
+    assert not list((tmp_path / "consumed").glob("*.json"))
 
 
 def test_unicode_is_literal_utf8(tmp_path):
@@ -226,16 +239,21 @@ def test_unicode_is_literal_utf8(tmp_path):
 
 @pytest.mark.parametrize("capture_fails", [False, True])
 def test_receiver_captures_before_ingestion_and_preserves_message(tmp_path, monkeypatch, caplog, capture_fails):
-    import asyncio
     original = update()
     events = []
+    dispatcher = auth.CaptureDispatcher(tmp_path)
+    project = auth._project_update
+    store = auth._store
 
-    def retain(value):
+    def snapshot(value, received_at=None):
         assert value is original
-        events.append("capture")
+        events.append("snapshot")
+        return project(value, received_at=RECEIVED)
+
+    def retain(data, root):
         if capture_fails:
-            raise OSError("SECRET must not enter logs")
-        return auth.retain_update(value, root=tmp_path, received_at=RECEIVED)
+            raise auth.PublicationError(auth.PublicationState.NOT_PUBLISHED)
+        return store(data, root)
 
     async def ingest(message, context):
         events.append("ingest")
@@ -243,30 +261,17 @@ def test_receiver_captures_before_ingestion_and_preserves_message(tmp_path, monk
         assert message.text == TEXT
         return SimpleNamespace(register_handoff_ready=False)
 
-    monkeypatch.setattr(adapter, "retain_update", retain)
+    monkeypatch.setattr(auth, "_project_update", snapshot)
+    monkeypatch.setattr(auth, "_store", retain)
+    monkeypatch.setattr(adapter, "CAPTURE_DISPATCHER", dispatcher)
     monkeypatch.setattr(adapter, "ingest_telegram_message", AsyncMock(side_effect=ingest))
-    asyncio.run(adapter.handle_update(original, SimpleNamespace()))
-    assert events == ["capture", "ingest"]
-    assert not (tmp_path / "consumed").exists()
-    assert "SECRET" not in caplog.text
+    try:
+        asyncio.run(adapter.handle_update(original, SimpleNamespace()))
+    finally:
+        dispatcher.close()
+    assert events == ["snapshot", "ingest"]
+    assert not list((tmp_path / "consumed").glob("*.json"))
     assert TEXT not in caplog.text
-
-
-def test_new_nested_archive_and_consumption_are_durable(tmp_path, monkeypatch):
-    root = tmp_path / "authentication-evidence" / "telegram"
-    actual = auth.os.fsync
-    calls = []
-
-    def sync(fd):
-        calls.append(fd)
-        actual(fd)
-
-    monkeypatch.setattr(auth.os, "fsync", sync)
-    path = capture(root)
-    verify(path, root)
-    # Parent fsyncs for three new directories, plus file/directory for two records.
-    assert len(calls) == 7
-    assert root.stat().st_mode & 0o777 == 0o700
 
 
 def test_symlink_evidence_and_archive_are_rejected(tmp_path):
@@ -274,12 +279,397 @@ def test_symlink_evidence_and_archive_are_rejected(tmp_path):
     path = capture(root)
     alias = tmp_path / "alias"
     alias.symlink_to(root, target_is_directory=True)
-    with pytest.raises(ValueError):
+    with pytest.raises(auth.PublicationError):
         capture(alias)
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, OSError)):
         verify(alias / path.name, alias)
     linked = root / "link.json"
     linked.symlink_to(path)
     with pytest.raises(OSError):
         verify(linked, root)
-    assert not (root / "consumed").exists()
+    assert not list((root / "consumed").glob("*.json"))
+
+
+@pytest.mark.parametrize("which", ["parent", "ancestor"])
+def test_adversarial_directory_symlink_component(tmp_path, which):
+    real = tmp_path / "real"
+    real.mkdir(mode=0o700)
+    alias = tmp_path / "alias"
+    alias.symlink_to(real, target_is_directory=True)
+    root = alias / "archive" if which == "parent" else alias / "nested" / "archive"
+    with pytest.raises(auth.PublicationError) as error:
+        capture(root)
+    assert error.value.state == auth.PublicationState.NOT_PUBLISHED
+    assert not list(real.rglob("*.json"))
+
+
+@pytest.mark.parametrize("which", ["ancestor", "archive", "consumed"])
+def test_adversarial_directory_swapped_after_validation(tmp_path, monkeypatch, which):
+    parent = tmp_path / "parent"
+    root = parent / "archive"
+    path = capture(root)
+    original_link = auth.os.link
+    swapped = False
+    target = {"ancestor": parent, "archive": root, "consumed": root / "consumed"}[which]
+    moved = target.with_name(target.name + "-original")
+
+    def swap_then_link(src, dst, **kwargs):
+        nonlocal swapped
+        if not swapped and not str(dst).endswith(".complete"):
+            swapped = True
+            target.rename(moved)
+            target.mkdir(mode=0o700)
+        return original_link(src, dst, **kwargs)
+
+    monkeypatch.setattr(auth.os, "link", swap_then_link)
+    with pytest.raises(auth.PublicationError) as error:
+        verify(path, root)
+    assert error.value.state == auth.PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
+    assert not list(target.rglob("*.json"))
+    assert not list(moved.rglob("consumed/*.complete"))
+    # A subsequent verifier must reject the changed layout rather than reinitialize it.
+    with pytest.raises((ValueError, OSError)):
+        verify(path, root)
+
+
+def test_adversarial_directory_archive_replaced_during_capture(tmp_path, monkeypatch):
+    root = tmp_path / "archive"
+    capture(root)
+    original_link = auth.os.link
+    moved = tmp_path / "old-archive"
+    swapped = False
+
+    def replace(src, dst, **kwargs):
+        nonlocal swapped
+        if not swapped and str(dst).endswith(".json"):
+            swapped = True
+            root.rename(moved)
+            root.mkdir(mode=0o700)
+        return original_link(src, dst, **kwargs)
+
+    monkeypatch.setattr(auth.os, "link", replace)
+    with pytest.raises(auth.PublicationError) as error:
+        capture(root)
+    assert error.value.state == auth.PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
+    assert not list(root.iterdir())
+    assert len(list(moved.glob("*.json"))) == 2
+    assert len(list(moved.glob("*.complete"))) == 1
+
+
+def test_adversarial_directory_replay_after_consumed_swap(tmp_path):
+    path = capture(tmp_path)
+    receipt = verify(path, tmp_path)
+    before = receipt.read_bytes()
+    consumed = tmp_path / "consumed"
+    consumed.rename(tmp_path / "old-consumed")
+    consumed.mkdir(mode=0o700)
+    with pytest.raises(ValueError, match="identity"):
+        verify(path, tmp_path)
+    assert not list(consumed.iterdir())
+    assert (tmp_path / "old-consumed" / receipt.name).read_bytes() == before
+    # A new capture cannot reset the anchored replay namespace either.
+    with pytest.raises(auth.PublicationError):
+        capture(tmp_path)
+
+
+def test_adversarial_directory_stable_path_and_descriptor_relative_io(tmp_path, monkeypatch):
+    original_link = auth.os.link
+    calls = []
+
+    def relative(src, dst, **kwargs):
+        assert "/" not in str(src) and "/" not in str(dst)
+        assert kwargs["src_dir_fd"] == kwargs["dst_dir_fd"]
+        assert kwargs["follow_symlinks"] is False
+        calls.append(dst)
+        return original_link(src, dst, **kwargs)
+
+    monkeypatch.setattr(auth.os, "link", relative)
+    path = capture(tmp_path)
+    receipt = verify(path, tmp_path)
+    assert receipt.exists()
+    assert path.with_name(path.name + ".complete").exists()
+    assert len(calls) == 5  # anchor, evidence+completion, consumption+completion
+
+
+@pytest.mark.parametrize("mode", [0o755, 0o770, 0o777])
+def test_adversarial_directory_unsafe_permissions(tmp_path, mode):
+    root = tmp_path / "archive"
+    root.mkdir(mode=mode)
+    root.chmod(mode)
+    with pytest.raises(auth.PublicationError):
+        capture(root)
+    assert not list(root.glob("*.json"))
+
+
+def test_adversarial_directory_mode_change_after_validation(tmp_path):
+    path = capture(tmp_path)
+    with auth.PinnedArchive(tmp_path) as archive:
+        (tmp_path / "consumed").chmod(0o750)
+        with pytest.raises(ValueError, match="identity"):
+            archive.validate()
+    with pytest.raises((ValueError, OSError)):
+        verify(path, tmp_path)
+
+
+@pytest.mark.parametrize("field", ["st_dev", "st_ino", "st_uid", "st_gid", "st_mode"])
+def test_adversarial_directory_revalidates_all_identity_fields(tmp_path, monkeypatch, field):
+    capture(tmp_path)
+    with auth.PinnedArchive(tmp_path) as archive:
+        actual = auth.os.fstat
+        def changed(fd):
+            value = actual(fd)
+            if fd != archive.root_fd:
+                return value
+            fields = {name: getattr(value, name) for name in
+                      ("st_dev", "st_ino", "st_uid", "st_gid", "st_mode")}
+            fields[field] += 1
+            return SimpleNamespace(**fields)
+        monkeypatch.setattr(auth.os, "fstat", changed)
+        with pytest.raises(ValueError, match="identity"):
+            archive.validate()
+
+
+def test_adversarial_directory_parent_replaced_cannot_reinitialize_replay_namespace(tmp_path):
+    parent = tmp_path / "private-parent"
+    root = parent / "archive"
+    path = capture(root)
+    verify(path, root)
+    parent.rename(tmp_path / "previous-parent")
+    parent.mkdir(mode=0o700)
+    with pytest.raises(auth.PublicationError):
+        capture(root)
+    assert not list(parent.iterdir())
+
+
+def test_adversarial_directory_archive_replacement_rejected_after_reopen(tmp_path, monkeypatch):
+    root = tmp_path / "archive"
+    capture(root)
+    root.rename(tmp_path / "old-archive")
+    root.mkdir(mode=0o700)
+    # Simulate a new process: the persisted parent anchor still pins the archive.
+    monkeypatch.setattr(auth, "_KNOWN_LAYOUTS", {})
+    with pytest.raises(auth.PublicationError):
+        capture(root)
+    assert not list(root.glob("*.json"))
+
+
+def test_adversarial_directory_unsafe_owner_rejected(tmp_path, monkeypatch):
+    root = tmp_path / "archive"
+    root.mkdir(mode=0o700)
+    target = root.stat().st_ino
+    actual = auth.os.fstat
+    def wrong_owner(fd):
+        value = actual(fd)
+        if value.st_ino != target:
+            return value
+        return SimpleNamespace(st_dev=value.st_dev, st_ino=value.st_ino,
+                               st_uid=os.geteuid() + 1000, st_gid=value.st_gid,
+                               st_mode=value.st_mode)
+    monkeypatch.setattr(auth.os, "fstat", wrong_owner)
+    with pytest.raises(auth.PublicationError):
+        capture(root)
+    assert not list(root.iterdir())
+
+
+def test_adversarial_async_slow_fsync_heartbeat_ordinary_ingestion_and_overload(tmp_path, monkeypatch, caplog):
+    started, release = Event(), Event()
+    original_fsync = auth.os.fsync
+    calls = []
+    dispatcher = auth.CaptureDispatcher(tmp_path)
+
+    def stalled(fd):
+        started.set()
+        assert release.wait(5), "test did not release simulated disk"
+        return original_fsync(fd)
+
+    async def ingest(message, context):
+        calls.append(message.text)
+        return SimpleNamespace(register_handoff_ready=False)
+
+    monkeypatch.setattr(auth.os, "fsync", stalled)
+    monkeypatch.setattr(adapter, "CAPTURE_DISPATCHER", dispatcher)
+    monkeypatch.setattr(adapter, "ingest_telegram_message", AsyncMock(side_effect=ingest))
+
+    async def exercise():
+        await adapter.handle_update(update(), SimpleNamespace())
+        for _ in range(100):
+            if started.is_set():
+                break
+            await asyncio.sleep(.005)
+        assert started.is_set()
+        ticks = []
+        async def heartbeat():
+            for _ in range(3):
+                await asyncio.sleep(.005)
+                ticks.append(1)
+        await asyncio.wait_for(asyncio.gather(
+            heartbeat(), adapter.handle_update(update(text="ordinary business text"), SimpleNamespace())
+        ), timeout=1)
+        assert len(ticks) == 3 and not release.is_set()
+        assert calls == [TEXT, "ordinary business text"]
+        # No executor backlog: all additional auth submissions fail immediately.
+        assert [dispatcher.submit(update()) for _ in range(20)] == ["REJECTED_CAPACITY"] * 20
+        await adapter.handle_update(update(), SimpleNamespace())
+        assert calls == [TEXT, "ordinary business text", TEXT]
+        assert not list((tmp_path / "consumed").glob("*.json"))
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        release.set()
+        dispatcher.close()
+    assert "capacity exhausted" in caplog.text
+    assert len(list(tmp_path.glob("*.json"))) == 1
+    assert not list((tmp_path / "consumed").glob("*.json"))
+
+
+def test_adversarial_async_concurrent_admission_has_no_waiting_jobs(tmp_path, monkeypatch):
+    started, release = Event(), Event()
+    actual = auth._store
+    calls = []
+    dispatcher = auth.CaptureDispatcher(tmp_path)
+    def store(data, root):
+        calls.append(data)
+        started.set()
+        assert release.wait(5)
+        return actual(data, root)
+    monkeypatch.setattr(auth, "_store", store)
+    try:
+        with ThreadPoolExecutor(max_workers=8) as submitters:
+            statuses = list(submitters.map(lambda _: dispatcher.submit(update()), range(24)))
+        assert started.wait(1)
+        assert statuses.count("ADMITTED") == 1
+        assert statuses.count("REJECTED_CAPACITY") == 23
+        assert len(calls) == 1
+    finally:
+        release.set()
+        dispatcher.close()
+    assert len(list(tmp_path.glob("*.json"))) == 1
+    assert not list((tmp_path / "consumed").glob("*.json"))
+
+
+def test_adversarial_async_worker_start_failure_closes_admission(tmp_path, monkeypatch, caplog):
+    dispatcher = auth.CaptureDispatcher(tmp_path)
+    def unavailable():
+        raise RuntimeError("injected worker start failure")
+    monkeypatch.setattr(dispatcher.executor, "_adjust_thread_count", unavailable)
+    monkeypatch.setattr(adapter, "CAPTURE_DISPATCHER", dispatcher)
+    ingestion = AsyncMock(return_value=SimpleNamespace(register_handoff_ready=False))
+    monkeypatch.setattr(adapter, "ingest_telegram_message", ingestion)
+    try:
+        assert dispatcher.submit(update()) == "NOT_PUBLISHED"
+        assert dispatcher.executor._shutdown
+        assert dispatcher.submit(update()) == "NOT_PUBLISHED"
+        asyncio.run(adapter.handle_update(update(text="ordinary"), SimpleNamespace()))
+        ingestion.assert_awaited_once()
+    finally:
+        dispatcher.close()
+    assert not list(tmp_path.glob("*.json"))
+    assert "worker unavailable" in caplog.text
+
+
+@pytest.mark.parametrize("failure", ["file_fsync", "before_link", "after_link", "parent_fsync", "readback", "completion_link"])
+def test_adversarial_durability_publication_failure_states(tmp_path, monkeypatch, failure):
+    # Initialize the layout without retaining any platform evidence.
+    with auth.PinnedArchive(tmp_path, create=True):
+        pass
+    fsync, link, read = auth.os.fsync, auth.os.link, auth.PinnedArchive.read
+    published = False
+
+    def failing_fsync(fd):
+        is_dir = stat.S_ISDIR(os.fstat(fd).st_mode)
+        if (failure == "file_fsync" and not is_dir) or (failure == "parent_fsync" and is_dir and published):
+            raise OSError("injected fsync failure")
+        return fsync(fd)
+
+    def failing_link(src, dst, **kwargs):
+        nonlocal published
+        if failure == "before_link" or (failure == "completion_link" and str(dst).endswith(".complete")):
+            raise OSError("injected link failure")
+        result = link(src, dst, **kwargs)
+        if str(dst).endswith(".json"):
+            published = True
+            if failure == "after_link":
+                raise OSError("injected failure after payload publication")
+        return result
+
+    def failing_read(self, fd, name):
+        if failure == "readback" and not name.startswith("."):
+            raise ValueError("injected readback verification failure")
+        return read(self, fd, name)
+
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, "fsync", failing_fsync)
+        m.setattr(auth.os, "link", failing_link)
+        m.setattr(auth.PinnedArchive, "read", failing_read)
+        with pytest.raises(auth.PublicationError) as error:
+            capture(tmp_path)
+    records = list(tmp_path.glob("*.json"))
+    before_publication = failure in ("file_fsync", "before_link")
+    assert error.value.state == (auth.PublicationState.NOT_PUBLISHED if before_publication
+                                 else auth.PublicationState.PUBLISHED_DURABILITY_UNCERTAIN)
+    assert len(records) == (0 if before_publication else 1)
+    assert not list(tmp_path.glob("*.complete"))
+    for path in records:
+        before = path.read_bytes()
+        with pytest.raises((ValueError, OSError)):
+            verify(path, tmp_path)
+        assert path.read_bytes() == before
+    assert not list((tmp_path / "consumed").glob("*.json"))
+
+
+def test_adversarial_durability_parent_creation_fsync_failure(tmp_path, monkeypatch):
+    root = tmp_path / "archive"
+    def fail(fd):
+        raise OSError("injected parent fsync failure")
+    monkeypatch.setattr(auth.os, "fsync", fail)
+    with pytest.raises(auth.PublicationError) as error:
+        capture(root)
+    assert error.value.state == auth.PublicationState.NOT_PUBLISHED
+    assert not list(root.glob("*.json"))
+
+
+def test_adversarial_durability_success_completion_is_last_commit(tmp_path, monkeypatch):
+    events = []
+    fsync, link = auth.os.fsync, auth.os.link
+    def synced(fd):
+        events.append("fsync")
+        return fsync(fd)
+    def linked(src, dst, **kwargs):
+        events.append("complete" if str(dst).endswith(".complete") else "link")
+        return link(src, dst, **kwargs)
+    monkeypatch.setattr(auth.os, "fsync", synced)
+    monkeypatch.setattr(auth.os, "link", linked)
+    path = capture(tmp_path)
+    assert events[-1] == "complete"
+    assert json.loads(path.with_name(path.name + ".complete").read_bytes())["state"] == "DURABLY_PUBLISHED"
+    assert verify(path, tmp_path).exists()
+
+
+def test_adversarial_durability_missing_or_changed_completion_rejects(tmp_path):
+    path = capture(tmp_path)
+    completion = path.with_name(path.name + ".complete")
+    completion.write_bytes(b"{}\n")
+    with pytest.raises(ValueError, match="completion"):
+        verify(path, tmp_path)
+    assert not list((tmp_path / "consumed").glob("*.json"))
+
+
+def test_adversarial_durability_orphan_certificate_cannot_authorize_new_publication(tmp_path, monkeypatch):
+    path = capture(tmp_path)
+    # Preserve the previous payload for inspection, leaving its certificate orphaned.
+    path.rename(tmp_path / "retained-previous-payload")
+    actual = auth.uuid4
+    calls = 0
+    def collision():
+        nonlocal calls
+        calls += 1
+        return path.name.split(".")[0] if calls == 1 else actual()
+    monkeypatch.setattr(auth, "uuid4", collision)
+    with pytest.raises(auth.PublicationError) as error:
+        capture(tmp_path)
+    assert error.value.state == auth.PublicationState.NOT_PUBLISHED
+    assert not path.exists()
+    with pytest.raises(OSError):
+        verify(path, tmp_path)
+    assert not list((tmp_path / "consumed").glob("*.json"))

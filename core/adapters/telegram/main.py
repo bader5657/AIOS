@@ -1,4 +1,3 @@
-import logging
 import os
 
 from dotenv import load_dotenv
@@ -13,7 +12,7 @@ from telegram.ext import (
 
 from core.ingestion.universal_ingestion import ingest_telegram_message
 from core.mission.status import mission_status
-from core.adapters.telegram.auth_evidence import retain_update
+from core.adapters.telegram.auth_evidence import CAPTURE_DISPATCHER
 
 load_dotenv("/opt/aios/runtime/config/runtime.env")
 
@@ -39,12 +38,9 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ):
         return
 
-    try:
-        retain_update(update)
-    except (OSError, ValueError):
-        # No update contents, credentials or exception details in logs. Capture
-        # failure never grants authentication and does not change normal ingestion.
-        logging.getLogger(__name__).error("Telegram authentication evidence capture failed")
+    # Only the immutable allowlisted snapshot is prepared here. Disk work has a
+    # single nonblocking admission slot and never delays unrelated ingestion.
+    CAPTURE_DISPATCHER.submit(update)
 
     text = (update.message.text or "").strip().lower()
 
