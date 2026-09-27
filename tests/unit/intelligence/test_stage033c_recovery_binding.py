@@ -244,7 +244,7 @@ class RecoveryGovernanceTests(unittest.TestCase):
         self.assertEqual(m.RECOVERY_NOT_AFTER, "2026-10-03T23:24:12.093093Z")
         self.assertEqual(m.RECOVERY_PAYLOAD_SHA256, "be7a1750eb77ae77e8f020fc3f29c5f047cf88d1720a387f50f58f58c877962e")
         self.assertEqual(m.RECOVERY_TF_A, "c006afcad84984baea6af164067fdd4cfc31cdcac5f86baf7b1ceefd6e4c5065")
-        self.assertIsNone(m.ACTIVATION_RECORD)
+        self.assertEqual(m.ACTIVATION_RECORD, m.RUNTIME_PARENT / "p4s7-recovery-activation.json")
 
     def test_historical_activation_schema_rejected(self):
         value = activation("a"*64, "b"*40, "c"*40)
@@ -255,11 +255,12 @@ class RecoveryGovernanceTests(unittest.TestCase):
     def test_main_cannot_open_historical_activation_or_create_any_state(self):
         with ExitStack() as stack:
             stack.enter_context(patch.object(m, "check_no_args_root"))
+            stack.enter_context(patch.object(m, "_protected_record", side_effect=m.Stop(m.PRECONDITION_FAILED, "ACTIVATION")))
             spies = [stack.enter_context(patch.object(m, name)) for name in
                      ("_read_regular_nofollow", "verify_merged_authority", "open_dir", "durable_claim", "stage_and_publish", "write_failure_result")]
             with self.assertRaises(m.GovernedStop) as caught:
                 m.main()
-            self.assertEqual(caught.exception.stage, "RECOVERY_ACTIVATION_NOT_GOVERNED")
+            self.assertEqual(caught.exception.stage, "ACTIVATION")
             for spy in spies:
                 spy.assert_not_called()
 

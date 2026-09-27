@@ -30,9 +30,24 @@ REL_EXECUTOR = Path("docs/intelligence/stage-0.33c-step4-one-shot-runtime-instal
 REL_POLICY = Path("docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md")
 REL_R13_AUTHORITY = Path("docs/intelligence/stage-0.33c-p4s7-runtime-install-execution-authority/00_FINAL_ONE_SHOT_RUNTIME_INSTALL_AUTHORITY.md")
 RUNTIME_PARENT = Path("/opt/aios/runtime/intelligence/production-candidate-create/stage-0.33c")
-# No merged governance freezes a recovery activation path/version yet.
-# The historical parser remains available for regression, never as activation.
-ACTIVATION_RECORD = None
+ACTIVATION_RECORD = RUNTIME_PARENT / "p4s7-recovery-activation.json"
+TRUST_SELECTOR = RUNTIME_PARENT / "p4s7-recovery-review-merge-trust.json"
+REL_R32 = Path("docs/intelligence/stage-0.33c-p4s7-r32-recovery-bindings/00_RECOVERY_EXECUTOR_PACKAGE_BINDING_AMENDMENT.md")
+REL_R34 = Path("docs/intelligence/stage-0.33c-p4s7-recovery-activation/00_RECOVERY_ACTIVATION_GOVERNANCE.md")
+REL_TRUST = Path("docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md")
+EVIDENCE_PREFIX = "docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/records/"
+R32_MERGE = "ba717f6990d775748f46d62ef03a696f1618077b"
+R34_MERGE = "8e9a8023742773b055e17dba002b2ebf07528118"
+TRUST_MERGE = "7f124e307d9a516b4ce278d800c92d29d476cf5e"
+TRUST_SHA256 = "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957"
+SELECTOR_KEYS = frozenset({"schema_version", "evidence_commit", "evidence_path", "evidence_transport_sha256"})
+EVIDENCE_KEYS = frozenset({"schema_version", "repository", "binding_id", "authority_id",
+    "policy_reference", "activation_governance_reference", "approval_id", "package_payload_sha256",
+    "expected_runtime_head", "executor_sha256", "policy_sha256", "reader", "r32", "r34", "supersedes"})
+REVIEW_KEYS = frozenset({"pr_number", "reviewed_head_sha", "merge_sha"})
+PREDECESSOR_KEYS = frozenset({"kind", "commit", "path", "transport_sha256"})
+UUID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
 INPUT_SOURCE_PARENT = Path("/run/aios/stage-0.33c-p4s5-source")
 APPROVAL_SOURCE_PARENT = Path("/run/aios/stage-0.33c-p4s5-recovery-source")
 RECOVERY_APPROVAL_ID = "3a478d87-5c4f-4778-9f88-2228f4d7167f"
@@ -56,13 +71,10 @@ PIPELINE_COMPAT={"pdf":"document","doc":"document","spreadsheet":"document","web
 EVENT_FAILURE_CODES={"TIMEOUT","UNAVAILABLE","REJECTED","UNKNOWN"}
 EXPECTED_INTERPRETER = "/opt/aios/runtime/venv/bin/python"
 EXPECTED_PYTHON_VERSION = (3, 12, 3)
-R13_PR_NUMBER = 289
-R13_REVIEWED_HEAD = "209618b845c844ad08915853fa1dfa07c1c9897a"
-ACTIVATION_SCHEMA_VERSION = "aios-stage-0.33c-p4s7-r13-post-merge-activation-v1"
+ACTIVATION_SCHEMA_VERSION = "aios-stage-0.33c-p4s7-recovery-activation-v1"
 ACTIVATION_KEYS = frozenset({
-    "schema_version", "authority_id", "pr_number", "reviewed_head_sha",
-    "authority_merge_sha", "expected_runtime_head", "executor_sha256",
-    "policy_reference", "activated_at_utc",
+    "schema_version", "authority_id", "expected_runtime_head", "executor_sha256",
+    "policy_reference", "approval_id", "package_payload_sha256", "activated_at_utc",
 })
 
 
@@ -580,63 +592,248 @@ def _git_bytes(*args: str) -> bytes:
         raise Stop(PRECONDITION_FAILED, "RUNTIME_REPOSITORY", errno_code=getattr(exc, "errno", None)) from exc
 
 
-def read_activation_record(path: Path | None = ACTIVATION_RECORD) -> dict[str, object]:
-    if path is None:
-        raise Stop(PRECONDITION_FAILED, "RECOVERY_ACTIVATION_NOT_GOVERNED")
+def _require(condition: bool, stage: str) -> None:
+    if not condition:
+        raise Stop(PRECONDITION_FAILED, stage)
+
+
+def _closed(value: object, keys: frozenset[str], stage: str) -> None:
+    _require(type(value) is dict and set(value) == keys, stage)
+
+
+def _hex(value: object, length: int) -> bool:
+    return type(value) is str and re.fullmatch(r"[0-9a-f]{%d}" % length, value) is not None
+
+
+def canonical_record(transport: bytes, stage: str) -> dict[str, object]:
     try:
-        transport_bytes, info = _read_regular_nofollow(path, "ACTIVATION")
-    except GovernedStop as exc:
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION", errno_code=exc.errno_code) from exc
-    if (info.st_uid != 0 or info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o400 or
-            info.st_nlink != 1):
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION")
-    if (len(transport_bytes) < 2 or transport_bytes[-1:] != b"\n" or
-            transport_bytes[-2:-1] in (b"\n", b"\r", b" ", b"\t")):
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION")
-    semantic_bytes = transport_bytes[:-1]
-    if semantic_bytes.startswith(b"\xef\xbb\xbf"):
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION")
+        _require(transport.endswith(b"\n") and not transport.startswith(b"\xef\xbb\xbf"), stage)
+        semantic = transport[:-1]
+        value = exact_json(semantic)
+        canonical = json.dumps(value, ensure_ascii=False, sort_keys=True,
+                               separators=(",", ":"), allow_nan=False).encode("utf-8")
+        _require(type(value) is dict and canonical == semantic, stage)
+        return value
+    except (GovernedStop, ValueError, TypeError, UnicodeError, RecursionError, OverflowError) as exc:
+        raise Stop(PRECONDITION_FAILED, stage) from exc
+
+
+def _protected_record(path: Path, stage: str) -> bytes:
+    """Fixed caller constants only; retain and recheck every traversal descriptor."""
+    descriptors = []
     try:
-        activation = exact_json(semantic_bytes)
-    except (GovernedStop, ValueError, RecursionError, OverflowError) as exc:
-        # Includes UTF-8/JSON errors and the integer/recursion parser limits.
-        # Process-control exceptions must continue to propagate.
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA") from exc
-    if not isinstance(activation, dict) or set(activation) != ACTIVATION_KEYS:
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA")
-    # Validate values here; verify_merged_authority independently binds the digest
-    # to the actual executor and policy before any claim.
-    validate_activation_schema(activation, activation["executor_sha256"])
-    try:
-        canonical = json.dumps(
-            activation, ensure_ascii=False, sort_keys=True,
-            separators=(",", ":"), allow_nan=False,
-        ).encode("utf-8")
-    except (ValueError, TypeError, UnicodeError) as exc:
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA") from exc
-    if canonical != semantic_bytes:
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA")
+        descriptors.append(os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC))
+        for component in path.parent.parts[1:]:
+            descriptors.append(os.open(component, os.O_RDONLY | os.O_DIRECTORY |
+                                       os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=descriptors[-1]))
+        parent = os.fstat(descriptors[-1])
+        _require(parent.st_uid == 0 and parent.st_gid == pwd.getpwnam("aiosadmin").pw_gid
+                 and stat.S_IMODE(parent.st_mode) == 0o750, stage)
+        fd = os.open(path.name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
+                     dir_fd=descriptors[-1])
+        descriptors.append(fd)
+        before = os.fstat(fd)
+        _require(stat.S_ISREG(before.st_mode) and before.st_uid == before.st_gid == 0
+                 and stat.S_IMODE(before.st_mode) == 0o400 and before.st_nlink == 1, stage)
+        chunks = []
+        while True:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        after = os.fstat(fd)
+        signature = lambda i: (i.st_dev, i.st_ino, i.st_mode, i.st_uid, i.st_gid,
+                               i.st_nlink, i.st_size, i.st_mtime_ns, i.st_ctime_ns)
+        entry = os.stat(path.name, dir_fd=descriptors[-2], follow_symlinks=False)
+        _require(signature(before) == signature(after) == signature(entry), stage)
+        for parent_fd, child_fd, component in zip(descriptors[:-2], descriptors[1:-1], path.parent.parts[1:]):
+            info = os.fstat(child_fd)
+            entry = os.stat(component, dir_fd=parent_fd, follow_symlinks=False)
+            _require(stat.S_ISDIR(info.st_mode) and info.st_uid == 0
+                     and not stat.S_IMODE(info.st_mode) & 0o022
+                     and stat.S_IMODE(info.st_mode) & 0o100
+                     and (info.st_dev, info.st_ino) == (entry.st_dev, entry.st_ino), stage)
+        return b"".join(chunks)
+    except (OSError, KeyError) as exc:
+        raise Stop(PRECONDITION_FAILED, stage, errno_code=getattr(exc, "errno", None)) from exc
+    finally:
+        close_error = None
+        for fd in reversed(descriptors):
+            try:
+                os.close(fd)
+            except OSError as exc:
+                close_error = exc
+        if close_error is not None:
+            raise Stop(PRECONDITION_FAILED, stage, errno_code=close_error.errno) from close_error
+
+
+def read_activation_record() -> dict[str, object]:
+    activation = canonical_record(_protected_record(ACTIVATION_RECORD, "ACTIVATION"), "ACTIVATION_SCHEMA")
+    validate_activation_schema(activation, activation.get("executor_sha256"))
     return activation
 
 
 def validate_activation_schema(activation: dict[str, object], executor_sha: str) -> None:
-    sha_fields = ("reviewed_head_sha", "authority_merge_sha", "expected_runtime_head", "executor_sha256")
-    if (not isinstance(activation, dict) or set(activation) != ACTIVATION_KEYS or
-            activation.get("schema_version") != ACTIVATION_SCHEMA_VERSION or
-            activation.get("authority_id") != AUTHORITY_ID or
-            type(activation.get("pr_number")) is not int or
-            activation.get("pr_number") != R13_PR_NUMBER or
-            activation.get("reviewed_head_sha") != R13_REVIEWED_HEAD or
-            activation.get("executor_sha256") != executor_sha or
-            activation.get("policy_reference") != str(REL_POLICY) or
-            any(not isinstance(activation.get(key), str) or
-                re.fullmatch(r"[0-9a-f]{40}" if key != "executor_sha256" else r"[0-9a-f]{64}", activation[key]) is None
-                for key in sha_fields)):
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA")
+    stage = "ACTIVATION_SCHEMA"
+    _closed(activation, ACTIVATION_KEYS, stage)
+    _require(all(type(v) is str for v in activation.values()) and
+             activation["schema_version"] == ACTIVATION_SCHEMA_VERSION and
+             activation["authority_id"] == AUTHORITY_ID and
+             activation["approval_id"] == RECOVERY_APPROVAL_ID and
+             activation["package_payload_sha256"] == RECOVERY_PAYLOAD_SHA256 and
+             activation["policy_reference"] == str(REL_POLICY) and
+             _hex(activation["expected_runtime_head"], 40) and
+             _hex(activation["executor_sha256"], 64) and
+             activation["executor_sha256"] == executor_sha, stage)
     try:
-        parse_utc(activation.get("activated_at_utc"))
+        parse_utc(activation["activated_at_utc"])
     except (GovernedStop, ValueError) as exc:
-        raise Stop(PRECONDITION_FAILED, "ACTIVATION_SCHEMA") from exc
+        raise Stop(PRECONDITION_FAILED, stage) from exc
+
+
+def _evidence_path(path: object) -> bool:
+    return type(path) is str and re.fullmatch(re.escape(EVIDENCE_PREFIX) + UUID_PATTERN + r"\.json", path) is not None
+
+
+def validate_selector(value: dict[str, object]) -> None:
+    _closed(value, SELECTOR_KEYS, "SELECTOR_SCHEMA")
+    _require(value["schema_version"] == "aios-p4s7-recovery-review-merge-trust-v1" and
+             _hex(value["evidence_commit"], 40) and _evidence_path(value["evidence_path"]) and
+             _hex(value["evidence_transport_sha256"], 64), "SELECTOR_SCHEMA")
+
+
+def validate_evidence(value: dict[str, object], path: str) -> None:
+    stage = "EVIDENCE_SCHEMA"
+    _closed(value, EVIDENCE_KEYS, stage)
+    fixed = {"schema_version": "aios-p4s7-recovery-review-merge-evidence-v1",
+             "repository": "bader5657/AIOS", "authority_id": AUTHORITY_ID,
+             "policy_reference": str(REL_POLICY), "activation_governance_reference": str(REL_R34),
+             "approval_id": RECOVERY_APPROVAL_ID, "package_payload_sha256": RECOVERY_PAYLOAD_SHA256}
+    _require(all(type(value[k]) is str and value[k] == v for k, v in fixed.items()), stage)
+    _require(type(value["binding_id"]) is str and _evidence_path(path) and
+             path == EVIDENCE_PREFIX + value["binding_id"] + ".json" and
+             _hex(value["expected_runtime_head"], 40) and
+             _hex(value["executor_sha256"], 64) and _hex(value["policy_sha256"], 64), stage)
+    for name in ("reader", "r32", "r34"):
+        review = value[name]
+        _closed(review, REVIEW_KEYS, stage)
+        _require(type(review["pr_number"]) is int and review["pr_number"] > 0 and
+                 _hex(review["reviewed_head_sha"], 40) and _hex(review["merge_sha"], 40), stage)
+    _require(value["r32"]["pr_number"] == 299 and value["r32"]["merge_sha"] == R32_MERGE and
+             value["r34"]["pr_number"] == 300 and value["r34"]["merge_sha"] == R34_MERGE and
+             value["reader"]["pr_number"] not in (299, 300, 301), stage)
+    predecessor = value["supersedes"]
+    _closed(predecessor, PREDECESSOR_KEYS, stage)
+    _require(all(type(v) is str for v in predecessor.values()) and
+             _hex(predecessor["commit"], 40) and _hex(predecessor["transport_sha256"], 64), stage)
+    if predecessor["kind"] == "r34-baseline":
+        _require(predecessor["commit"] == R34_MERGE and predecessor["path"] == str(REL_R34), stage)
+    else:
+        _require(predecessor["kind"] == "recovery-evidence-v1" and _evidence_path(predecessor["path"]), stage)
+
+
+def _commit(commit: str) -> None:
+    _require(_hex(commit, 40) and run_git("cat-file", "-t", commit) == "commit", "EVIDENCE_GIT")
+
+
+def _blob(commit: str, path: str | Path) -> bytes:
+    _commit(commit)
+    listing = _git_bytes("ls-tree", "-z", commit, "--", str(path))
+    # Fixed full path, one regular file only; no symlink/gitlink or path discovery.
+    prefix, sep, name = listing.partition(b"\t")
+    _require(bool(sep) and name == str(path).encode() + b"\0", "EVIDENCE_GIT")
+    parts = prefix.split()
+    _require(len(parts) == 3 and parts[0] in (b"100644", b"100755") and parts[1] == b"blob", "EVIDENCE_GIT")
+    if str(path).startswith(EVIDENCE_PREFIX):
+        _require(parts[0] == b"100644", "EVIDENCE_GIT")
+    return _git_bytes("cat-file", "blob", parts[2].decode("ascii"))
+
+
+def _ancestor(old: str, new: str) -> None:
+    _commit(old)
+    _commit(new)
+    run_git("merge-base", "--is-ancestor", old, new)
+
+
+def _review(review: dict[str, object], paths: tuple[Path, ...]) -> None:
+    merge, reviewed = review["merge_sha"], review["reviewed_head_sha"]
+    _commit(merge)
+    _commit(reviewed)
+    parents = run_git("show", "-s", "--format=%P", merge).split()
+    _require(len(parents) == 2 and parents[1] == reviewed, "REVIEW_MERGE")
+    for path in paths:
+        _require(_blob(reviewed, path) == _blob(merge, path), "REVIEW_BLOB")
+
+
+def _verify_evidence_record(record: dict[str, object], commit: str) -> None:
+    head = record["expected_runtime_head"]
+    _ancestor(head, commit)
+    for component, paths in (("r32", (REL_R32, REL_EXECUTOR, REL_POLICY)),
+                             ("r34", (REL_R34,)), ("reader", (REL_EXECUTOR, REL_POLICY))):
+        _review(record[component], paths)
+        _ancestor(record[component]["merge_sha"], head)
+    _ancestor(TRUST_MERGE, record["reader"]["reviewed_head_sha"])
+    contract = _blob(TRUST_MERGE, REL_TRUST)
+    _require(sha256(contract) == TRUST_SHA256 and _blob(head, REL_TRUST) == contract, "TRUST_CONTRACT")
+    _require(_blob(head, REL_R34) == _blob(R34_MERGE, REL_R34), "HISTORICAL_GOVERNANCE")
+    executor = _blob(head, REL_EXECUTOR)
+    policy = _blob(head, REL_POLICY)
+    merge = record["reader"]["merge_sha"]
+    _require(executor == _blob(merge, REL_EXECUTOR) and sha256(executor) == record["executor_sha256"], "EXECUTOR_BINDING")
+    _require(policy == _blob(merge, REL_POLICY) and sha256(policy) == record["policy_sha256"], "POLICY_BINDING")
+    try:
+        text = policy.decode("utf-8")
+    except UnicodeError as exc:
+        raise Stop(PRECONDITION_FAILED, "POLICY_BINDING") from exc
+    digests = re.findall(r"\| executor SHA-256 \| `([0-9a-f]{64})` \|", text)
+    _require(digests == [record["executor_sha256"]] and AUTHORITY_ID in text and
+             "P4S6_BLOCKERS_REMEDIATED_READY_FOR_REREVIEW" in text, "POLICY_BINDING")
+
+
+def read_recovery_evidence() -> dict[str, object]:
+    """Local proof only. Fresh independent operator verification is EXTERNAL.
+
+    Identical local inputs cannot reveal an unavailable revocation/successor.
+    Success is necessary, never sufficient authority to activate or execute.
+    No receipt, flag, online lookup or implicit freshness mechanism is used.
+    """
+    transport = _protected_record(TRUST_SELECTOR, "SELECTOR")
+    selector = canonical_record(transport, "SELECTOR_SCHEMA")
+    validate_selector(selector)
+    commit, path, digest = (selector[k] for k in ("evidence_commit", "evidence_path", "evidence_transport_sha256"))
+    seen_ids, seen_refs = set(), set()
+    selected = None
+    while True:
+        _require((commit, path) not in seen_refs, "PREDECESSOR_CYCLE")
+        seen_refs.add((commit, path))
+        data = _blob(commit, path)
+        _require(sha256(data) == digest, "EVIDENCE_HASH")
+        record = canonical_record(data, "EVIDENCE_SCHEMA")
+        validate_evidence(record, path)
+        _require(record["binding_id"] not in seen_ids, "PREDECESSOR_CYCLE")
+        seen_ids.add(record["binding_id"])
+        # Evidence must be the unique addition at its actual two-parent merge.
+        parents = run_git("show", "-s", "--format=%P", commit).split()
+        _require(len(parents) == 2 and _blob(parents[1], path) == data, "EVIDENCE_MERGE")
+        changes = _git_bytes("diff-tree", "--no-commit-id", "-r", "--name-status", "-z", parents[0], commit, "--", EVIDENCE_PREFIX)
+        _require(changes == b"A\0" + path.encode() + b"\0", "EVIDENCE_CONFLICT")
+        _verify_evidence_record(record, commit)
+        selected = selected or record
+        previous = record["supersedes"]
+        _ancestor(previous["commit"], parents[0])
+        _require(previous["commit"] != commit, "PREDECESSOR_CYCLE")
+        # Bounded authenticated history, not directory/ref discovery. Any
+        # intervening record addition/modification is an observable skip/fork.
+        intervening = _git_bytes("log", "--format=%H", "--full-history", "-m",
+                                 previous["commit"] + ".." + parents[0], "--", EVIDENCE_PREFIX)
+        _require(not intervening.strip(), "PREDECESSOR_CONFLICT")
+        commit, path, digest = previous["commit"], previous["path"], previous["transport_sha256"]
+        if previous["kind"] == "r34-baseline":
+            _require(sha256(_blob(commit, path)) == digest, "PREDECESSOR_HASH")
+            break
+    # Recheck fixed selector bytes/custody before returning local proof.
+    _require(_protected_record(TRUST_SELECTOR, "SELECTOR") == transport, "SELECTOR_CHANGED")
+    return selected
 
 
 def verify_actual_interpreter(executable: str = sys.executable, version_info: object = sys.version_info) -> None:
@@ -653,37 +850,27 @@ def verify_actual_interpreter(executable: str = sys.executable, version_info: ob
 
 def verify_merged_authority(executor_sha: str, activation: dict[str, object]) -> str:
     validate_activation_schema(activation, executor_sha)
-    try:
-        policy = (REPOSITORY / REL_POLICY).read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        raise Stop(PRECONDITION_FAILED, "POLICY_BINDING", errno_code=getattr(exc, "errno", None)) from exc
-    match = re.search(r"\| executor SHA-256 \| `([0-9a-f]{64})` \|", policy)
-    if match is None or match.group(1) != executor_sha:
-        raise Stop(PRECONDITION_FAILED, "POLICY_BINDING")
-    if AUTHORITY_ID not in policy or "P4S6_BLOCKERS_REMEDIATED_READY_FOR_REREVIEW" not in policy:
-        raise Stop(PRECONDITION_FAILED, "POLICY_BINDING")
-    merge_sha = str(activation["authority_merge_sha"])
-    expected_head = str(activation["expected_runtime_head"])
-    run_git("cat-file", "-e", f"{merge_sha}^{{commit}}")
-    run_git("cat-file", "-e", f"{expected_head}^{{commit}}")
-    run_git("merge-base", "--is-ancestor", merge_sha, expected_head)
-    reviewed_authority = _git_bytes("show", f"{R13_REVIEWED_HEAD}:{REL_R13_AUTHORITY}")
-    merged_authority = _git_bytes("show", f"{merge_sha}:{REL_R13_AUTHORITY}")
-    if reviewed_authority != merged_authority:
-        raise Stop(PRECONDITION_FAILED, "AUTHORITY_MERGE")
+    # Local timestamp consistency is not proof of actual creation or authority.
+    activated = parse_utc(activation["activated_at_utc"])
+    _require(parse_utc(RECOVERY_APPROVED_AT) <= activated < parse_utc(RECOVERY_NOT_AFTER)
+             and activated <= utc_now(), "ACTIVATION_TIME")
+    evidence = read_recovery_evidence()
+    for field in ("authority_id", "approval_id", "package_payload_sha256", "policy_reference",
+                  "expected_runtime_head", "executor_sha256"):
+        _require(activation[field] == evidence[field], "ACTIVATION_BINDING")
     head = run_git("rev-parse", "HEAD")
-    if head != expected_head:
-        raise Stop(PRECONDITION_FAILED, "RUNTIME_HEAD")
-    if run_git("status", "--porcelain=v1", "--untracked-files=all"):
-        raise Stop(PRECONDITION_FAILED, "RUNTIME_CLEANLINESS")
-    head_blob = _git_bytes("show", f"{head}:{REL_EXECUTOR}")
+    _require(head == evidence["expected_runtime_head"], "RUNTIME_HEAD")
+    _require(not run_git("status", "--porcelain=v1", "--untracked-files=all"), "RUNTIME_CLEANLINESS")
     try:
         executor_bytes = (REPOSITORY / REL_EXECUTOR).read_bytes()
+        policy_bytes = (REPOSITORY / REL_POLICY).read_bytes()
     except OSError as exc:
         raise Stop(PRECONDITION_FAILED, "EXECUTOR_HEAD", errno_code=exc.errno) from exc
-    if head_blob != executor_bytes:
-        raise Stop(PRECONDITION_FAILED, "EXECUTOR_HEAD")
-    return merge_sha
+    _require(executor_bytes == _blob(head, REL_EXECUTOR) and sha256(executor_bytes) == executor_sha,
+             "EXECUTOR_HEAD")
+    _require(policy_bytes == _blob(head, REL_POLICY) and sha256(policy_bytes) == evidence["policy_sha256"],
+             "POLICY_BINDING")
+    return evidence["reader"]["merge_sha"]
 
 
 def open_dir(path: Path, uid: int, gid: int, mode: int, *, check_components: bool = False) -> int:
