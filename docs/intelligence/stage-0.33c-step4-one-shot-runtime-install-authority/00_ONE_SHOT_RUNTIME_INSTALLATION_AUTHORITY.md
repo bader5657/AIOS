@@ -1,5 +1,16 @@
 # Stage 0.33C-P4S6 One-Shot Runtime Package Installation Authority
 
+## Recovery reader implementation boundary
+
+The recovery reader implements the merged PR #301 protected-pin contract and
+R34's eight-key activation schema. The executor digest below identifies these
+reviewable code bytes only; it does not supersede R34's runtime/activation
+bindings. Production selector publication, evidence/binding supersession,
+activation creation and execution remain separately authorized future actions.
+Fresh independent operator verification remains external and mandatory; local
+reader success never establishes global freshness or continuing authorization.
+The R32 section below is retained historical amendment context.
+
 ## R32 active recovery binding amendment
 
 The active executor now binds recovery authority
@@ -58,7 +69,7 @@ must remain absent and must not be created, modified, or consumed.
 | Binding | Frozen value |
 |---|---|
 | executor repository path | `docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py` |
-| executor SHA-256 | `da020dff0974acf0bb7fc22bc1b54f17d149ee8f11ace67420eb16cca73cd6be` |
+| executor SHA-256 | `7b38ce601cbeb930a4277af8f4dfe66bbf4b7b9df9ad94059e504082f58a8beb` |
 | interpreter/runtime | `/opt/aios/runtime/venv/bin/python`, governed Python `3.12.3` |
 | run-as identity | Unix `root` (`euid=0`, account name `root`) |
 | arguments/input model | no arguments; closed constants and the two fixed private sources only |

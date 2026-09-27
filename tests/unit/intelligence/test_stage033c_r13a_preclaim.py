@@ -29,9 +29,8 @@ def activation(executor_sha, merge, head):
     return {
         "schema_version": executor.ACTIVATION_SCHEMA_VERSION,
         "authority_id": executor.AUTHORITY_ID,
-        "pr_number": 289,
-        "reviewed_head_sha": executor.R13_REVIEWED_HEAD,
-        "authority_merge_sha": merge,
+        "approval_id": executor.RECOVERY_APPROVAL_ID,
+        "package_payload_sha256": executor.RECOVERY_PAYLOAD_SHA256,
         "expected_runtime_head": head,
         "executor_sha256": executor_sha,
         "policy_reference": str(executor.REL_POLICY),
@@ -52,165 +51,8 @@ class ZeroSideEffectProof:
         self.assertEqual(publication.call_count, 0, "publication count")
 
 
-class GitGraphCase(ZeroSideEffectProof, unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.repo = Path(self.tmp.name)
-        git(self.repo, "init")
-        git(self.repo, "config", "user.email", "r13a@example.invalid")
-        git(self.repo, "config", "user.name", "R13A Test")
-        self.exec_path = self.repo / executor.REL_EXECUTOR
-        self.policy_path = self.repo / executor.REL_POLICY
-        self.authority_path = self.repo / executor.REL_R13_AUTHORITY
-        self.exec_path.parent.mkdir(parents=True)
-        self.authority_path.parent.mkdir(parents=True)
-        self.exec_path.write_bytes(b"reviewed executor\n")
-        digest = hashlib.sha256(self.exec_path.read_bytes()).hexdigest()
-        self.policy_path.write_text(
-            f"{executor.AUTHORITY_ID}\nP4S6_BLOCKERS_REMEDIATED_READY_FOR_REREVIEW\n"
-            f"| executor SHA-256 | `{digest}` |\n"
-        )
-        self.authority_path.write_text("reviewed PR 289 authority\n")
-        git(self.repo, "add", ".")
-        git(self.repo, "commit", "-m", "reviewed")
-        self.reviewed = git(self.repo, "rev-parse", "HEAD")
-        (self.repo / "merge-proof").write_text("human merge\n")
-        git(self.repo, "add", ".")
-        git(self.repo, "commit", "-m", "authority merge")
-        self.merge = git(self.repo, "rev-parse", "HEAD")
-        (self.repo / "runtime-proof").write_text("runtime head\n")
-        git(self.repo, "add", ".")
-        git(self.repo, "commit", "-m", "runtime head")
-        self.head = git(self.repo, "rev-parse", "HEAD")
-        self.digest = digest
-        self.activation = activation(digest, self.merge, self.head)
-        self.activation["reviewed_head_sha"] = self.reviewed
-        self.patches = (
-            patch.object(executor, "REPOSITORY", self.repo),
-            patch.object(executor, "R13_REVIEWED_HEAD", self.reviewed),
-        )
-        for item in self.patches:
-            item.start(); self.addCleanup(item.stop)
-        self.main_patches = (
-            patch.object(executor, "check_no_args_root"),
-            patch.object(executor, "read_activation_record", return_value=self.activation),
-            patch.object(executor, "verify_actual_interpreter"),
-        )
-        for item in self.main_patches:
-            item.start(); self.addCleanup(item.stop)
-
-    def assert_precondition(self):
-        with self.assertRaises(executor.GovernedStop) as caught:
-            executor.verify_merged_authority(self.digest, self.activation)
-        self.assertEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
-
-    def test_exact_expected_head_and_valid_activation_accepted(self):
-        self.assertEqual(executor.verify_merged_authority(self.digest, self.activation), self.merge)
-
-    def test_wrong_head_rejected(self):
-        self.activation["expected_runtime_head"] = self.merge
-        self.assert_main_precondition_without_side_effects()
-
-    def test_modified_tracked_file_rejected(self):
-        (self.repo / "runtime-proof").write_text("dirty\n")
-        self.assert_main_precondition_without_side_effects()
-
-    def test_staged_change_rejected(self):
-        (self.repo / "runtime-proof").write_text("staged\n")
-        git(self.repo, "add", "runtime-proof")
-        self.assert_main_precondition_without_side_effects()
-
-    def test_untracked_file_rejected(self):
-        (self.repo / "untracked").write_text("dirt\n")
-        self.assert_main_precondition_without_side_effects()
-
-    def test_repository_resolution_failure_rejected(self):
-        # Prove readable prerequisites and repository truth before fault injection.
-        self.assertEqual(hashlib.sha256(self.exec_path.read_bytes()).hexdigest(), self.digest)
-        self.assertEqual(executor.verify_merged_authority(self.digest, self.activation), self.merge)
-        command = ("/usr/bin/git", "-c", "safe.directory=/opt/aios-src", "-C", str(self.repo), "cat-file", "-e", f"{self.merge}^{{commit}}")
-        git_failure = subprocess.CalledProcessError(128, command)
-        with ExitStack() as stack:
-            git_path = stack.enter_context(patch.object(executor, "run_git", wraps=executor.run_git))
-            git_command = stack.enter_context(patch.object(executor.subprocess, "run", side_effect=git_failure))
-            claim = stack.enter_context(patch.object(executor, "durable_claim"))
-            staging = stack.enter_context(patch.object(executor, "stage_and_publish"))
-            publication = stack.enter_context(patch.object(executor.os, "link"))
-            with self.assertRaises(executor.GovernedStop) as caught:
-                executor.main()
-        git_path.assert_called_once_with("cat-file", "-e", f"{self.merge}^{{commit}}")
-        git_command.assert_called_once_with(
-            command, check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, text=True, env={"PATH": "/usr/bin:/bin"},
-        )
-        self.assertEqual(caught.exception.classification, executor.PRECONDITION_FAILED)
-        self.assertEqual(caught.exception.stage, "RUNTIME_REPOSITORY")
-        self.assertIs(caught.exception.__cause__, git_failure)
-        self.assertEqual(claim.call_count, 0, "claim count")
-        self.assertEqual(staging.call_count, 0, "staging count")
-        self.assertEqual(publication.call_count, 0, "publication count")
-
-    def test_invalid_merge_sha_rejected(self):
-        self.activation["authority_merge_sha"] = "f" * 40
-        self.assert_main_precondition_without_side_effects()
-
-    def test_byte_git_failure_stops_before_claim(self):
-        real_run = subprocess.run
-
-        def fail_show(command, **kwargs):
-            if "show" in command:
-                raise subprocess.CalledProcessError(128, command)
-            return real_run(command, **kwargs)
-
-        self.assertEqual(executor.verify_merged_authority(self.digest, self.activation), self.merge)
-        with patch.object(executor.subprocess, "run", side_effect=fail_show), \
-             patch.object(executor, "_git_bytes", wraps=executor._git_bytes) as byte_git:
-            self.assert_main_precondition_without_side_effects()
-        byte_git.assert_called_once_with("show", f"{self.reviewed}:{executor.REL_R13_AUTHORITY}")
-
-    def test_executor_head_mismatch_even_when_status_is_clean(self):
-        # Git's assume-unchanged bit can hide a local executor edit from status.
-        git(self.repo, "update-index", "--assume-unchanged", str(executor.REL_EXECUTOR))
-        self.exec_path.write_bytes(b"locally replaced executor\n")
-        self.digest = hashlib.sha256(self.exec_path.read_bytes()).hexdigest()
-        self.policy_path.write_text(
-            f"{executor.AUTHORITY_ID}\nP4S6_BLOCKERS_REMEDIATED_READY_FOR_REREVIEW\n"
-            f"| executor SHA-256 | `{self.digest}` |\n"
-        )
-        git(self.repo, "add", str(executor.REL_POLICY))
-        git(self.repo, "commit", "-m", "bind local executor digest")
-        self.activation["executor_sha256"] = self.digest
-        self.activation["expected_runtime_head"] = git(self.repo, "rev-parse", "HEAD")
-        self.assertEqual(executor.run_git("status", "--porcelain=v1", "--untracked-files=all"), "")
-        with self.assertRaises(executor.GovernedStop) as caught:
-            executor.verify_merged_authority(self.digest, self.activation)
-        self.assertEqual(caught.exception.stage, "EXECUTOR_HEAD")
-        self.assert_main_precondition_without_side_effects()
-
-    def test_merge_not_ancestor_rejected(self):
-        git(self.repo, "checkout", "--orphan", "unrelated")
-        for child in self.repo.iterdir():
-            if child.name != ".git" and child.is_file():
-                child.unlink()
-        (self.repo / "orphan").write_text("unrelated\n")
-        git(self.repo, "add", ".")
-        git(self.repo, "commit", "-m", "unrelated")
-        unrelated = git(self.repo, "rev-parse", "HEAD")
-        git(self.repo, "checkout", self.head)
-        self.activation["authority_merge_sha"] = unrelated
-        self.assert_main_precondition_without_side_effects()
-
-    def test_reviewed_authority_document_must_match_merge_lineage(self):
-        self.activation["authority_merge_sha"] = self.head
-        self.authority_path.write_text("changed authority\n")
-        git(self.repo, "add", ".")
-        git(self.repo, "commit", "-m", "changed authority")
-        changed = git(self.repo, "rev-parse", "HEAD")
-        self.activation["authority_merge_sha"] = changed
-        self.activation["expected_runtime_head"] = changed
-        self.assert_main_precondition_without_side_effects()
-
+# Git-graph preclaim regressions now exercise recovery evidence in
+# test_stage033c_recovery_reader.py; the legacy activation format is rejected.
 
 class GitSafeDirectoryTests(unittest.TestCase):
     def test_both_helpers_freeze_exact_path_and_minimal_environment(self):
@@ -224,7 +66,7 @@ class GitSafeDirectoryTests(unittest.TestCase):
                 if helper is executor.run_git:
                     expected["text"] = True
                 run.assert_called_once_with(
-                    ("/usr/bin/git", "-c", "safe.directory=/opt/aios-src", "-C",
+                    ("/usr/bin/git", "--no-replace-objects", "-c", "safe.directory=/opt/aios-src", "-C",
                      "/opt/aios-src", "rev-parse", "HEAD"), **expected,
                 )
 
@@ -322,7 +164,7 @@ class ActivationSchemaTests(ZeroSideEffectProof, unittest.TestCase):
     def test_activation_absent_stops_main_before_claim(self):
         real_read = executor.read_activation_record
         missing = self.repo / "activation-record-does-not-exist.json"
-        with patch.object(executor, "read_activation_record", side_effect=lambda: real_read(missing)):
+        with patch.object(executor, "ACTIVATION_RECORD", missing), patch.object(executor, "read_activation_record", side_effect=lambda: real_read()):
             self.assert_main_precondition_without_side_effects()
 
 

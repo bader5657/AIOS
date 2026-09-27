@@ -29,9 +29,8 @@ def valid():
     return {
         "schema_version": executor.ACTIVATION_SCHEMA_VERSION,
         "authority_id": executor.AUTHORITY_ID,
-        "pr_number": 289,
-        "reviewed_head_sha": executor.R13_REVIEWED_HEAD,
-        "authority_merge_sha": "b" * 40,
+        "approval_id": executor.RECOVERY_APPROVAL_ID,
+        "package_payload_sha256": executor.RECOVERY_PAYLOAD_SHA256,
         "expected_runtime_head": "c" * 40,
         "executor_sha256": "d" * 64,
         "policy_reference": str(executor.REL_POLICY),
@@ -52,10 +51,24 @@ def reader(tmp_path):
         fields[4] = fields[5] = 0
         return os.stat_result(fields)
 
-    with patch.object(executor.os, "fstat", side_effect=root_ownership), \
+    def protected_read(path, stage):
+        # Parser regression isolates ancestor traversal (covered by recovery
+        # custody tests), retaining real no-follow file reads and file metadata.
+        try:
+            data, info = executor._read_regular_nofollow(path, stage)
+        except executor.GovernedStop as exc:
+            raise executor.Stop(executor.PRECONDITION_FAILED, stage) from exc
+        if (info.st_uid != 0 or info.st_gid != 0 or
+                info.st_mode & 0o777 != 0o400 or info.st_nlink != 1):
+            raise executor.Stop(executor.PRECONDITION_FAILED, stage)
+        return data
+
+    with patch.object(executor, "ACTIVATION_RECORD", path), \
+         patch.object(executor, "_protected_record", side_effect=protected_read), \
+         patch.object(executor.os, "fstat", side_effect=root_ownership), \
          patch.object(executor, "check_no_args_root"), \
-         patch.object(executor, "read_activation_record", side_effect=lambda: real_read(path)):
-        yield path, lambda: real_read(path)
+         patch.object(executor, "read_activation_record", side_effect=lambda: real_read()):
+        yield path, lambda: real_read()
 
 
 def write_transport(path, data):
@@ -95,10 +108,10 @@ MALFORMED = {
     "double_lf": lambda v: canonical(v) + b"\n\n",
     "trailing_space": lambda v: canonical(v) + b" \n",
     "bom": lambda v: b"\xef\xbb\xbf" + canonical(v) + b"\n",
-    "duplicate_key": lambda v: b'{"pr_number":289,' + canonical(v)[1:] + b"\n",
+    "duplicate_key": lambda v: b'{"authority_id":"duplicate",' + canonical(v)[1:] + b"\n",
     "invalid_utf8": lambda v: canonical(v).replace(b"2026", b"\xff026") + b"\n",
     "unknown_key": lambda v: canonical({**v, "unknown": 1}) + b"\n",
-    "missing_key": lambda v: canonical({k: x for k, x in v.items() if k != "pr_number"}) + b"\n",
+    "missing_key": lambda v: canonical({k: x for k, x in v.items() if k != "approval_id"}) + b"\n",
     "empty": lambda v: b"",
     "only_lf": lambda v: b"\n",
     "bytes_after_lf": lambda v: canonical(v) + b"\nx\n",
@@ -116,7 +129,7 @@ def test_noncanonical_main_rejection(case, valid, reader):
 
 
 @pytest.mark.parametrize("value", ["289", 289.0, True, False, None])
-def test_pr_number_exact_int_main_rejection(value, valid, reader):
+def test_legacy_pr_number_field_main_rejection(value, valid, reader):
     path, _ = reader
     write_transport(path, canonical({**valid, "pr_number": value}) + b"\n")
     assert_preclaim_stop()
@@ -152,10 +165,9 @@ def test_unicode_timestamp_digits_main_rejection(index, zero, valid, reader):
 
 
 def test_exponent_notation_main_rejection(valid, reader):
-    semantic = canonical(valid).replace(b'"pr_number":289', b'"pr_number":2.89e2')
+    semantic = canonical({**valid, "approval_id": 289}).replace(b'"approval_id":289', b'"approval_id":2.89e2')
     parsed = executor.exact_json(semantic)
-    assert parsed == valid
-    assert type(parsed["pr_number"]) is float
+    assert type(parsed["approval_id"]) is float
     assert canonical(parsed) != semantic
     path, _ = reader
     write_transport(path, semantic + b"\n")
@@ -170,7 +182,7 @@ def test_real_parser_limit_main_rejection(case, valid, reader):
     if case == "integer_limit":
         previous = sys.get_int_max_str_digits()
         sys.set_int_max_str_digits(4300)
-        semantic = canonical(valid).replace(b'"pr_number":289', b'"pr_number":' + b"9" * 5000)
+        semantic = canonical({**valid, "approval_id": 289}).replace(b'"approval_id":289', b'"approval_id":' + b"9" * 5000)
         error = ValueError
     else:
         # Python 3.12's C JSON decoder has a separate recursion limit.
@@ -218,8 +230,8 @@ def test_canonical_transport_accepted(valid, reader):
     write_transport(path, canonical(valid) + b"\n")
     result = read()
     assert result == valid
-    assert len(result) == 9
-    assert type(result["pr_number"]) is int
+    assert len(result) == 8
+    assert all(type(value) is str for value in result.values())
     executor.validate_activation_schema(result, valid["executor_sha256"])
 
 
