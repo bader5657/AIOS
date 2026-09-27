@@ -99,6 +99,7 @@ class PublicationState(str, Enum):
     NOT_PUBLISHED = "NOT_PUBLISHED"
     PUBLISHED_DURABILITY_UNCERTAIN = "PUBLISHED_DURABILITY_UNCERTAIN"
     DURABLY_PUBLISHED = "DURABLY_PUBLISHED"
+    COMMIT_RECOVERY_REQUIRED = "COMMIT_RECOVERY_REQUIRED"
 
 
 class PublicationError(OSError):
@@ -326,10 +327,6 @@ def _completion(name, data):
                             "state": PublicationState.DURABLY_PUBLISHED.value})
 
 
-_UNCERTAIN_ATTEMPTS = set()
-_ATTEMPT_LOCK = Lock()
-
-
 def _attempt_record(name, data, state):
     return canonical_bytes({"schema_version": "aios-telegram-auth-attempt-v1",
                             "filename": name,
@@ -363,58 +360,107 @@ def _pending_guard(directory_fd, name, data):
         pass
 
 
-def _reject_uncertain(fd, directory_fd, name, data, identity):
-    if identity is not None:
-        with _ATTEMPT_LOCK:
-            _UNCERTAIN_ATTEMPTS.add(tuple(identity))
-    # The durable guard was established before completion. Keep it on every
-    # failure, including inability to append a terminal journal entry. Restore it
-    # if an error-after-effect occurred while retiring it on the success path.
-    try:
-        _pending_guard(directory_fd, name, data)
-    except OSError:
-        logging.getLogger(__name__).critical(
-            "Telegram auth attempt guard persistence failed; archive requires custody review")
+def _reject_uncertain(fd, name, data):
+    # Diagnostic only: absence of a final marker is the durable denial. No
+    # quarantine write, transient lock or process-local memory enables safety.
     try:
         _append_attempt(fd, name, data, "UNCERTAIN")
     except OSError:
-        logging.getLogger(__name__).critical(
-            "Telegram auth attempt journal persistence failed; retained guard denies authentication")
+        logging.getLogger(__name__).error(
+            "Telegram auth provisional attempt failed; no final commit published")
+
+
+def _commit_record(archive, directory_fd, name, data, committed_at):
+    """Construct the exact closed commit schema from pinned, validated objects."""
+    _utc(committed_at)
+    payload = json.loads(data.decode("utf-8"), object_pairs_hook=_unique_pairs)
+    if payload.get("schema_version") == SCHEMA:
+        validate_evidence(payload)
+        sender = payload["message"]["from"]["id"]
+        challenge_digest = hashlib.sha256(payload["message"]["text"].encode("utf-8")).hexdigest()
+    else:
+        if payload.get("schema_version") != "aios-telegram-owner-auth-consumption-v1":
+            raise ValueError("unsupported commit payload")
+        sender = payload["telegram_user_id"]
+        challenge_digest = payload["challenge_sha256"]
+    expected = {
+        "evidence": (name, data),
+        "certificate": (name + ".complete", _completion(name, data)),
+        "journal": (name + ".attempt", _attempt_record(name, data, "PENDING")
+                    + _attempt_record(name, data, "PREPARED")),
+        "guard": (name + ".pending", _attempt_record(name, data, "PENDING")),
+    }
+    objects = {}
+    for role, (filename, raw) in expected.items():
+        if archive.read(directory_fd, filename) != raw:
+            raise ValueError("attempt completion object digest/state mismatch")
+        objects[role] = {"filename": filename,
+                         "identity": _identity(os.stat(filename, dir_fd=directory_fd,
+                                                        follow_symlinks=False)),
+                         "sha256": hashlib.sha256(raw).hexdigest()}
+    archive.current_objects(directory_fd, {obj["filename"]: obj["identity"]
+                                           for obj in objects.values()})
+    return {"schema_version": "aios-telegram-auth-commit-v1", "state": "COMMITTED",
+            "attempt_id": name, "challenge_sha256": challenge_digest,
+            "telegram_user_id": sender, "committed_at_utc": committed_at,
+            "directory_identity": _identity(os.fstat(directory_fd)),
+            "namespace_identities": [entry[3] for entry in archive.entries],
+            "objects": objects}
+
+
+def _recover_commit(archive, directory_fd, name, data):
+    """Accept only an existing final decision; finish durability after interruption.
+
+    A surviving link does not prove that the publisher's directory fsync returned.
+    Reopen validates every binding and repeats fsyncs before exposing eligibility.
+    Recovery NEVER creates a marker or promotes provisional artifacts.
+    """
+    marker = name + ".commit"
+    try:
+        raw = archive.read(directory_fd, marker)
+    except FileNotFoundError:
+        raise ValueError("attempt has no final commit marker") from None
+    record = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_pairs)
+    if type(record) is not dict:
+        raise ValueError("invalid commit record")
+    expected = _commit_record(archive, directory_fd, name, data,
+                              record.get("committed_at_utc"))
+    if raw != canonical_bytes(expected):
+        raise ValueError("commit record identity/digest/schema mismatch")
+    identities = {obj["filename"]: obj["identity"] for obj in expected["objects"].values()}
+    identities[marker] = _identity(os.stat(marker, dir_fd=directory_fd, follow_symlinks=False))
+    for filename, identity in identities.items():
+        with _opened(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                     dir_fd=directory_fd) as fd:
+            if _identity(os.fstat(fd)) != identity:
+                raise ValueError("commit object replaced during recovery")
+            os.fsync(fd)
+    os.fsync(directory_fd)
+    archive.current_objects(directory_fd, identities)
+    # Recheck bound bytes as well as inodes after the recovery durability barrier.
+    if archive.read(directory_fd, marker) != raw or canonical_bytes(
+            _commit_record(archive, directory_fd, name, data,
+                           expected["committed_at_utc"])) != raw:
+        raise ValueError("commit changed during recovery")
 
 
 @contextmanager
 def _committed_attempt(archive, directory_fd, name, data):
-    attempt_name = name + ".attempt"
-    with _opened(attempt_name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+    # Lock only serializes with an in-flight publisher. Correctness after process
+    # death derives from the final marker and retained bindings, never this lock.
+    with _opened(name + ".attempt", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                  dir_fd=directory_fd) as fd:
         fcntl.flock(fd, fcntl.LOCK_SH)
-        try:
-            os.stat(name + ".pending", dir_fd=directory_fd, follow_symlinks=False)
-        except FileNotFoundError:
-            pass
-        else:
-            raise ValueError("attempt is still pending or uncertain")
         metadata = os.fstat(fd)
         if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.geteuid()
                 or metadata.st_mode & 0o077):
             raise ValueError("unsafe attempt journal")
-        with _ATTEMPT_LOCK:
-            if tuple(_identity(metadata)) in _UNCERTAIN_ATTEMPTS:
-                raise ValueError("attempt permanently uncertain")
-        with os.fdopen(fd, "rb", closefd=False) as stream:
-            journal = stream.read(65537)
-        expected = (_attempt_record(name, data, "PENDING")
-                    + _attempt_record(name, data, "COMMITTED"))
-        if journal != expected:
-            raise ValueError("attempt digest/state is not finally committed")
-        archive.current_objects(directory_fd, {attempt_name: _identity(metadata)})
+        _recover_commit(archive, directory_fd, name, data)
         yield
-        # The shared lock covers validation and challenge consumption. The
-        # publisher cannot expose a provisional COMMITTED line to a verifier.
 
 
 def _publish(archive, directory_fd, name, data):
-    """Locked PENDING -> COMMITTED, or terminal UNCERTAIN; certificate alone is insufficient."""
+    """Prepare immutable artifacts, then publish one irreversible final decision."""
     attempt_name = name + ".attempt"
     try:
         os.stat(name + ".complete", dir_fd=directory_fd, follow_symlinks=False)
@@ -428,6 +474,7 @@ def _publish(archive, directory_fd, name, data):
         payload_stage = completion_stage = None
         state = PublicationState.NOT_PUBLISHED
         objects = {}
+        committing = False
         try:
             objects = {attempt_name: _identity(os.fstat(attempt_fd))}
             _append_attempt(attempt_fd, name, data, "PENDING")
@@ -469,16 +516,29 @@ def _publish(archive, directory_fd, name, data):
             os.unlink(completion_stage, dir_fd=directory_fd)
             completion_stage = None
             os.fsync(directory_fd)
-            # Provisional until post-state-sync namespace validation succeeds.
-            # Readers cannot see it as authoritative while this lock is held.
-            _append_attempt(attempt_fd, name, data, "COMMITTED")
+            _append_attempt(attempt_fd, name, data, "PREPARED")
+            # The guard is permanent and bound by the final marker. There is no
+            # retirement window and no mutable COMMITTED journal entry.
+            record = _commit_record(archive, directory_fd, name, data,
+                                    _timestamp(datetime.now(timezone.utc)))
+            commit_stage = archive.stage(directory_fd, canonical_bytes(record))
             archive.current_objects(directory_fd, objects)
-            os.unlink(name + ".pending", dir_fd=directory_fd)
-            # Losing this deletion on crash denies authentication, never enables
-            # it. Recheck the returned namespace before exposing committed state.
-            archive.current_objects(directory_fd, objects)
+            if canonical_bytes(_commit_record(archive, directory_fd, name, data,
+                                               record["committed_at_utc"])) != canonical_bytes(record):
+                raise ValueError("commit bindings changed before publication")
+            # Irreversible decision boundary. Any ambiguous error from here is
+            # RECOVERY_REQUIRED, never an uncertain/aborted attempt later promoted.
+            committing = True
+            os.link(commit_stage, name + ".commit", src_dir_fd=directory_fd,
+                    dst_dir_fd=directory_fd, follow_symlinks=False)
+            _recover_commit(archive, directory_fd, name, data)
+            # The marker staging alias is deliberately retained. No fallible
+            # security-critical cleanup follows the durable decision.
         except BaseException as error:
-            _reject_uncertain(attempt_fd, directory_fd, name, data, objects.get(attempt_name))
+            if committing:
+                state = PublicationState.COMMIT_RECOVERY_REQUIRED
+            else:
+                _reject_uncertain(attempt_fd, name, data)
             if isinstance(error, FileExistsError) and state == PublicationState.NOT_PUBLISHED:
                 raise
             if not isinstance(error, Exception):

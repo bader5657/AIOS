@@ -388,7 +388,7 @@ def test_adversarial_directory_stable_path_and_descriptor_relative_io(tmp_path, 
     receipt = verify(path, tmp_path)
     assert receipt.exists()
     assert path.with_name(path.name + ".complete").exists()
-    assert len(calls) == 5  # anchor, evidence+completion, consumption+completion
+    assert len(calls) == 7  # anchor, evidence/certificate/commit, consumption/certificate/commit
 
 
 @pytest.mark.parametrize("mode", [0o755, 0o770, 0o777])
@@ -642,8 +642,8 @@ def test_adversarial_durability_success_requires_final_attempt_commit(tmp_path, 
     monkeypatch.setattr(auth.os, "link", linked)
     path = capture(tmp_path)
     assert events.index("complete") < len(events) - 1
-    assert events[-1] == "fsync"
-    assert attempt_states(path) == ["PENDING", "COMMITTED"]
+    assert "fsync" in events[events.index("complete") + 1:]
+    assert attempt_states(path) == ["PENDING", "PREPARED"]
     assert json.loads(path.with_name(path.name + ".complete").read_bytes())["state"] == "DURABLY_PUBLISHED"
     assert verify(path, tmp_path).exists()
 
@@ -683,7 +683,7 @@ def attempt_states(path):
 
 
 @pytest.mark.parametrize("point", ["completion_link", "post_link_validation", "completion_fsync",
-                                   "staging_cleanup", "committed_state", "guard_retirement"])
+                                   "staging_cleanup", "prepared_state", "final_validation"])
 def test_completion_outcome_error_after_effect_is_permanently_ineligible(tmp_path, monkeypatch, point):
     root = tmp_path / "archive"
     with auth.PinnedArchive(root, create=True):
@@ -708,6 +708,10 @@ def test_completion_outcome_error_after_effect_is_permanently_ineligible(tmp_pat
         if point == "post_link_validation" and completion_exists() and not fired:
             fired = True
             raise OSError("injected before final namespace check")
+        if (point == "final_validation" and completion_exists() and not fired
+                and any(b'"PREPARED"' in p.read_bytes() for p in root.glob("*.attempt"))):
+            fired = True
+            raise OSError("injected before final marker publication")
         return check(self, fd, objects)
 
     def synced(fd):
@@ -722,7 +726,7 @@ def test_completion_outcome_error_after_effect_is_permanently_ineligible(tmp_pat
     def appended(fd, name, data, state):
         nonlocal fired
         result = append(fd, name, data, state)
-        if point == "committed_state" and state == "COMMITTED" and not fired:
+        if point == "prepared_state" and state == "PREPARED" and not fired:
             fired = True
             raise OSError("injected after provisional committed journal fsync")
         return result
@@ -734,9 +738,6 @@ def test_completion_outcome_error_after_effect_is_permanently_ineligible(tmp_pat
             fired = True
             raise OSError("injected required staging cleanup failure")
         result = unlink(name, **kwargs)
-        if point == "guard_retirement" and str(name).endswith(".pending") and not fired:
-            fired = True
-            raise OSError("injected after pending guard unlink")
         return result
 
     with monkeypatch.context() as m:
@@ -754,8 +755,7 @@ def test_completion_outcome_error_after_effect_is_permanently_ineligible(tmp_pat
     assert path.with_name(path.name + ".pending").exists()
     assert attempt_states(path)[-1] == "UNCERTAIN"
     before = path.read_bytes()
-    # Also prove denial without any process-local uncertain-attempt cache.
-    monkeypatch.setattr(auth, "_UNCERTAIN_ATTEMPTS", set())
+    # No process-local denial cache exists; the missing commit is authoritative.
     with pytest.raises(ValueError):
         verify(path, root)
     assert path.read_bytes() == before
@@ -791,7 +791,6 @@ def test_completion_outcome_guard_denies_when_uncertain_journal_append_fails(tmp
         with pytest.raises(auth.PublicationError):
             capture(tmp_path)
     path = next(tmp_path.glob("*.json"))
-    monkeypatch.setattr(auth, "_UNCERTAIN_ATTEMPTS", set())
     assert attempt_states(path) == ["PENDING"]
     with pytest.raises(ValueError):
         verify(path, tmp_path)
@@ -803,7 +802,7 @@ def test_completion_outcome_reader_cannot_observe_provisional_commit(tmp_path, m
     append = auth._append_attempt
     def pause_then_fail(fd, name, data, state):
         result = append(fd, name, data, state)
-        if state == "COMMITTED":
+        if state == "PREPARED":
             reached.set()
             assert release.wait(5)
             raise OSError("final validation not complete")
@@ -850,7 +849,7 @@ def test_final_namespace_swap_never_reports_success(tmp_path, monkeypatch, which
         return result
     def appended(fd, name, data, state):
         result = append(fd, name, data, state)
-        if state == "COMMITTED" and when == "after_state" and not swapped:
+        if state == "PREPARED" and when == "after_state" and not swapped:
             swap()
         return result
     with monkeypatch.context() as m:
@@ -877,7 +876,7 @@ def test_final_namespace_missing_returned_payload_rejects_commit(tmp_path, monke
     moved = tmp_path / "retained-renamed-payload"
     def move_after_state(fd, name, data, state):
         result = append(fd, name, data, state)
-        if state == "COMMITTED":
+        if state == "PREPARED":
             (tmp_path / name).rename(moved)
         return result
     monkeypatch.setattr(auth, "_append_attempt", move_after_state)
@@ -896,8 +895,9 @@ def test_final_namespace_stable_names_reference_committed_objects(tmp_path):
     for record in (path, receipt):
         assert record.exists()
         assert record.with_name(record.name + ".complete").exists()
-        assert not record.with_name(record.name + ".pending").exists()
-        assert attempt_states(record) == ["PENDING", "COMMITTED"]
+        assert record.with_name(record.name + ".pending").exists()
+        assert record.with_name(record.name + ".commit").exists()
+        assert attempt_states(record) == ["PENDING", "PREPARED"]
 
 
 @pytest.mark.parametrize("target", ["/", "archive", "consumed", "attempt", "evidence", "certificate"])
@@ -978,3 +978,261 @@ def test_descriptor_ownership_stream_wrapper_failure_closes_fd(tmp_path, monkeyp
                     with auth._committed_attempt(archive, archive.root_fd, path.name, data):
                         pytest.fail("stream failure was not propagated")
         assert len(os.listdir("/proc/self/fd")) == baseline
+
+
+# Dedicated crash/recovery suite: each publisher and verifier is a separate
+# interpreter. No inherited module caches, monkeypatches or locks authorize it.
+_CRASH_PROCESS = r'''
+import json, os, runpy, signal, sys
+from pathlib import Path
+m = runpy.run_path(sys.argv[1])
+a = m["auth"]
+root, action = Path(sys.argv[2]), sys.argv[3]
+if action == "verify":
+    try:
+        paths = list(root.glob("*.json"))
+        receipt = m["verify"](paths[0], root)
+        print(json.dumps({"accepted": True, "receipt": receipt.name}))
+    except (OSError, ValueError, IndexError):
+        print(json.dumps({"accepted": False}))
+    sys.exit(0)
+with a.PinnedArchive(root, create=True):
+    pass
+link, fsync, read = a.os.link, a.os.fsync, a.PinnedArchive.read
+append, guard, recover = a._append_attempt, a._pending_guard, a._recover_commit
+
+def kill():
+    os.kill(os.getpid(), signal.SIGKILL)
+
+def linked(src, dst, **kw):
+    if str(dst).endswith(".commit") and action == "before_final_marker":
+        kill()
+    result = link(src, dst, **kw)
+    if str(dst).endswith(".commit") and action == "after_marker_publication":
+        kill()
+    return result
+
+def synced(fd):
+    target = os.readlink('/proc/self/fd/' + str(fd))
+    if action == "before_evidence_durable" and target.endswith('.tmp'):
+        kill()
+    return fsync(fd)
+
+def readback(self, fd, name):
+    result = read(self, fd, name)
+    if action == "after_evidence_durable" and name.endswith('.json') and not name.startswith('.'):
+        kill()
+    if name.endswith('.complete'):
+        if action == "after_certificate_durable": kill()
+        if action == "certificate_error": raise OSError('injected certificate readback error')
+    return result
+
+def appended(fd, name, data, state):
+    if state == "UNCERTAIN" and action in ("uncertainty_persistence_failure", "certificate_error", "guard_error"):
+        raise OSError('injected quarantine persistence failure')
+    result = append(fd, name, data, state)
+    if state == "PREPARED":
+        if action == "after_provisional_journal_durable": kill()
+        if action == "uncertainty_persistence_failure": raise OSError('injected provisional error after effect')
+    return result
+
+def guarded(*args):
+    result = guard(*args)
+    if action == "after_guard_durable": kill()
+    if action == "guard_error": raise OSError('injected guard error after effect')
+    return result
+
+def recovered(*args):
+    result = recover(*args)
+    if action == "after_marker_durable": kill()
+    return result
+
+a.os.link, a.os.fsync, a.PinnedArchive.read = linked, synced, readback
+a._append_attempt, a._pending_guard, a._recover_commit = appended, guarded, recovered
+try:
+    m["capture"](root)
+except a.PublicationError as error:
+    print(error.state.value)
+'''
+
+
+def fresh_process(root, action):
+    import subprocess
+    import sys
+    from pathlib import Path
+    return subprocess.run([sys.executable, "-c", _CRASH_PROCESS,
+                           str(Path(__file__).resolve()), str(root), action],
+                          capture_output=True, text=True, timeout=15,
+                          env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+
+
+@pytest.mark.parametrize("point", [
+    "before_evidence_durable", "after_evidence_durable", "after_certificate_durable",
+    "after_provisional_journal_durable", "after_guard_durable", "before_final_marker",
+    "uncertainty_persistence_failure", "certificate_error", "guard_error",
+])
+def test_crash_recovery_no_final_marker_fresh_verifier_rejects(tmp_path, point):
+    import signal
+    root = tmp_path / "archive"
+    publisher = fresh_process(root, point)
+    assert publisher.returncode == (0 if point.endswith("error") or point == "uncertainty_persistence_failure"
+                                    else -signal.SIGKILL), publisher.stderr
+    assert not list(root.glob("*.commit"))
+    verifier = fresh_process(root, "verify")
+    assert verifier.returncode == 0, verifier.stderr
+    assert json.loads(verifier.stdout) == {"accepted": False}
+    assert not list((root / "consumed").iterdir())
+
+
+@pytest.mark.parametrize("point", ["after_marker_publication", "after_marker_durable", "success"])
+def test_crash_recovery_final_decision_reopens_and_consumes_once(tmp_path, point):
+    import signal
+    root = tmp_path / "archive"
+    publisher = fresh_process(root, point)
+    assert publisher.returncode == (0 if point == "success" else -signal.SIGKILL), publisher.stderr
+    assert len(list(root.glob("*.commit"))) == 1
+    verifier = fresh_process(root, "verify")
+    assert verifier.returncode == 0, verifier.stderr
+    assert json.loads(verifier.stdout)["accepted"] is True
+    # Yet another interpreter cannot resurrect the already consumed challenge.
+    again = fresh_process(root, "verify")
+    assert again.returncode == 0, again.stderr
+    assert json.loads(again.stdout) == {"accepted": False}
+    assert len(list((root / "consumed").glob("*.commit"))) == 1
+
+
+@pytest.mark.parametrize("mutation", ["missing", "unknown", "duplicate", "digest", "identity", "partial"])
+def test_crash_recovery_commit_record_is_mandatory_closed_and_bound(tmp_path, mutation):
+    root = tmp_path / "archive"
+    path = capture(root)
+    marker = path.with_name(path.name + ".commit")
+    raw = marker.read_bytes()
+    record = json.loads(raw)
+    if mutation == "missing": marker.unlink()
+    elif mutation == "partial": marker.write_bytes(raw[:-3])
+    elif mutation == "duplicate": marker.write_bytes(b'{"state":"COMMITTED",' + raw[1:])
+    else:
+        if mutation == "unknown": record["unknown"] = "extra"
+        if mutation == "digest": record["objects"]["journal"]["sha256"] = "0" * 64
+        if mutation == "identity": record["objects"]["evidence"]["identity"][1] += 1
+        marker.write_bytes(auth.canonical_bytes(record))
+    verifier = fresh_process(root, "verify")
+    assert verifier.returncode == 0, verifier.stderr
+    assert json.loads(verifier.stdout) == {"accepted": False}
+    assert not list((root / "consumed").iterdir())
+
+
+def test_crash_recovery_guard_never_retired(tmp_path, monkeypatch):
+    unlink = auth.os.unlink
+    def no_retirement(name, **kwargs):
+        assert not str(name).endswith('.pending'), "security guard retirement is forbidden"
+        return unlink(name, **kwargs)
+    monkeypatch.setattr(auth.os, 'unlink', no_retirement)
+    path = capture(tmp_path)
+    receipt = verify(path, tmp_path)
+    assert path.with_name(path.name + '.pending').exists()
+    assert receipt.with_name(receipt.name + '.pending').exists()
+
+
+def test_crash_recovery_directory_sync_failure_never_consumes(tmp_path, monkeypatch):
+    path = capture(tmp_path)
+    original = auth.os.fsync
+    def failing(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError('recovery directory sync unavailable')
+        return original(fd)
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, 'fsync', failing)
+        with pytest.raises(OSError):
+            verify(path, tmp_path)
+    assert not list((tmp_path / 'consumed').iterdir())
+
+
+@pytest.mark.parametrize('which', ['archive', 'consumed'])
+@pytest.mark.parametrize('when', ['before_link', 'after_link'])
+def test_crash_recovery_final_marker_namespace_swap_never_returns_success(tmp_path, monkeypatch, which, when):
+    root = tmp_path / 'archive'
+    path = capture(root)
+    target = root if which == 'archive' else root / 'consumed'
+    moved = tmp_path / ('old-' + which)
+    original = auth.os.link
+    def linked(src, dst, **kwargs):
+        if str(dst).endswith('.commit') and when == 'before_link':
+            target.rename(moved)
+            target.mkdir(mode=0o700)
+        result = original(src, dst, **kwargs)
+        if str(dst).endswith('.commit') and when == 'after_link':
+            target.rename(moved)
+            target.mkdir(mode=0o700)
+        return result
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, 'link', linked)
+        with pytest.raises(auth.PublicationError) as error:
+            verify(path, root)
+    assert error.value.state == auth.PublicationState.COMMIT_RECOVERY_REQUIRED
+    result = fresh_process(root, 'verify')
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {'accepted': False}
+    assert not list(target.iterdir())
+
+
+@pytest.mark.parametrize('role', ['evidence', 'certificate', 'journal', 'guard'])
+def test_crash_recovery_bound_object_replacement_rejects_fresh_verifier(tmp_path, role):
+    root = tmp_path / 'archive'
+    path = capture(root)
+    record = json.loads(path.with_name(path.name + '.commit').read_bytes())
+    obj = root / record['objects'][role]['filename']
+    raw = obj.read_bytes()
+    obj.rename(obj.with_name(obj.name + '.retained'))
+    obj.write_bytes(raw)
+    obj.chmod(0o600)
+    result = fresh_process(root, 'verify')
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {'accepted': False}
+    assert not list((root / 'consumed').iterdir())
+
+
+def test_crash_recovery_post_marker_error_is_recoverable_decision_not_uncertain(tmp_path, monkeypatch):
+    root = tmp_path / 'archive'
+    original = auth.os.link
+    def after_effect(src, dst, **kwargs):
+        result = original(src, dst, **kwargs)
+        if str(dst).endswith('.commit'):
+            raise OSError('ambiguous final decision link result')
+        return result
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, 'link', after_effect)
+        with pytest.raises(auth.PublicationError) as error:
+            capture(root)
+    assert error.value.state == auth.PublicationState.COMMIT_RECOVERY_REQUIRED
+    path = next(root.glob('*.json'))
+    assert attempt_states(path) == ['PENDING', 'PREPARED']
+    result = fresh_process(root, 'verify')
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)['accepted'] is True
+
+
+@pytest.mark.parametrize('boundary', ['marker_file', 'marker_parent'])
+def test_crash_recovery_final_sync_failure_requires_fresh_durability_barrier(tmp_path, monkeypatch, boundary):
+    root = tmp_path / 'archive'
+    fsync = auth.os.fsync
+    fired = False
+    def failed(fd):
+        nonlocal fired
+        name = os.readlink('/proc/self/fd/' + str(fd))
+        if (list(root.glob('*.commit')) and not fired
+                and (name.endswith('.commit') if boundary == 'marker_file'
+                     else stat.S_ISDIR(os.fstat(fd).st_mode))):
+            fired = True
+            raise OSError('injected final decision sync failure')
+        return fsync(fd)
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, 'fsync', failed)
+        with pytest.raises(auth.PublicationError) as error:
+            capture(root)
+    assert fired
+    assert error.value.state == auth.PublicationState.COMMIT_RECOVERY_REQUIRED
+    assert not list((root / 'consumed').iterdir())
+    result = fresh_process(root, 'verify')
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)['accepted'] is True

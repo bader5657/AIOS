@@ -57,11 +57,11 @@ automatic retry of rejected or failed captures.
 
 Default archive: `/opt/aios/data/authentication-evidence/telegram/`.
 Evidence filenames remain `<UUID>.<transport-SHA256>.json`; the hash includes LF.
-Each publication has a `<filename>.attempt` journal. Completion uses a
-`<filename>.complete` certificate and a temporary fail-closed `<filename>.pending`
-guard. A certificate alone never authorizes verification. The evidence's closed
-schema is unchanged; journals, guards, certificates and directory identity
-metadata are separate private control records, not additional platform fields.
+Each publication retains `<filename>.attempt`, `<filename>.complete`, and a
+permanent `<filename>.pending` preparation guard. Only `<filename>.commit` is the
+final commit decision. The closed evidence schema remains unchanged. The marker,
+guard, journal, certificate and directory anchor are separate private control
+records. A certificate or prepared journal alone never authorizes authentication.
 
 All path components are opened from `/` using directory descriptors with
 `O_DIRECTORY | O_NOFOLLOW`. The walk rejects traversal, symlinks, non-directories,
@@ -90,68 +90,95 @@ boundary. Deleting/replacing that whole boundary is not supported recovery or
 re-enrollment; hashes cannot defend against a custodian intentionally replacing
 all trust metadata. Missing anchors in verification are always STOP.
 
-## Publication outcomes and durability
+## Publication outcomes and crash recovery
 
-Publication reports three outcomes:
+The protocol is monotonic: prepare and validate every bound artifact, then publish
+one final decision. It never removes the guard, mutates a journal to COMMITTED,
+or relies on an in-memory denial cache. The final marker is necessary, not advisory.
 
-| Outcome | Retained artifacts and verification consequence |
+| Outcome | Meaning |
 |---|---|
-| `NOT_PUBLISHED` | This attempt did not publish its final payload name. A journal, guard or staging artifacts may exist. Existing records are never overwritten. |
-| `PUBLISHED_DURABILITY_UNCERTAIN` | The payload and even its completion certificate may exist. Retain them for inspection. The attempt is terminally uncertain, with a retained pending guard; it is ineligible for authentication. |
-| `DURABLY_PUBLISHED` | Payload/certificate syncing, readback, final journal syncing, and namespace/object checks passed. The pending guard was retired. This capture outcome alone is not authentication PASS. |
+| `NOT_PUBLISHED` | The final payload name was not published. Provisional artifacts may exist; no final marker exists. |
+| `PUBLISHED_DURABILITY_UNCERTAIN` | Provisional payload/certificate may exist, but final marker publication was not attempted. Authentication is impossible, even if diagnostic UNCERTAIN writes fail. |
+| `COMMIT_RECOVERY_REQUIRED` | Final marker publication was attempted. Its outcome/durability needs inspection and recovery; this is neither an aborted attempt nor authentication PASS. A missing marker rejects. A surviving valid decision can be recovered as described below. |
+| `DURABLY_PUBLISHED` | The final decision and all bindings passed validation, file/directory syncs and current-namespace checks. Capture alone is still not authentication PASS. |
 
-The authoritative journal uses a closed `aios-telegram-auth-attempt-v1` record
-with exactly `schema_version`, `filename`, `transport_sha256`, and `state`.
-Each entry is canonical UTF-8 JSON plus one LF. The only accepting journal is the
-exact two-entry sequence `PENDING`, `COMMITTED`, bound to the same filename and
-transport digest. An `UNCERTAIN` entry is terminal. Missing, malformed, partial,
-extra or reordered entries reject, including `UNCERTAIN` followed by `COMMITTED`.
-No existing attempt is reopened for publication or retried.
+### Authoritative commit schema
 
-The publisher exclusively creates and locks the attempt journal, writes/fsyncs
-`PENDING`, and establishes/fsyncs its pending guard before payload publication.
-It retains the exclusive lock across the entire finalization sequence:
+`aios-telegram-auth-commit-v1` is a closed canonical UTF-8 JSON object with exactly:
 
-1. Stage/fsync payload and certificate bytes; publish payload without replacement.
-2. Sync its directory and verify exact readback.
-3. Revalidate pinned directory identities immediately before the completion link.
-4. Link the certificate using the pinned directory descriptor, then immediately
-   revalidate the namespace and exact linked payload/certificate/journal objects.
-5. Sync completion publication, verify its bytes, and repeat namespace/object checks.
-6. Perform required staging cleanup and sync before final state. Cleanup failure
-   is not silently represented as committed success.
-7. Append/fsync provisional `COMMITTED`, revalidate the namespace and objects,
-   retire the pending guard, and validate the returned names once more.
-8. Release the lock with committed success only after these checks pass.
+- `schema_version`, `state` (exactly `COMMITTED`), `attempt_id` (payload filename),
+  `challenge_sha256`, `telegram_user_id`, and `committed_at_utc`.
+- `directory_identity` and `namespace_identities`: pinned device/inode/uid/gid/mode
+  of the target directory and governed ancestor/consumption chain.
+- `objects`: exactly `evidence`, `certificate`, `journal`, and `guard`. Each entry
+  has exactly `filename`, `identity` (device/inode/uid/gid/mode), and `sha256`.
+  For consumption publications, the `evidence` slot is the consumption receipt.
 
-A verifier holds a shared journal lock through evidence verification and challenge
-consumption. It cannot accept a provisional `COMMITTED` entry while the publisher
-is still finalizing. It requires the final authoritative journal, no pending guard,
-matching canonical evidence/certificate bytes and digests, and the governed
-namespace. Completion certificates are supporting artifacts, not the authority.
+The verifier reconstructs the exact expected record from retained objects and
+compares canonical bytes; missing/unknown/duplicate fields, altered identities,
+noncanonical encodings, or differing hashes reject. Marker publication uses 0600,
+UUID staging, O_EXCL/no-overwrite hard linking, pinned directory descriptors,
+file fsync and parent fsync. The timestamp records preparation of the commit
+decision; it never substitutes for Telegram `message.date` in authentication.
 
-Any finalization error, including an error after a completion link or state write
-has taken effect, establishes terminal denial before the publisher releases its
-lock. The publisher retains/restores the pending guard and appends/fsyncs
-`UNCERTAIN`; it does not delete evidence or certificates. An unsuccessful
-consumption publication is likewise never reported as authentication PASS.
-Remaining staging aliases are preserved on publication failure. No uncertain
-attempt is automatically retried, overwritten, or promoted.
+The journal retains exactly canonical PENDING then PREPARED entries using the
+existing `aios-telegram-auth-attempt-v1` schema. The permanent guard retains the
+exact PENDING entry. These are immutable prerequisites bound by the marker;
+neither is independently an authorization record. Old PENDING/COMMITTED journals
+and certificate-only records cannot pass this protocol. No backfill is provided.
 
-The guard provides a persistent denial when storage cannot append the terminal
-entry; such failures produce a critical custody-review diagnostic. A process-local
-denial set is an additional backstop, not a replacement for retained state. Never
-remove guards or reconstruct a success journal to recover an uncertain attempt.
-If storage cannot retain the quarantine outcome, stop and obtain custody review;
-that failure does not authorize authentication or automated recovery.
+### Finalization sequence
 
-Payload, certificate and committed journal have completed their required syncs
-before success. Losing the pending-guard deletion on a crash can conservatively
-block a previously successful capture; it cannot enable an uncertain one.
-Directory creation also syncs parents. This is local durable retention with an
-explicit failure protocol, not an independent signature or immutable storage
-service. Namespace checks establish the commit-time objects; custody must preserve
-them afterward.
+1. Exclusively create the attempt journal, write/fsync PENDING, then create/fsync
+   the guard and parent. The exclusive journal also reserves the attempt name.
+2. Stage/fsync and publish the payload and certificate without overwrite. Sync
+   the directory, read back exact bytes, and validate pinned namespace identities
+   before and after certificate publication.
+3. Complete required provisional staging cleanup and directory sync. Append/fsync
+   PREPARED. Validate all objects and construct the commit record binding their
+   exact bytes, hashes, identities, numeric sender and challenge digest.
+4. Stage/fsync the final marker. Repeat current-namespace/object checks and compare
+   all bindings immediately before its descriptor-relative final hard link.
+5. Publish `<filename>.commit`: this is the **irreversible commit decision**. From
+   this point errors mean `COMMIT_RECOVERY_REQUIRED`, never an uncertain attempt
+   that can later be promoted. The decision itself is not revoked or rewritten.
+6. Validate the marker and all bound objects, fsync each and the parent, and
+   revalidate current namespace identities and bytes. Only then return durable
+   publication success. No guard retirement occurs. The marker staging alias is
+   deliberately retained; no security-critical cleanup follows commitment.
+
+Before step 5, any error or SIGKILL leaves no final marker. A diagnostic UNCERTAIN
+append may fail too: rejection still follows from marker absence, with no
+quarantine restoration or process memory required. Existing attempts are never
+reopened for publication. Provisional and uncertain artifacts remain inspectable.
+
+A crash/error during or after step 5 is an interrupted commit decision. A surviving
+link alone cannot prove that the original parent's fsync returned. Every verifier
+therefore runs the same recovery barrier: require the existing final marker,
+validate its exact canonical bindings and current namespace, fsync all bound files
+and the marker and parent, then recheck identities/bytes. Failure rejects before
+challenge consumption. Recovery never creates a missing marker, repairs bytes,
+changes journal states, retires guards, or retries publication. A lost link rejects;
+a surviving valid decision becomes eligible only after this durability barrier.
+An interruption after the marker is durable may thus be treated as committed even
+if its publisher never returned. This is an explicit durable decision protocol,
+not inference from a successful function return or a process-local lock.
+
+Journal locks serialize live publishers/verifiers, but termination releases them
+without changing the above rules. Namespace swaps fail current identity checks,
+including on restart through the retained identity anchor. Restoring the exact
+original custody namespace can recover an existing final decision; it cannot
+create a decision for a provisional attempt. Namespace checks establish commit-time
+objects; custody must preserve the entire archive afterward.
+
+The crash suite uses SIGKILL and separate fresh Python interpreters for publication,
+verification and replay. It tests missing-marker rejection across intermediate
+steps, failed uncertainty diagnostics, pre-link termination, post-link recovery,
+and post-durability termination. It also checks permanent guards, closed marker
+schema, bound-object replacement and final-marker namespace swaps. These are
+process-crash tests on the local filesystem, not a simulation of hardware falsely
+acknowledging fsync or physical power-loss ordering.
 
 ## Verification and replay
 
@@ -173,19 +200,22 @@ does not invent a verified display name; the receipt separates actual username
 from the declared display username.
 
 Only after all checks succeed does descriptor-relative, no-replace publication
-create `consumed/<SHA256-of-challenge-text>.json`, its authoritative attempt journal
-and completion certificate. The receipt binds source digest, numeric identity,
+create `consumed/<SHA256-of-challenge-text>.json`, its prepared journal, permanent
+guard, completion certificate and authoritative final commit marker. The receipt binds source digest, numeric identity,
 PR/HEAD, approval ID, validity window and disclosed `solo-project-owner-bootstrap`
 roles. Exclusive journal creation permits at most one consumer. The anchored
 consumption directory cannot be replaced to reset this check. Overloaded captures
 and incomplete/uncertain evidence never enter challenge consumption.
 
-If consumption publication itself fails, report failure/uncertainty rather than
-PASS. Its retained attempt namespace conservatively reserves the nonce against
-retry; this is not a successful authentication. Preserve those artifacts and use a
-separately issued new challenge. No failed identity/text/time/schema check writes
-a consumption attempt. Restoring a renamed directory does not change terminal
-`UNCERTAIN` state or permit a second successful consumer.
+If consumption publication is interrupted, do not report PASS: before the final
+decision report failure/uncertainty; after attempting that decision report
+COMMIT_RECOVERY_REQUIRED. Its retained attempt namespace conservatively reserves
+the nonce against retry. Preserve the artifacts for custody inspection; do not
+infer authentication from a provisional receipt or a failed function return. No failed identity/text/time/schema check writes
+a consumption attempt. Restoring a renamed directory cannot remove the exclusive attempt reservation or
+permit a second successful consumer. A consumption decision interrupted after final
+marker publication is retained for custody inspection; a subsequent call does not
+return a second successful consumption.
 
 Filesystem custody is part of the trust boundary. Hashes do not authenticate a
 hand-written file; accept only the existing receiver's controlled archive, never
@@ -203,15 +233,17 @@ logging reconfiguration is required.
 
 Rollback restores the **pre-feature** receiver under separate deployment approval
 and restarts the host `aios.service` only if authorized. Keep the archive, identity
-anchor, attempt journals, pending guards, completion certificates and consumption records unchanged; a code-only
+anchor, attempt journals, pending guards, completion certificates, final commit markers
+and consumption records unchanged; a code-only
 rollback leaves them intact. Do not use the superseded draft verifier from PR #306
-HEADs `796c551` or `9a04954`: they do not enforce this final attempt-state contract
+HEADs `796c551`, `9a04954` or `2f9fb09`: they do not enforce this final commit contract
 and must not verify retained evidence. While capture/verification is rolled back, no challenge may be
 authenticated from a normalized manifest alone.
 
 This change requires no database migration or new config/environment variable.
 It creates private evidence/control files only when a future deployed receiver
-admits a challenge. It does not migrate or promote old evidence; pre-journal records are ineligible. Moving/restoring
+admits a challenge. It does not migrate or promote old evidence; records without final commit markers are ineligible. Moving/restoring
 archive directories with new inode/device identities is not a transparent rollback:
 the identity checks deliberately STOP and require a separately reviewed custody
-recovery decision. No such recovery is implemented or authorized here.
+recovery decision. No namespace replacement/re-enrollment procedure is implemented
+or authorized here; final-marker durability recovery preserves existing identities.
