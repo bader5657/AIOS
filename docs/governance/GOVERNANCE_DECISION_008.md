@@ -64,6 +64,13 @@ bytes. No original review is invented and no previous gate becomes satisfied
 retroactively. Reviewers may record findings; only the Owner approves their
 admission for a specified future governance action.
 
+Bootstrap admission uses the process's dedicated `bootstrap_verification` GitRef
+and the referenced verification's exact `bootstrap_review_records`, with no
+generic-subjects or free-text substitute. Corrections preserve authenticated
+historical event times and separately record current creation, verification,
+acceptance, approval and publication times; unavailable required historical times
+remain STOP. These clarifications grant no additional authority.
+
 ## Proposed file scope and disposition
 
 Only this decision, `operator-review-evidence/00_PROCESS.md`, and the linked

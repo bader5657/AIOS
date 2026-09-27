@@ -120,9 +120,10 @@ The payload has exactly:
 |---|---|
 | `record_id`, `repository` | As above |
 | `classification` | `original-review-retention` or `retrospective-revalidation` |
+| `record_created_at_utc` | UTC when this new record, including a correction, is actually assembled; never the historical review or merge time |
 | `subject` | PRIdentity |
 | `review_verdict` | `CLEAN` or `CHANGES_REQUIRED` |
-| `reviewed_at_utc` | UTC of the actual review being retained |
+| `reviewed_at_utc` | UTC of the actual review being retained: authenticated original review for original-review-retention, actual re-review for retrospective-revalidation |
 | `merge_verified_at_utc` | UTC of current merge verification |
 | `merge_occurred_at_utc` | UTC from independently corroborated merge evidence; distinct from verification time |
 | `review_source` | SourceRef: actual findings, scope, author independence, reviewer identity and any AI/tool assistance |
@@ -140,6 +141,20 @@ already exist, bind the exact reviewed head, and predate the actual merge. Its
 review timestamp comes from that authenticated original source. Current collection,
 acceptance and approval dates remain current. Missing original review cannot be
 filled by an old commit date, a PR description, or a fresh review called original.
+
+Historical event fields remain distinct from record-creation and current
+verification/attestation times. `merge_occurred_at_utc` always describes the actual
+historical merge. `reviewed_at_utc` describes the specific review retained by this
+record, not collection or correction time. For the bootstrap's retrospective
+class it describes the real re-validation, never an unavailable original review.
+All required UTC fields remain non-nullable. If a required historical event time
+cannot be authentically established, STOP: do not complete, publish or admit a
+review record with a guessed time, null, sentinel, correction time or invented
+precision. Retain a current-dated unavailability/STOP source receipt under
+sections 1 and 6 instead. An unavailable original pre-merge review timestamp is
+not a field to fill in a permitted retrospective record; an unavailable required
+actual merge timestamp still blocks that record. Current verification timestamps
+remain separately recorded in the source receipt even when completion is blocked.
 
 Retention has two phases for a new PR: before its human merge, preserve authentic
 independent review and Owner merge-authorization receipts bound to its exact
@@ -184,6 +199,7 @@ The closed payload has exactly:
 | `process_authority` | GitRef to approved merged GD-008 |
 | `governance_basis` | Nonempty array of GitRef: exact already-approved governing documents, including bootstrap amendment when relevant |
 | `subjects` | Array of GitRef: exact review records, evidence records or prior authority decisions affected |
+| `bootstrap_verification` | Exactly one GitRef to a previously completed and published action-verification record for admit-bootstrap; JSON null for every other decision; never omitted or an array |
 | `appointments` | Array of Appointment; nonempty only for commission-process / appoint-actors |
 | `selector` | Selector or null; nonnull only for authorize-selector |
 | `effect` | Nonempty string stating exact scope, superseded/revoked decisions and restrictions; cannot create authority beyond governance_basis |
@@ -222,8 +238,10 @@ work resumes. There is no unpublished positive-authority exception.
 
 `admit-bootstrap` must reference exactly four approved CLEAN records and the exact
 bootstrap amendment, declare its population-remediation effect prospectively,
-and close admission for that set. It neither authorizes PR #304 merge nor creates
-a second first-record entitlement. `close-bootstrap` records abandonment or final
+and close admission for that set. Its required verification is identified only by
+`bootstrap_verification`, under the validation rules below; `subjects`, `effect`
+and source prose cannot substitute for that field. It neither authorizes PR #304
+merge nor creates a second first-record entitlement. `close-bootstrap` records abandonment or final
 completion and forbids reopening; record corrections preserve the same admission.
 `authorize-binding` names an exact approved binding, baseline and applicable
 supersession authority; a second live successor to the same predecessor is STOP.
@@ -239,6 +257,71 @@ independent byte/custody verification complete, retain the prior installed state
 must reconcile the register decision, actual publication receipt and observed
 selector; mismatch or an unfinished transition blocks operational use.
 
+### Bootstrap admission verification reference
+
+For `admit-bootstrap`, `bootstrap_verification` must be a non-null closed GitRef.
+Its `commit` is the action-verification publication PR's independently verified
+actual merge commit, its `path` is exactly
+`docs/governance/operator-review-evidence/verifications/<record_id>.json`, and
+`transport_sha256` hashes that record's complete canonical committed bytes,
+including the one LF. The filename UUID must equal both record_id fields. Resolve
+one exact regular `100644` blob; no branch name, directory search, source receipt,
+unpublished draft, alternative schema or free-form reference is acceptable.
+
+Before Owner admission and again immediately before its publication, independently
+verify all of the following; any missing, mismatched, stale, unavailable or
+ambiguous input is STOP, not permission to omit the field or reinterpret it:
+
+1. The referenced record satisfies `aios-operator-action-verification-v1`, its
+   closed schema, canonical bytes, authenticated attestations and post-merge
+   publication checks. Its `classification` is `fresh-action-verification`,
+   `verdict` is `PASS`, `action` is `bootstrap-admission`, and all four no-conflict
+   booleans are true. Its selector fields are null.
+2. Its `target` is exactly the held PR #304 candidate tuple in the bootstrap
+   amendment: commit `e1a4459dc55ad9a15fe6dfc28dc11758a799c8c0`, path
+   `docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/records/1b8e3152-e315-43f4-9396-28776bd87947.json`,
+   transport SHA-256 `11a609eaf580d3283b84d4994fb7f79a2995da6bab529ca722032f69c98523b2`.
+   Authenticate its PR mapping separately; no future PR #304 merge is invented.
+3. Its `bootstrap_review_records` contains exactly four distinct GitRefs in PR
+   number order 299, 300, 302, 303. Each resolves at its actual verified publication
+   merge to `reviews/<record_id>.json` under this archive, with exact transport
+   digest and matching filename/record UUIDs. Each is an approved, published,
+   unrevoked CLEAN `retrospective-revalidation` record for the amendment's exact
+   corresponding HEAD/merge pair. The admission's `subjects` must equal this
+   ordered array followed by the verification's `target` (exactly five GitRefs).
+   The verification reference itself never appears in `subjects`.
+4. Its `register_tip` equals the admission's `predecessor` as a complete GitRef,
+   its `register_sequence` matches that entry, and the admission sequence is
+   exactly one greater. Its `authority` identifies that tip, GD-008 and the exact
+   approved bootstrap amendment; the admission's `governance_basis` identifies
+   those same governance documents. Walk the pinned register to genesis and its
+   exact predecessor_inventory and owner_source receipts. Fresh authenticated
+   Owner confirmation must cover that same inventory, all subsequent decisions
+   and off-register instructions, the target and the four review-record tuples.
+   No repository-only completeness inference or unspecified inventory is allowed.
+5. The verification's checks, reviewer acceptance, Owner approval, actual
+   publication and independent post-merge verification are all complete before
+   the admission's `decided_at_utc`. Retained current-dated publication receipts
+   establish that ordering; no future publication timestamp is embedded in the
+   verification itself. Require `checked_at_utc <= decided_at_utc < expires_at_utc`
+   and that the admission's Owner approval and publication both occur before
+   expires_at_utc and within all applicable authority windows. Perform section 5's
+   final direct confirmation immediately before publication. An intervening
+   register decision, revocation, superseded review, changed inventory, expiry or
+   freshness failure invalidates admission and requires a new verification.
+6. Neither the referenced verification record nor its action_id may have been
+   used or reserved for another admission. Check the complete authoritative
+   register and pending/off-register instructions with the Owner, reserve it for
+   this admission's exact record_id, and serialize publication. A retry after an
+   aborted admission requires a new verification record and action_id. Successful
+   admission consumes this verification for that one admission only. Its own
+   authorized append is the sole expected register-tip advancement; no unrelated
+   intervening entry is allowed. It consumes no recovery installation authority.
+
+For every decision other than `admit-bootstrap`, `bootstrap_verification` must be
+present and null. These conditional rules are part of the closed schema; reject
+unknown fields, missing fields, wrong types and any free-text replacement.
+
 ## 5. Fresh action / no-conflict verification schema
 
 `schema_version = "aios-operator-action-verification-v1"`.
@@ -251,6 +334,7 @@ The closed payload has exactly:
 | `action_id` | UUID, unique to one proposed action; never a reusable PASS |
 | `action` | `bootstrap-admission`, `evidence-review`, `evidence-merge`, `selector-publication`, `activation-creation`, or `installation-attempt` |
 | `target` | GitRef to exact reviewed/merged artifact relevant to that action |
+| `bootstrap_review_records` | Exactly four distinct GitRefs ordered by PR 299, 300, 302, 303 for bootstrap-admission, as validated in section 4; empty array for every other action, never null or omitted |
 | `authority` | Nonempty array of GitRef to exact register decisions and separately approved action-specific governance |
 | `register_tip` | GitRef to authenticated latest effective decision |
 | `register_sequence` | Positive integer matching that tip |
@@ -332,7 +416,8 @@ receipts. Archive loss or unavailable required records is STOP. There is no
 time-based expiry of historical evidence; applicability/approval windows still
 expire and historical evidence never renews them.
 
-Corrections create a new UUID and current timestamps. A review correction names
+Review corrections create a new UUID and record their actual current creation time in
+the review payload's `record_created_at_utc`. A review correction names
 the exact prior review via predecessor and undergoes fresh acceptance/approval;
 its use requires an Owner register decision superseding the old admitted record.
 Original subject identities never change under a correction. New subjects need
@@ -341,6 +426,28 @@ or revoke decision in the same serial chain; no sequence reuse. Action verificat
 are never amended or reused: any new attempt gets a new action_id and record.
 Sources are never edited; corrected statements use new source IDs and disclose
 the earlier statement and reason. Preserve all conflicting records for audit.
+
+For a review correction, preserve authentically established `reviewed_at_utc`
+and `merge_occurred_at_utc` when retaining the same historical events; never
+replace them with record-creation time. A historical value may change only when
+a stronger independently authenticated source establishes the actual event time.
+Retain that new source and explain the prior value, corrected value and evidence
+in `findings`; keep the prior record immutable. If the necessary event time is
+unavailable, use section 3's unavailability/STOP rule, not a fabricated date. A
+newly performed permitted retrospective re-review uses its actual current
+reviewed_at_utc and explicitly identifies the new review in review_source; it
+does not backdate or relabel an original review.
+
+New correction events use their actual current times: record_created_at_utc for
+assembly, merge_verified_at_utc for fresh merge verification, and each new
+reviewer_acceptance.at_utc and project_owner_approval.at_utc for those attestations.
+The later Owner admission/supersession decision records its real decided_at_utc
+and approval time. Record each new publication's actual time in its authenticated
+post-merge source receipt under section 6, not in an invented future timestamp or
+the subject's historical merge_occurred_at_utc. Creation and current verification
+must be complete before new reviewer acceptance; Owner approval follows acceptance,
+and publication follows its separate authorization. These rules change no
+historical event, original authority window or retrospective allowlist.
 
 Schema/version changes require separately reviewed, explicitly Owner-approved
 governance and a defined compatibility boundary. Unknown versions are STOP;

@@ -72,6 +72,10 @@ No authority to expand this table is delegated to a custodian or reviewer.
    re-validation; not the original pre-merge review; original acceptance record
    unavailable." An accountable independent human must adopt any AI-assisted
    result. Never backdate a source, review, authentication or approval.
+   Record current assembly time as `record_created_at_utc`; preserve the sourced
+   actual historical `merge_occurred_at_utc`. Apply the process's correction and
+   unavailable-timestamp rules: no original pre-merge time is invented, and a
+   required historical time that cannot be authenticated is STOP.
 6. Publish four records through the new process, with separate explicit Owner
    approval of each record's admission scope and independently verified human
    publication merges. CLEAN is required for admission; blocking findings require
@@ -80,12 +84,22 @@ No authority to expand this table is delegated to a custodian or reviewer.
    commissioned register and directly authenticated Owner inventory. It must
    cover competing first records for the R34 baseline, conflicting supersession
    authorities, hidden/pending successors, revocations and the current selector
-   decision. Git search alone is insufficient. Retain a bootstrap-admission
-   action verification referencing the four published records and register tip.
-8. The Owner may then publish one `admit-bootstrap` decision referencing exactly
-   those four records, this amendment, the completed action verification and the
-   exact first-record candidate identified below. This is a prospective remedy
-   for the missing evidentiary prerequisite, not historical ratification of the
+   decision. Git search alone is insufficient. Publish and independently verify
+   a `bootstrap-admission` action-verification record whose `target` is the exact
+   held candidate below and whose `bootstrap_review_records` contains the four
+   published retrospective records in PR order 299, 300, 302, 303. Pin the exact
+   register tip/sequence, authority inventory and governance references, and
+   retain its authenticated publication/verification timestamps.
+8. The Owner may then publish one `admit-bootstrap` decision using its required
+   `bootstrap_verification` GitRef to that previously completed verification,
+   following [the process's exact reference and validation rules](../../governance/operator-review-evidence/00_PROCESS.md#bootstrap-admission-verification-reference).
+   `subjects` contains exactly the four review GitRefs followed by the candidate
+   target; `governance_basis` identifies GD-008 and this amendment. The dedicated
+   `bootstrap_verification` field is mandatory and cannot be replaced by subjects
+   or free text. Require PASS, exact identities, matching register predecessor
+   and inventory, completion before decided_at_utc, current unexpired/unrevoked
+   authority through publication, and no reuse for another admission. This is a
+   prospective remedy for the missing evidentiary prerequisite, not historical ratification of the
    population event, a merge instruction or operational activation.
 
 Admission consumes only this single bootstrap admission opportunity, never the
