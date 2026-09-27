@@ -16,7 +16,7 @@ spec.loader.exec_module(executor)
 
 class PackageBindingReconciliationTests(unittest.TestCase):
     INPUT = ("approved-input.json", 1327, 1328, "e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d")
-    APPROVAL = ("approved-input-approval.json", 3579, 3580, "2ea9e735d7a5183a3e247abf57438d6e095fd7e9858d5ce688d221f7e9050f26")
+    APPROVAL = ("approved-input-approval.json", 3579, 3580, "6ea5fc118e375ac035f321110198eb43811fb5b991a095554c15d0a6cbeb16c9")
     OLD_APPROVAL = ("approved-input-approval.json", 3549, 3550, "266c39426fae0b04dacf009436334dd34d6791368dcad5066a9b2a37b9bd8a57")
     APPROVAL_TRANSPORT_SHA256 = "1d24f693154e0e8c2ac4504b9e81086662670c870e785c4f0d4d79c3ded16ac8"
 
@@ -180,7 +180,7 @@ class SyntheticRun(TempCase):
             self.assertIn(path, (self.parent, self.source))
             return os.open(path, os.O_RDONLY | os.O_DIRECTORY)
         for name, value in (("REPOSITORY", self.root), ("REL_EXECUTOR", Path("fixture-executor.py")),
-                            ("RUNTIME_PARENT", self.parent), ("SOURCE_PARENT", self.source), ("FILES", self.specs)):
+                            ("RUNTIME_PARENT", self.parent), ("INPUT_SOURCE_PARENT", self.source), ("APPROVAL_SOURCE_PARENT", self.source), ("FILES", self.specs)):
             self.stack.enter_context(patch.object(executor, name, value))
         self.stack.enter_context(patch.object(executor, "check_no_args_root"))
         self.stack.enter_context(patch.object(executor, "read_activation_record", return_value={}))

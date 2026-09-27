@@ -23,15 +23,23 @@ from contextlib import ExitStack
 from pathlib import Path
 
 
-AUTHORITY_ID = "9d29c855-0f23-4539-a9b9-2e17dc89c49d"
+AUTHORITY_ID = "7bc638e2-e1f4-4e87-a54a-4d0df031b130"
 BASELINE = "ca7940b8b94237611a37189e0bed10b002167e78"
 REPOSITORY = Path("/opt/aios-src")
 REL_EXECUTOR = Path("docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py")
 REL_POLICY = Path("docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md")
 REL_R13_AUTHORITY = Path("docs/intelligence/stage-0.33c-p4s7-runtime-install-execution-authority/00_FINAL_ONE_SHOT_RUNTIME_INSTALL_AUTHORITY.md")
 RUNTIME_PARENT = Path("/opt/aios/runtime/intelligence/production-candidate-create/stage-0.33c")
-ACTIVATION_RECORD = RUNTIME_PARENT / "p4s7-r13-post-merge-activation.json"
-SOURCE_PARENT = Path("/run/aios/stage-0.33c-p4s5-source")
+# No merged governance freezes a recovery activation path/version yet.
+# The historical parser remains available for regression, never as activation.
+ACTIVATION_RECORD = None
+INPUT_SOURCE_PARENT = Path("/run/aios/stage-0.33c-p4s5-source")
+APPROVAL_SOURCE_PARENT = Path("/run/aios/stage-0.33c-p4s5-recovery-source")
+RECOVERY_APPROVAL_ID = "3a478d87-5c4f-4778-9f88-2228f4d7167f"
+RECOVERY_APPROVED_AT = "2026-09-26T23:24:12.093093Z"
+RECOVERY_NOT_AFTER = "2026-10-03T23:24:12.093093Z"
+RECOVERY_PAYLOAD_SHA256 = "be7a1750eb77ae77e8f020fc3f29c5f047cf88d1720a387f50f58f58c877962e"
+RECOVERY_TF_A = "c006afcad84984baea6af164067fdd4cfc31cdcac5f86baf7b1ceefd6e4c5065"
 RETAINED_DATA_ROOT = Path("/opt/aios/data/documents")
 EVIDENCE_DIR = "runtime-sync-evidence"
 MARKER = f"step4-install-authority-{AUTHORITY_ID}.json"
@@ -40,7 +48,7 @@ HARNESS_SHA256 = "b9fc9fb22724184696eabf02525bcc0a626bdff5ce3943ed31ba2e21130f5c
 MANIFEST_ID = "9801b5e4-453d-429a-b51f-e8ffaa17a2c9"
 FILES = (
     ("approved-input.json", 1327, 1328, "e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d"),
-    ("approved-input-approval.json", 3579, 3580, "2ea9e735d7a5183a3e247abf57438d6e095fd7e9858d5ce688d221f7e9050f26"),
+    ("approved-input-approval.json", 3579, 3580, "6ea5fc118e375ac035f321110198eb43811fb5b991a095554c15d0a6cbeb16c9"),
 )
 
 INPUT_TYPES={"text","image","voice","document","pdf","doc","spreadsheet","video","audio","web_link","youtube_link","unknown"}
@@ -416,7 +424,34 @@ def validate_frozen_package(input_transport: bytes, approval_transport: bytes, *
     manifest = verify_retained_manifest(evidence["manifest_reference"], evidence, manifest_root=manifest_root, retained_root=retained_root)
     if manifest["manifest_id"] != evidence["manifest_id"]:
         raise Stop(APPROVED_BYTES_INVALID, "MANIFEST_BINDING")
+    validate_recovery_binding(input_transport, approval_transport, input_obj, approval)
     return input_obj, approval, manifest
+
+
+def validate_recovery_binding(input_transport: bytes, approval_transport: bytes,
+                              input_obj: dict, approval: dict) -> None:
+    """Bind the schema-validated package to the single reviewed recovery pair."""
+    payload = approval["package_payload"]
+    if payload["approval_id"] != RECOVERY_APPROVAL_ID:
+        raise Stop(APPROVED_BYTES_INVALID, "RECOVERY_APPROVAL_ID")
+    if (payload["approved_at_utc"] != RECOVERY_APPROVED_AT or
+            payload["not_after_utc"] != RECOVERY_NOT_AFTER):
+        raise Stop(APPROVED_BYTES_INVALID, "RECOVERY_APPROVAL_TIME")
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True,
+                           separators=(",", ":"), allow_nan=False).encode()
+    if not sha256(canonical) == approval["package_payload_sha256"] == RECOVERY_PAYLOAD_SHA256:
+        raise Stop(APPROVED_BYTES_INVALID, "RECOVERY_PAYLOAD_HASH")
+    if not payload["trusted_facts_sha256"] == trusted_facts_dto_sha256(input_obj["trusted_receipt_facts"]) == RECOVERY_TF_A:
+        raise Stop(APPROVED_BYTES_INVALID, "RECOVERY_TRUSTED_FACTS_HASH")
+    ingestion = input_obj["ingestion_result"]
+    if (payload["evidence"]["registry_record_id"] is not None or
+            ingestion["registry_record_id"] is not None or
+            ingestion["registration_succeeded"] is not False):
+        raise Stop(APPROVED_BYTES_INVALID, "RECOVERY_MODEL_B")
+    for data, (name, semantic, transport, digest) in zip((input_transport, approval_transport), FILES):
+        if (len(data) != transport or semantic != transport - 1 or
+                data[semantic:] != b"\n" or sha256(data[:semantic]) != digest):
+            raise Stop(APPROVED_BYTES_INVALID, "RECOVERY_SOURCE_BINDING", name)
 
 
 def _decimal_string(value: object, maximum: str, zero_allowed: bool = True) -> None:
@@ -545,7 +580,9 @@ def _git_bytes(*args: str) -> bytes:
         raise Stop(PRECONDITION_FAILED, "RUNTIME_REPOSITORY", errno_code=getattr(exc, "errno", None)) from exc
 
 
-def read_activation_record(path: Path = ACTIVATION_RECORD) -> dict[str, object]:
+def read_activation_record(path: Path | None = ACTIVATION_RECORD) -> dict[str, object]:
+    if path is None:
+        raise Stop(PRECONDITION_FAILED, "RECOVERY_ACTIVATION_NOT_GOVERNED")
     try:
         transport_bytes, info = _read_regular_nofollow(path, "ACTIVATION")
     except GovernedStop as exc:
@@ -968,11 +1005,14 @@ def main() -> int:
     verify_actual_interpreter()
     aios = pwd.getpwnam("aiosadmin")
     parent_fd = open_dir(RUNTIME_PARENT, 0, aios.pw_gid, 0o750, check_components=True)
-    source_fd = open_dir(SOURCE_PARENT, 0, 0, 0o700)
+    source_fds = []
     evidence_fd = None
     try:
+        # Validate both independent private parents before reading either file.
+        for source_parent in (INPUT_SOURCE_PARENT, APPROVAL_SOURCE_PARENT):
+            source_fds.append(open_dir(source_parent, 0, 0, 0o700))
         # Link-count and source metadata checks precede every package/target gate.
-        sources = [read_source(source_fd, *spec) for spec in FILES]
+        sources = [read_source(fd, *spec) for fd, spec in zip(source_fds, FILES)]
         evidence_fd = os.open(EVIDENCE_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
         info = os.fstat(evidence_fd)
         if info.st_uid != aios.pw_uid or info.st_gid != aios.pw_gid or stat.S_IMODE(info.st_mode) != 0o700:
@@ -1024,7 +1064,8 @@ def main() -> int:
     finally:
         if evidence_fd is not None:
             os.close(evidence_fd)
-        os.close(source_fd)
+        for source_fd in source_fds:
+            os.close(source_fd)
         os.close(parent_fd)
 
 
