@@ -33,11 +33,11 @@ and activation; [GD-003](GOVERNANCE_DECISION_003.md) rejects merge-as-approval;
 The [Authority Hierarchy](../architecture/AIOS_AUTHORITY_HIERARCHY.md#4-approval-hierarchy)
 reserves approval to the Project Owner and requires explicit scoped delegation.
 
-All three proposed documents remain non-authoritative until independent review
-and explicit Project Owner approval of their exact final reviewed head, human
-merge with reviewed/merged byte equality, and explicit activation for this scope.
-Approval of PR preparation is not approval of this decision or of any bootstrap
-record. Do not label the proposal Approved, Published or Active by inference.
+All three proposed documents remain non-authoritative until disclosed human review under
+the process's role model and explicit Project Owner approval of their exact final
+reviewed head, human merge with reviewed/merged byte equality, and explicit activation
+for this scope. Approval of PR preparation is not approval of this decision or of any
+bootstrap record. Do not label the proposal Approved, Published or Active by inference.
 
 The process's initial commissioning is a separate, explicitly Owner-authorized
 governance publication after that human merge. Its non-circular authentication
@@ -46,12 +46,37 @@ record blocks use; this proposal creates none. Commissioning does not require
 or publish a runtime selector. Signed attestations, new keys, services and
 reader implementation are outside this decision.
 
-The initial Owner instruction may explicitly activate the exact merged package
-for commissioning and authorize that single genesis publication, using the
-already-established Owner identity. Retain that instruction and its independent
-authentication as genesis source receipts. This bounded startup does not assume
-an earlier archive record exists. Until genesis publication is independently
-verified, no review-record admission or recovery action may rely on this process.
+The initial Owner instruction may explicitly activate the exact merged package for
+commissioning and authorize that single genesis publication, using the
+already-established Owner identity. Retain that instruction and its authentication
+independent of the proposed records, with the actual combined roles disclosed, as
+genesis source receipts. This bounded startup does not assume an earlier archive record
+exists. Until genesis publication is verified under that disclosed role model, no
+review-record admission or recovery action may rely on this process.
+
+## Temporary solo-owner scope and production boundary
+
+AIOS currently has one human Project Owner/operator and no available independent second
+human reviewer. For development/bootstrap governance only, the process permits that
+Owner to review, approve, act as custodian and publication verifier, and commission the
+operator-evidence process. Each role combination must be explicitly disclosed in source
+receipts and the digest-bound `role_context` payload field. AI review is advisory
+evidence, never independent human acceptance. The Owner may review and approve this
+exact amended proposal under that disclosed model; no second human is required for this
+bootstrap path. The distinct steps and authenticated Owner identity remain mandatory,
+and none is completed here.
+
+Solo scope is limited to development, bootstrap, governance preparation, non-destructive
+validation and evidence/process commissioning. It cannot by itself authorize destructive
+production changes, irreversible data mutation, recovery authority consumption, one-shot
+install execution or final production activation. That boundary requires either an
+independent human reviewer for the exact action, or a separately approved future
+governance amendment explicitly accepting solo-owner production risk, plus all
+applicable existing execution gates. This package supplies neither production
+authorization nor that future amendment. See the [process role model and
+boundary](operator-review-evidence/00_PROCESS.md#temporary-solo-project-owner-bootstrap-role-model).
+Exact PR/HEAD and blob binding, actual timestamps, canonical evidence, immutable
+retention and no-backdating rules remain mandatory in either mode.
 
 ## Relationship to earlier authority
 
@@ -82,5 +107,9 @@ installation; authority consumption; approval-window renewal; Step-4 closure;
 Step-5; source, test, policy, executor, runtime, service or database change is
 authorized. Later actions retain their separate permissions and fresh gates.
 
-Next action: independent governance/security review and explicit Project Owner
+PR #304 remains blocked until this amended governance is reviewed and explicitly
+approved; approval alone does not clear its later commissioning, admission and separate
+review/merge gates.
+
+Next action: disclosed human governance/security review and explicit Project Owner
 decision. Do not merge automatically. No approval or activation is recorded here.

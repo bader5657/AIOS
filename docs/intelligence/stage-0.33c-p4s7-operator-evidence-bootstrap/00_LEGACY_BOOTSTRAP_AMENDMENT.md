@@ -20,16 +20,21 @@ pre-merge acceptance. This is an explicit proposed exception to:
 - [PR #301: component review identity](../stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md#closed-evidence-schema),
   [trust-root evidence](../stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md#trust-root-and-separately-authorized-selector-publication),
   and [bootstrap ordering](../stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md#bootstrap-anti-circularity-and-supersession),
-  only insofar as they require these four unavailable original acceptance records;
+  only insofar as they require these four unavailable original acceptance records
+  or a second human for the corresponding prospective bootstrap acceptance;
 - [PR #303: exact component review/merge identities](../stage-0.33c-p4s7-recovery-binding-supersession/00_FIRST_RECOVERY_EVIDENCE_BINDING_AUTHORITY.md#exact-component-reviewmerge-identities)
   and [later population gates](../stage-0.33c-p4s7-recovery-binding-supersession/00_FIRST_RECOVERY_EVIDENCE_BINDING_AUTHORITY.md#later-population-gates-and-exclusions),
   only for the corresponding acceptance prerequisite and the prospective
   disposition of the already-populated, unmerged first record.
 
-Keep PR #301/#303 and all historical artifacts byte-identical. This separate
-addendum supplies the exception; no historical gate is represented as having
-passed. Every non-excepted requirement, including topology, blobs, human merge,
-no-conflict verification and fresh external operator gates, remains mandatory.
+Keep PR #301/#303 and all historical artifacts byte-identical. This separate addendum
+supplies the exception; no historical gate is represented as having passed. For this
+limited development/bootstrap path, disclosed solo-Owner review replaces the
+second-human requirement; it does not establish historical independence or authorize
+production execution. The process section 1 role model and high-risk production boundary
+apply to every step below. Every non-excepted requirement, including topology, blobs,
+human merge, no-conflict verification and fresh external operator gates, remains
+mandatory.
 
 ## Exhaustive immutable allowlist
 
@@ -47,12 +52,13 @@ No authority to expand this table is delegated to a custodian or reviewer.
 
 ## Required one-time sequence after separate approval
 
-1. Independently review this complete governance proposal. Obtain explicit
+1. Review this complete amended proposal under the disclosed process role model;
+   the sole human Owner may perform this bootstrap governance review. Obtain explicit
    Project Owner approval of the exact final head and this exception, human
    merge, reviewed/merged document equality, and explicit activation. Commission
    the process with real appointed identities and complete authority inventory.
-2. Obtain a separately scoped Owner instruction to perform fresh independent
-   re-reviews of all four exact subjects. The current design task performs none.
+2. Obtain a separately scoped Owner instruction to perform fresh human
+   re-reviews of all four exact subjects under that disclosed role model. The current design task performs none.
    Review both the historical changes against their applicable governance and
    their compatibility with the now-proposed bootstrap chain. Record limitations;
    do not silently grade historical scope against unrelated later requirements.
@@ -70,21 +76,22 @@ No authority to expand this table is delegated to a custodian or reviewer.
    verification timestamp, reviewer identity, findings and real sources under
    `retrospective-revalidation`. Explicitly state: "Fresh retrospective
    re-validation; not the original pre-merge review; original acceptance record
-   unavailable." An accountable independent human must adopt any AI-assisted
-   result. Never backdate a source, review, authentication or approval.
+   unavailable." The accountable human Owner in solo mode must adopt any AI-assisted
+   result as advisory evidence, never independent human acceptance. Record
+   role_context and disclose every combined role and absence of a second human. Never backdate a source, review, authentication or approval.
    Record current assembly time as `record_created_at_utc`; preserve the sourced
    actual historical `merge_occurred_at_utc`. Apply the process's correction and
    unavailable-timestamp rules: no original pre-merge time is invented, and a
    required historical time that cannot be authenticated is STOP.
 6. Publish four records through the new process, with separate explicit Owner
-   approval of each record's admission scope and independently verified human
+   approval of each record's admission scope and role-disclosed verification of human
    publication merges. CLEAN is required for admission; blocking findings require
    a new correction/review under separate authority, never a fabricated PASS.
 7. Perform fresh authoritative no-conflict/no-revocation verification against the
    commissioned register and directly authenticated Owner inventory. It must
    cover competing first records for the R34 baseline, conflicting supersession
    authorities, hidden/pending successors, revocations and the current selector
-   decision. Git search alone is insufficient. Publish and independently verify
+   decision. Git search alone is insufficient. Publish and verify under the disclosed role model
    a `bootstrap-admission` action-verification record whose `target` is the exact
    held candidate below and whose `bootstrap_review_records` contains the four
    published retrospective records in PR order 299, 300, 302, 303. Pin the exact
@@ -121,6 +128,11 @@ Its predecessor remains R34 merge `8e9a8023742773b055e17dba002b2ebf07528118`,
 the existing recovery activation governance path, transport SHA-256
 `299296d106d6d661ac2fd55b1442b9980485d7f2bdf64b228fbfebbbb73dcf31`.
 
+PR #304 remains blocked until this amended governance is reviewed and explicitly
+approved. That approval alone does not release the hold: all steps 1–8 and the separate
+prospective review/merge authorization remain required. No merge is authorized by this
+amendment or by the instruction to prepare it.
+
 Only after steps 1–8 may these retrospective records substitute for the four
 unavailable original acceptances for a separately authorized fresh review of
 that exact first-record candidate. Do not alter its fifteen-field schema, JSON
@@ -154,5 +166,5 @@ blocks every applicable later action. Record admission cannot cure expired
 operational approval. No old activation or unavailable original review is reused.
 
 This proposal creates no evidence records, source receipts, appointments, approval
-statements, register entries or freshness PASS. Stop after independent governance
-review preparation; no automatic merge or bootstrap execution.
+statements, register entries or freshness PASS. Stop after disclosed governance review
+preparation; no automatic merge or bootstrap execution.

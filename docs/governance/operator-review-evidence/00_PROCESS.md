@@ -21,15 +21,65 @@ IDs are canonical lowercase UUIDs. Records are regular Git blobs, mode `100644`.
 These paths never confer authenticity through existence, ownership or Git ancestry.
 No runtime evidence, selector, claim/result or private-source directory is reused.
 
-The Project Owner remains the approval authority under GD-001/002/003. The Owner
-must explicitly appoint named accountable human reviewers, custodians and
-independent publication verifiers, with exact roles, channel identities and scope.
-AI assistance must be disclosed; an agent output alone is not human acceptance.
-The accountable reviewer must adopt the findings against the exact subject.
-Reviewer and Owner must be different people. A reviewer must be independent of
-the subject change's author/implementer. A custodian may be the Owner; a publication
-verifier must be independent of the custodian and may be the reviewer. An AI agent
-may prepare drafts/copies when instructed; it cannot impersonate these principals.
+### Temporary SOLO PROJECT OWNER bootstrap role model
+
+AIOS is in development/bootstrap with one human Project Owner/operator and no
+independent second human reviewer available. No second person or independence may be
+inferred, fabricated or attributed to an AI review.
+
+The Project Owner remains the approval authority under GD-001/002/003. For
+**development, bootstrap, governance preparation, non-destructive validation, and
+evidence/process commissioning only**, `solo-project-owner-bootstrap` mode permits that
+same authenticated human to review, approve, act as custodian, verify publication,
+operate this governance process and commission it. Explicitly appoint the Owner to the
+reviewer/custodian/verifier roles with the real identity, channel and scope. Combining
+roles does not combine or skip the review, approval, human merge, post-merge
+verification and commissioning steps.
+
+Every payload must carry the closed `role_context` below, covered by its attested
+digest. In solo mode its source receipts and pre-record governance approval, review,
+commissioning and publication instructions must explicitly disclose the combined roles,
+that only one human is participating, that no independent human acceptance is claimed,
+and any advisory AI assistance. Reviewer acceptance and Owner approval remain separate,
+sequential attestations by that same human. AI findings are advisory evidence only; the
+accountable human must personally review and adopt findings against the exact PR/HEAD.
+AI cannot authenticate, approve, commission or supply independent human acceptance.
+
+In `independent-human` mode, the reviewer is a different person from the Owner and
+independent of the subject's author/implementer; the publication verifier is independent
+of the custodian and may be the reviewer. The Owner explicitly appoints each named
+accountable human and channel. Solo mode does not claim these independence properties.
+An AI agent may prepare drafts/copies when instructed but cannot impersonate any
+principal.
+
+Solo mode is temporary and must be explicitly selected for each instruction or record;
+it is not an inferred default or a perpetual production waiver. When an independent
+human becomes available, an authenticated `appoint-actors` decision may establish the
+independent mode for future work. Mode changes never rewrite the role disclosures or
+acceptance status of earlier evidence.
+
+### High-risk production execution boundary
+
+Solo-owner mode must not by itself authorize destructive production changes,
+irreversible data mutation, recovery authority consumption, one-shot install execution
+or final production activation. Crossing that boundary requires either (A) an
+authenticated independent human reviewer accepting the exact proposed production action,
+in addition to Owner approval and every existing action gate, or (B) a separately
+reviewed and explicitly approved **future governance amendment** accepting solo-owner
+production risk and defining its scope, evidence and execution gates. This proposal is
+not that future amendment. An Owner instruction, combined-role appointment, bootstrap
+admission, AI review or PASS cannot substitute for it. Until A or an effective B and all
+existing prerequisites are satisfied, STOP at this boundary. Production use of bootstrap
+evidence requires that additional action-specific acceptance; it never becomes
+independent human evidence by reuse. Ambiguous or mixed scopes are STOP.
+
+`solo-project-owner-bootstrap` permits PASS only for `bootstrap-admission`,
+`evidence-review` and `evidence-merge` when strictly within the permitted governance
+scope. It cannot yield a production-authorizing PASS for `selector-publication`,
+`activation-creation` or `installation-attempt`. Non-destructive preparation may be
+reviewed as `evidence-review`; it confers no execution authority. Decisions such as
+`authorize-binding` or `authorize-selector` in solo mode can record only governance
+preparation, with execution explicitly withheld in `effect`.
 
 Authentication uses direct human confirmation with the already-known Project
 Owner, in person or through an independently authenticated established channel,
@@ -41,13 +91,17 @@ No copied statement, GitHub review/comment, commit signature or JSON identity is
 the sole authentication source. If the real Owner cannot be authenticated
 independently of the proposed records, STOP; no self-enrollment or inferred trust.
 
-For each attestation, the custodian obtains the actor's direct confirmation of
-the exact payload digest, meaning, current timestamp and scope over an appointed
-channel. The independent publication verifier repeats authentication and checks
-the retained receipts against that confirmation before accepting publication.
-An identity/channel change requires a new Owner decision authenticated using the
-previously trusted channel or fresh direct Owner identity verification; ambiguity
-stops the process. There is no automatic trust of new contact details in a record.
+For each attestation, the custodian obtains the actor's direct confirmation of the exact
+payload digest, meaning, current timestamp and scope over an appointed channel. The
+appointed publication verifier repeats the authentication check and compares the
+retained receipts against that confirmation before accepting publication. In solo mode
+the Owner performs and records this check through the established channel, disclosing
+that it is self-verification, not independent human corroboration. Authentication
+independent of the proposed records still applies; it does not require inventing a
+second human. An identity/channel change requires a new Owner decision authenticated
+using the previously trusted channel or fresh direct Owner identity verification;
+ambiguity stops the process. There is no automatic trust of new contact details in a
+record.
 
 Source receipts retain exact UTF-8 statements/transcripts approved for publication
 by their speakers: actor, authenticated channel, confirmation method, actual UTC
@@ -79,6 +133,7 @@ backdated, or copied from a merge date to suggest a prior review.
 | `PRIdentity` | `pr_number: positive integer`, `reviewed_head_sha: SHA`, `merge_sha: SHA` |
 | `BlobCheck` | `path: string`, `reviewed_sha256: Digest`, `merged_sha256: Digest`; digests must equal for acceptance |
 | `Selector` | `schema_version: "aios-p4s7-recovery-review-merge-trust-v1"`, `evidence_commit: SHA`, `evidence_path: string`, `evidence_transport_sha256: Digest`; obey PR #301's exact path and value rules |
+| `RoleContext` | `mode: "independent-human"` or `"solo-project-owner-bootstrap"`; `combined_roles: unique array of "reviewer", "approver", "custodian", "verifier", "commissioner", "operator"`; `disclosure: nonempty string` stating actual role combinations, scope and AI assistance. Solo mode lists every combined role and explicitly states no independent human acceptance; independent mode must satisfy section 1 role separation |
 | `Appointment` | `actor: Actor`, `roles: nonempty unique array of "reviewer", "custodian", "verifier"`, `scope: "p4s7-recovery"` |
 
 Every stored path is the full repository-relative path, never the abbreviated
@@ -102,7 +157,7 @@ All record classes have exactly these six top-level fields:
 | `record_id` | UUID; equals filename stem and `payload.record_id` |
 | `repository` | Exactly `bader5657/AIOS`; also equals `payload.repository` |
 | `payload` | Class-specific closed object below |
-| `reviewer_acceptance` | Attestation; independent human adopts the review or verification findings |
+| `reviewer_acceptance` | Attestation; accountable human adopts the findings under role_context; in solo mode the actor is the same authenticated Owner as project_owner_approval, with separate later approval |
 | `project_owner_approval` | Attestation; Owner explicitly approves the payload's stated disposition/scope, not unlisted operations |
 
 The payload repeats `record_id` and `repository` so their identities are covered
@@ -119,14 +174,15 @@ The payload has exactly:
 | Field | Type / rule |
 |---|---|
 | `record_id`, `repository` | As above |
+| `role_context` | RoleContext; required, digest-bound scope and combined-role disclosure under section 1 |
 | `classification` | `original-review-retention` or `retrospective-revalidation` |
 | `record_created_at_utc` | UTC when this new record, including a correction, is actually assembled; never the historical review or merge time |
 | `subject` | PRIdentity |
 | `review_verdict` | `CLEAN` or `CHANGES_REQUIRED` |
 | `reviewed_at_utc` | UTC of the actual review being retained: authenticated original review for original-review-retention, actual re-review for retrospective-revalidation |
 | `merge_verified_at_utc` | UTC of current merge verification |
-| `merge_occurred_at_utc` | UTC from independently corroborated merge evidence; distinct from verification time |
-| `review_source` | SourceRef: actual findings, scope, author independence, reviewer identity and any AI/tool assistance |
+| `merge_occurred_at_utc` | UTC from merge evidence corroborated against authentic human sources and Git facts, independent of the proposed record; no second human required in solo mode; distinct from verification time |
+| `review_source` | SourceRef: actual findings, scope, actual author/reviewer relationship, role_context disclosure, reviewer identity and any AI/tool assistance |
 | `human_merge_source` | SourceRef: direct authenticated statement of the actual human merger or Owner with firsthand merge evidence; identify the historical actor/action; no API-only inference |
 | `identity_sources` | Nonempty array of SourceRef: PR mapping, original two-parent topology, exact second parent and blob-comparison output; factual Git/API evidence only |
 | `artifact_checks` | Nonempty array of BlobCheck, unique paths; all governance-required artifacts |
@@ -136,11 +192,13 @@ The payload has exactly:
 | `predecessor` | GitRef to preceding review record for this subject, or null for first record |
 | `permitted_use` | Exactly `p4s7-recovery-evidence-gate-only` |
 
-For original-review-retention, an authentic original independent review must
-already exist, bind the exact reviewed head, and predate the actual merge. Its
-review timestamp comes from that authenticated original source. Current collection,
-acceptance and approval dates remain current. Missing original review cannot be
-filled by an old commit date, a PR description, or a fresh review called original.
+For original-review-retention, an authentic original human review satisfying the
+governance effective at that event must already exist, bind the exact reviewed head, and
+predate the actual merge. Its review timestamp comes from that authenticated original
+source. Current collection, acceptance and approval dates remain current. Missing
+original review cannot be filled by an old commit date, a PR description, or a fresh
+review called original. Solo mode never retroactively waives an original independence
+requirement or relabels a historical solo or AI review as independent human acceptance.
 
 Historical event fields remain distinct from record-creation and current
 verification/attestation times. `merge_occurred_at_utc` always describes the actual
@@ -156,13 +214,13 @@ not a field to fill in a permitted retrospective record; an unavailable required
 actual merge timestamp still blocks that record. Current verification timestamps
 remain separately recorded in the source receipt even when completion is blocked.
 
-Retention has two phases for a new PR: before its human merge, preserve authentic
-independent review and Owner merge-authorization receipts bound to its exact
-final HEAD under the source-receipt custody rules. After the actual merge, verify
-the merge and assemble this completed record with its now-known merge_sha.
-No completed review record containing a future merge is required before that
-merge. Pre-merge receipts alone cannot satisfy a later completed-record gate.
-If the reviewed HEAD changes, obtain new review and authorization receipts.
+Retention has two phases for a new PR: before its human merge, preserve authentic human
+review under section 1 and Owner merge-authorization receipts bound to its exact final
+HEAD under the source-receipt custody rules. After the actual merge, verify the merge
+and assemble this completed record with its now-known merge_sha. No completed review
+record containing a future merge is required before that merge. Pre-merge receipts alone
+cannot satisfy a later completed-record gate. If the reviewed HEAD changes, obtain new
+review and authorization receipts.
 
 Retrospective records require the bootstrap amendment and its exact allowlist.
 The review occurs now, after that amendment is effective; merge verification is
@@ -191,6 +249,7 @@ The closed payload has exactly:
 | Field | Type / rule |
 |---|---|
 | `record_id`, `repository` | As above |
+| `role_context` | RoleContext; required, digest-bound scope and combined-role disclosure under section 1 |
 | `classification` | Exactly `owner-authority-decision` |
 | `sequence` | Positive integer |
 | `predecessor` | GitRef to prior decision, or null for genesis |
@@ -207,15 +266,16 @@ The closed payload has exactly:
 | `predecessor_inventory` | Array of GitRef identifying all applicable pre-register governance authorities; required for genesis, empty otherwise |
 
 Genesis requires explicit Owner commissioning under the now-approved and merged
-three-document package. The Owner and independent verifier authenticate the
-package's exact final reviewed head, human merge and blob equality directly,
-retaining receipts as genesis sources. This is the sole initial trust ceremony;
-it does not rely on a record approving itself or claim that an archive previously
-existed. The genesis Owner identity is established independently as in section 1.
-Initial reviewer/custodian/verifier appointments are approved explicitly by that
-Owner before genesis preparation and retained in its source receipts; later role
-changes require already-authenticated register authority. Missing independent
-review, package approval, human merge evidence or commissioning is STOP.
+three-document package. The Owner and appointed verifier (the same human in disclosed
+solo mode) authenticate the package's exact final reviewed head, human merge and blob
+equality directly, retaining receipts as genesis sources. This is the sole initial trust
+ceremony; it does not rely on a record approving itself or claim that an archive
+previously existed. The genesis Owner identity is established independently as in
+section 1. Initial reviewer/custodian/verifier appointments are approved explicitly by
+that Owner before genesis preparation and retained in its source receipts; later role
+changes require already-authenticated register authority. Missing disclosed
+role-compliant human review, package approval, human merge evidence or commissioning is
+STOP.
 
 At commissioning the Owner must enumerate all earlier applicable recovery
 authorities (including R32, R34, PR #301 and PR #303), revocations, supersessions
@@ -259,18 +319,18 @@ selector; mismatch or an unfinished transition blocks operational use.
 
 ### Bootstrap admission verification reference
 
-For `admit-bootstrap`, `bootstrap_verification` must be a non-null closed GitRef.
-Its `commit` is the action-verification publication PR's independently verified
-actual merge commit, its `path` is exactly
+For `admit-bootstrap`, `bootstrap_verification` must be a non-null closed GitRef. Its
+`commit` is the action-verification publication PR's verified actual merge commit, its
+`path` is exactly
 `docs/governance/operator-review-evidence/verifications/<record_id>.json`, and
-`transport_sha256` hashes that record's complete canonical committed bytes,
-including the one LF. The filename UUID must equal both record_id fields. Resolve
-one exact regular `100644` blob; no branch name, directory search, source receipt,
-unpublished draft, alternative schema or free-form reference is acceptable.
+`transport_sha256` hashes that record's complete canonical committed bytes, including
+the one LF. The filename UUID must equal both record_id fields. Resolve one exact
+regular `100644` blob; no branch name, directory search, source receipt, unpublished
+draft, alternative schema or free-form reference is acceptable.
 
-Before Owner admission and again immediately before its publication, independently
-verify all of the following; any missing, mismatched, stale, unavailable or
-ambiguous input is STOP, not permission to omit the field or reinterpret it:
+Before Owner admission and again immediately before its publication, the appointed
+verifier must verify all of the following; any missing, mismatched, stale, unavailable
+or ambiguous input is STOP, not permission to omit the field or reinterpret it:
 
 1. The referenced record satisfies `aios-operator-action-verification-v1`, its
    closed schema, canonical bytes, authenticated attestations and post-merge
@@ -300,7 +360,7 @@ ambiguous input is STOP, not permission to omit the field or reinterpret it:
    and off-register instructions, the target and the four review-record tuples.
    No repository-only completeness inference or unspecified inventory is allowed.
 5. The verification's checks, reviewer acceptance, Owner approval, actual
-   publication and independent post-merge verification are all complete before
+   publication and role-disclosed post-merge verification are all complete before
    the admission's `decided_at_utc`. Retained current-dated publication receipts
    establish that ordering; no future publication timestamp is embedded in the
    verification itself. Require `checked_at_utc <= decided_at_utc < expires_at_utc`
@@ -330,6 +390,7 @@ The closed payload has exactly:
 | Field | Type / rule |
 |---|---|
 | `record_id`, `repository` | As above |
+| `role_context` | RoleContext; required, digest-bound scope and combined-role disclosure under section 1 |
 | `classification` | Exactly `fresh-action-verification` |
 | `action_id` | UUID, unique to one proposed action; never a reusable PASS |
 | `action` | `bootstrap-admission`, `evidence-review`, `evidence-merge`, `selector-publication`, `activation-creation`, or `installation-attempt` |
@@ -343,7 +404,7 @@ The closed payload has exactly:
 | `selector` | Selector or null; required for selector-publication and later operational attempts; no invented future evidence merge |
 | `selector_transport_sha256` | Digest of exact canonical Selector plus LF, or null iff selector is null |
 | `owner_currentness_source` | SourceRef: fresh directly authenticated Owner statement naming register tip, action, subject, complete succession, and all known pending/off-register instructions |
-| `verification_sources` | Nonempty array of SourceRef: independently checked review/publication evidence and complete register/predecessor walk |
+| `verification_sources` | Nonempty array of SourceRef: checked review/publication evidence with actual verifier and role_context disclosure and complete register/predecessor walk |
 | `complete_succession` | Boolean |
 | `no_conflicting_successor` | Boolean |
 | `no_competing_supersession_authority` | Boolean |
@@ -351,14 +412,16 @@ The closed payload has exactly:
 | `verdict` | `PASS` or `STOP` |
 | `limitations` | Nonempty string, including sources and scope of external verification |
 
-PASS requires all four booleans true, authenticated Owner confirmation and
-independent verifier acceptance for this exact action. A boolean is never proof
-by itself. Walk every register predecessor to commissioned genesis, verify exact
-bytes/approvals and historical authority inventory, and reconcile all recovery
-binding and supersession decisions, revocations and the current selector decision.
-No skipped entries, forks, unexplained gaps, stale pins or unsupported source
-claims. Compare the exact actual selector where applicable; commissioning and
-bootstrap actions must use null rather than fabricate a selector.
+PASS requires all four booleans true, authenticated Owner confirmation and appointed
+human verifier acceptance for this exact action under section 1, including its
+production boundary. A solo-mode PASS never supplies independent human acceptance or
+production execution authority. A boolean is never proof by itself. Walk every register
+predecessor to commissioned genesis, verify exact bytes/approvals and historical
+authority inventory, and reconcile all recovery binding and supersession decisions,
+revocations and the current selector decision. No skipped entries, forks, unexplained
+gaps, stale pins or unsupported source claims. Compare the exact actual selector where
+applicable; commissioning and bootstrap actions must use null rather than fabricate a
+selector.
 
 The Owner must serialize decisions and confirmations: disclose in-flight requests,
 hold off issuing a competing positive decision while an action is pending, and
@@ -373,14 +436,15 @@ If that cannot be done without making the verification stale, STOP. The fresh
 confirmation and action linkage remain external operator gates; this process
 does not claim atomic global revocation detection or introduce a runtime service.
 
-The final confirmation receipt is a new immutable source file, bound to the
-published verification's commit/path/transport digest and action_id. It is kept
-by the appointed operator in the same protected working archive pending its next
-governance-only publication; both the operator and independent verifier retain an
-exact copy. This narrowly defined delayed publication applies only to that final
-receipt, never a positive Owner authority decision or an unapproved review record.
-Its custody, authentication and indefinite retention follow section 6. Missing
-receipt, unavailable verifier or inability to preserve it prevents the action.
+The final confirmation receipt is a new immutable source file, bound to the published
+verification's commit/path/transport digest and action_id. It is kept by the appointed
+operator in the same protected working archive pending its next governance-only
+publication; the operator and appointed verifier retain exact copies under section 6 (in
+solo mode, the same Owner maintains the separate copies). This narrowly defined delayed
+publication applies only to that final receipt, never a positive Owner authority
+decision or an unapproved review record. Its custody, authentication and indefinite
+retention follow section 6. Missing receipt, unavailable verifier or inability to
+preserve it prevents the action.
 
 ## 6. Custody, publication, retention and corrections
 
@@ -394,27 +458,30 @@ are supplementary custody controls, not acceptance evidence. No provisioning or
 permission changes are authorized by this proposal.
 
 Publication is a separate governance-only PR: add records/receipts only, validate
-schemas/canonical bytes and source digests, authenticate each reviewer/Owner
-statement, and obtain independent review of the exact final PR head. A human
-merges only after explicit Owner publication authorization naming that head and
-custodian. After merge, an independent verifier checks actual PR mapping,
-two-parent topology, reviewed-head second parent and exact reviewed/merged bytes.
-Retain that factual verification and authenticated publication approval as source
-receipts for the next linked action or register entry, referring to the now-known
-publication commit. No record embeds its own future merge. The initial record's
-use always requires these post-merge checks; a later receipt is not a substitute
-for actually performing them. Repository identity evidence and human acceptance
-must remain separately labeled throughout.
+schemas/canonical bytes and source digests, authenticate each reviewer/Owner statement,
+and obtain role-disclosed human review of the exact final PR head. A human merges only
+after explicit Owner publication authorization naming that head and custodian. After
+merge, the appointed verifier checks actual PR mapping, two-parent topology,
+reviewed-head second parent and exact reviewed/merged bytes. Retain that factual
+verification and authenticated publication approval as source receipts for the next
+linked action or register entry, referring to the now-known publication commit. No
+record embeds its own future merge. The initial record's use always requires these
+post-merge checks; a later receipt is not a substitute for actually performing them.
+Repository identity evidence and human acceptance must remain separately labeled
+throughout.
 
-Retain every published record, authentic receipt, failed review, STOP, revocation
-and superseded version indefinitely in accepted history and an Owner-controlled
-archive copy. Retain approved final confirmation receipts locally until publication
-and thereafter under the same rule. No deletion, rewrite, force-push, garbage
-collection of sole copies, or silent edit may erase an authoritative chain.
-Custodian and independent verifier retain separate exact copies of unpublished
-receipts. Archive loss or unavailable required records is STOP. There is no
-time-based expiry of historical evidence; applicability/approval windows still
-expire and historical evidence never renews them.
+Retain every published record, authentic receipt, failed review, STOP, revocation and
+superseded version indefinitely in accepted history and an Owner-controlled archive
+copy. Retain approved final confirmation receipts locally until publication and
+thereafter under the same rule. No deletion, rewrite, force-push, garbage collection of
+sole copies, or silent edit may erase an authoritative chain. Custodian and appointed
+verifier retain separate exact copies of unpublished receipts. In solo mode the Owner
+maintains both the protected working copy and a separate Owner-controlled archive copy,
+records their actual locations in the commissioning receipt, and discloses common
+custody; copies do not imply two humans or independent custody. Archive loss or
+unavailable required records is STOP. There is no time-based expiry of historical
+evidence; applicability/approval windows still expire and historical evidence never
+renews them.
 
 Review corrections create a new UUID and record their actual current creation time in
 the review payload's `record_created_at_utc`. A review correction names
@@ -449,9 +516,14 @@ must be complete before new reviewer acceptance; Owner approval follows acceptan
 and publication follows its separate authorization. These rules change no
 historical event, original authority window or retrospective allowlist.
 
-Schema/version changes require separately reviewed, explicitly Owner-approved
-governance and a defined compatibility boundary. Unknown versions are STOP;
-custodians cannot add fields or reinterpret historical records in place.
+Schema/version changes require separately reviewed, explicitly Owner-approved governance
+and a defined compatibility boundary. Unknown versions are STOP; custodians cannot add
+fields or reinterpret historical records in place. The required role_context is a
+revision to these still-proposed v1 schemas, not a migration or certification of any
+existing evidence. It adds one payload field to each class (19 review, 17 decision, 23
+action-verification fields); the six-field envelope and canonical encoding remain
+unchanged. No older record is implicitly upgraded, and historical source statements must
+never be rewritten.
 
 ## 7. Boundaries and proposed validation gates
 
@@ -461,13 +533,14 @@ Do not rely on it until GD-008 activation and commissioning. It does not change
 PR #301's fifteen-field evidence schema, four-field selector schema, R34's
 activation schema, executor/policy, fixed runtime or external freshness gate.
 
-Before any later publication, independently reject extra/missing/duplicate keys,
-wrong types, malformed IDs/times, noncanonical bytes, bad source hashes, false
-identity claims, unappointed actors, reviewer/Owner conflation, altered payloads,
-unavailable human merge evidence, backdating, forked register chains, off-allowlist
-bootstrap subjects, inappropriate nullable fields, stale action windows, changed
-selector bytes and unsupported approval scope. Positive checks must authenticate
-real actors and sources; synthetic tests or Git-only PASS are insufficient.
+Before any later publication, the appointed verifier must reject extra/missing/duplicate
+keys, wrong types, malformed IDs/times, noncanonical bytes, bad source hashes, false
+identity claims, unappointed actors, undisclosed role combination, false independence
+claims, out-of-scope solo authority, missing role_context, altered payloads, unavailable
+human merge evidence, backdating, forked register chains, off-allowlist bootstrap
+subjects, inappropriate nullable fields, stale action windows, changed selector bytes
+and unsupported approval scope. Positive checks must authenticate real actors and
+sources; synthetic tests or Git-only PASS are insufficient.
 
 This proposal adds documentation only. Implementing validators, provisioning
 custody, creating records, performing re-reviews, or publishing operational
