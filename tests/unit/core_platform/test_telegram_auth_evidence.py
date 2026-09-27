@@ -629,7 +629,7 @@ def test_adversarial_durability_parent_creation_fsync_failure(tmp_path, monkeypa
     assert not list(root.glob("*.json"))
 
 
-def test_adversarial_durability_success_completion_is_last_commit(tmp_path, monkeypatch):
+def test_adversarial_durability_success_requires_final_attempt_commit(tmp_path, monkeypatch):
     events = []
     fsync, link = auth.os.fsync, auth.os.link
     def synced(fd):
@@ -641,7 +641,9 @@ def test_adversarial_durability_success_completion_is_last_commit(tmp_path, monk
     monkeypatch.setattr(auth.os, "fsync", synced)
     monkeypatch.setattr(auth.os, "link", linked)
     path = capture(tmp_path)
-    assert events[-1] == "complete"
+    assert events.index("complete") < len(events) - 1
+    assert events[-1] == "fsync"
+    assert attempt_states(path) == ["PENDING", "COMMITTED"]
     assert json.loads(path.with_name(path.name + ".complete").read_bytes())["state"] == "DURABLY_PUBLISHED"
     assert verify(path, tmp_path).exists()
 
@@ -673,3 +675,306 @@ def test_adversarial_durability_orphan_certificate_cannot_authorize_new_publicat
     with pytest.raises(OSError):
         verify(path, tmp_path)
     assert not list((tmp_path / "consumed").glob("*.json"))
+
+
+def attempt_states(path):
+    return [json.loads(line)["state"] for line in
+            path.with_name(path.name + ".attempt").read_bytes().splitlines()]
+
+
+@pytest.mark.parametrize("point", ["completion_link", "post_link_validation", "completion_fsync",
+                                   "staging_cleanup", "committed_state", "guard_retirement"])
+def test_completion_outcome_error_after_effect_is_permanently_ineligible(tmp_path, monkeypatch, point):
+    root = tmp_path / "archive"
+    with auth.PinnedArchive(root, create=True):
+        pass
+    link, fsync, unlink = auth.os.link, auth.os.fsync, auth.os.unlink
+    check, append = auth.PinnedArchive.current_objects, auth._append_attempt
+    fired = False
+
+    def completion_exists():
+        return bool(list(root.glob("*.complete")))
+
+    def linked(src, dst, **kwargs):
+        nonlocal fired
+        result = link(src, dst, **kwargs)
+        if point == "completion_link" and str(dst).endswith(".complete") and not fired:
+            fired = True
+            raise OSError("injected after completion link succeeded")
+        return result
+
+    def checked(self, fd, objects):
+        nonlocal fired
+        if point == "post_link_validation" and completion_exists() and not fired:
+            fired = True
+            raise OSError("injected before final namespace check")
+        return check(self, fd, objects)
+
+    def synced(fd):
+        nonlocal fired
+        result = fsync(fd)
+        if (point == "completion_fsync" and stat.S_ISDIR(os.fstat(fd).st_mode)
+                and completion_exists() and not fired):
+            fired = True
+            raise OSError("injected after completion directory fsync")
+        return result
+
+    def appended(fd, name, data, state):
+        nonlocal fired
+        result = append(fd, name, data, state)
+        if point == "committed_state" and state == "COMMITTED" and not fired:
+            fired = True
+            raise OSError("injected after provisional committed journal fsync")
+        return result
+
+    def unlinked(name, **kwargs):
+        nonlocal fired
+        if (point == "staging_cleanup" and str(name).endswith(".tmp")
+                and completion_exists() and not fired):
+            fired = True
+            raise OSError("injected required staging cleanup failure")
+        result = unlink(name, **kwargs)
+        if point == "guard_retirement" and str(name).endswith(".pending") and not fired:
+            fired = True
+            raise OSError("injected after pending guard unlink")
+        return result
+
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, "link", linked)
+        m.setattr(auth.os, "fsync", synced)
+        m.setattr(auth.os, "unlink", unlinked)
+        m.setattr(auth.PinnedArchive, "current_objects", checked)
+        m.setattr(auth, "_append_attempt", appended)
+        with pytest.raises(auth.PublicationError) as error:
+            capture(root)
+    assert fired
+    assert error.value.state == auth.PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
+    path = next(root.glob("*.json"))
+    assert path.with_name(path.name + ".complete").exists()
+    assert path.with_name(path.name + ".pending").exists()
+    assert attempt_states(path)[-1] == "UNCERTAIN"
+    before = path.read_bytes()
+    # Also prove denial without any process-local uncertain-attempt cache.
+    monkeypatch.setattr(auth, "_UNCERTAIN_ATTEMPTS", set())
+    with pytest.raises(ValueError):
+        verify(path, root)
+    assert path.read_bytes() == before
+    assert not list((root / "consumed").glob("*.json"))
+
+
+@pytest.mark.parametrize("extra_states", [["UNCERTAIN"], ["UNCERTAIN", "COMMITTED"]])
+def test_completion_outcome_certificate_cannot_override_uncertain_state(tmp_path, extra_states):
+    path = capture(tmp_path)
+    with path.with_name(path.name + ".attempt").open("ab") as stream:
+        for state in extra_states:
+            stream.write(auth._attempt_record(path.name, path.read_bytes(), state))
+    with pytest.raises(ValueError, match="attempt"):
+        verify(path, tmp_path)
+    assert path.with_name(path.name + ".complete").exists()
+    assert not list((tmp_path / "consumed").glob("*.json"))
+
+
+def test_completion_outcome_guard_denies_when_uncertain_journal_append_fails(tmp_path, monkeypatch):
+    link, append = auth.os.link, auth._append_attempt
+    def failed_link(src, dst, **kwargs):
+        result = link(src, dst, **kwargs)
+        if str(dst).endswith(".complete"):
+            raise OSError("after-effect completion failure")
+        return result
+    def failed_append(fd, name, data, state):
+        if state == "UNCERTAIN":
+            raise OSError("journal unavailable")
+        return append(fd, name, data, state)
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, "link", failed_link)
+        m.setattr(auth, "_append_attempt", failed_append)
+        with pytest.raises(auth.PublicationError):
+            capture(tmp_path)
+    path = next(tmp_path.glob("*.json"))
+    monkeypatch.setattr(auth, "_UNCERTAIN_ATTEMPTS", set())
+    assert attempt_states(path) == ["PENDING"]
+    with pytest.raises(ValueError):
+        verify(path, tmp_path)
+    assert not list((tmp_path / "consumed").glob("*.json"))
+
+
+def test_completion_outcome_reader_cannot_observe_provisional_commit(tmp_path, monkeypatch):
+    reached, release = Event(), Event()
+    append = auth._append_attempt
+    def pause_then_fail(fd, name, data, state):
+        result = append(fd, name, data, state)
+        if state == "COMMITTED":
+            reached.set()
+            assert release.wait(5)
+            raise OSError("final validation not complete")
+        return result
+    monkeypatch.setattr(auth, "_append_attempt", pause_then_fail)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        writer = pool.submit(capture, tmp_path)
+        reader = None
+        try:
+            assert reached.wait(3)
+            path = next(tmp_path.glob("*.json"))
+            reader = pool.submit(verify, path, tmp_path)
+            with pytest.raises(TimeoutError):
+                reader.result(timeout=.05)
+        finally:
+            release.set()
+        with pytest.raises(auth.PublicationError):
+            writer.result(timeout=3)
+        with pytest.raises(ValueError):
+            reader.result(timeout=3)
+    assert not list((tmp_path / "consumed").glob("*.json"))
+
+
+@pytest.mark.parametrize("which", ["archive", "consumed"])
+@pytest.mark.parametrize("when", ["before_link", "after_link", "after_state"])
+def test_final_namespace_swap_never_reports_success(tmp_path, monkeypatch, which, when):
+    root = tmp_path / "archive"
+    path = capture(root)
+    link, append = auth.os.link, auth._append_attempt
+    target = root if which == "archive" else root / "consumed"
+    moved = tmp_path / ("old-" + which)
+    swapped = False
+    def swap():
+        nonlocal swapped
+        target.rename(moved)
+        target.mkdir(mode=0o700)
+        swapped = True
+    def linked(src, dst, **kwargs):
+        if str(dst).endswith(".complete") and when == "before_link" and not swapped:
+            swap()
+        result = link(src, dst, **kwargs)
+        if str(dst).endswith(".complete") and when == "after_link" and not swapped:
+            swap()
+        return result
+    def appended(fd, name, data, state):
+        result = append(fd, name, data, state)
+        if state == "COMMITTED" and when == "after_state" and not swapped:
+            swap()
+        return result
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, "link", linked)
+        m.setattr(auth, "_append_attempt", appended)
+        with pytest.raises(auth.PublicationError) as error:
+            verify(path, root)
+    assert swapped
+    assert error.value.state == auth.PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
+    assert not list(target.iterdir())
+    old_consumed = moved / "consumed" if which == "archive" else moved
+    receipt = next(old_consumed.glob("*.json"))
+    assert receipt.with_name(receipt.name + ".complete").exists()
+    assert attempt_states(receipt)[-1] == "UNCERTAIN"
+    # Restore the original namespace: the terminal journal still prevents replay.
+    target.rmdir()
+    moved.rename(target)
+    with pytest.raises(FileExistsError):
+        verify(path, root)
+
+
+def test_final_namespace_missing_returned_payload_rejects_commit(tmp_path, monkeypatch):
+    append = auth._append_attempt
+    moved = tmp_path / "retained-renamed-payload"
+    def move_after_state(fd, name, data, state):
+        result = append(fd, name, data, state)
+        if state == "COMMITTED":
+            (tmp_path / name).rename(moved)
+        return result
+    monkeypatch.setattr(auth, "_append_attempt", move_after_state)
+    with pytest.raises(auth.PublicationError) as error:
+        capture(tmp_path)
+    assert error.value.state == auth.PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
+    assert moved.exists()
+    attempt = next(tmp_path.glob("*.attempt"))
+    assert json.loads(attempt.read_bytes().splitlines()[-1])["state"] == "UNCERTAIN"
+    assert not list((tmp_path / "consumed").glob("*.json"))
+
+
+def test_final_namespace_stable_names_reference_committed_objects(tmp_path):
+    path = capture(tmp_path)
+    receipt = verify(path, tmp_path)
+    for record in (path, receipt):
+        assert record.exists()
+        assert record.with_name(record.name + ".complete").exists()
+        assert not record.with_name(record.name + ".pending").exists()
+        assert attempt_states(record) == ["PENDING", "COMMITTED"]
+
+
+@pytest.mark.parametrize("target", ["/", "archive", "consumed", "attempt", "evidence", "certificate"])
+def test_descriptor_ownership_first_fstat_failure_returns_to_baseline(tmp_path, monkeypatch, target):
+    root = tmp_path / "archive"
+    path = capture(root)
+    opened, actual_stat = auth.os.open, auth.os.fstat
+    descriptors = {}
+    fired = False
+    def tracked_open(name, *args, **kwargs):
+        fd = opened(name, *args, **kwargs)
+        descriptors[fd] = str(name)
+        return fd
+    def fail_first(fd):
+        nonlocal fired
+        name = descriptors.get(fd)
+        selected = (name == target or target == "attempt" and name == path.name + ".attempt"
+                    or target == "evidence" and name == path.name
+                    or target == "certificate" and name == path.name + ".complete")
+        if selected and not fired:
+            fired = True
+            raise OSError("injected first metadata failure")
+        return actual_stat(fd)
+    baseline = len(os.listdir("/proc/self/fd"))
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, "open", tracked_open)
+        m.setattr(auth.os, "fstat", fail_first)
+        with pytest.raises(OSError):
+            verify(path, root)
+    assert fired
+    assert len(os.listdir("/proc/self/fd")) == baseline
+    assert not list((root / "consumed").glob("*.json"))
+
+
+def test_descriptor_ownership_new_attempt_metadata_failure_closes_fd(tmp_path, monkeypatch):
+    opened, actual_stat = auth.os.open, auth.os.fstat
+    descriptors = {}
+    fired = False
+    def tracked_open(name, *args, **kwargs):
+        fd = opened(name, *args, **kwargs)
+        descriptors[fd] = str(name)
+        return fd
+    def fail_first(fd):
+        nonlocal fired
+        if descriptors.get(fd, "").endswith(".attempt") and not fired:
+            fired = True
+            raise OSError("injected new attempt fstat failure")
+        return actual_stat(fd)
+    baseline = len(os.listdir("/proc/self/fd"))
+    with monkeypatch.context() as m:
+        m.setattr(auth.os, "open", tracked_open)
+        m.setattr(auth.os, "fstat", fail_first)
+        with pytest.raises(auth.PublicationError):
+            capture(tmp_path)
+    assert fired
+    assert len(os.listdir("/proc/self/fd")) == baseline
+    assert not list(tmp_path.glob("*.json"))
+
+
+@pytest.mark.parametrize("operation", ["stage", "pending_guard", "evidence_read", "attempt_read"])
+def test_descriptor_ownership_stream_wrapper_failure_closes_fd(tmp_path, monkeypatch, operation):
+    path = capture(tmp_path)
+    data = path.read_bytes()
+    with auth.PinnedArchive(tmp_path) as archive:
+        baseline = len(os.listdir("/proc/self/fd"))
+        def fail_wrapper(*args, **kwargs):
+            raise OSError("injected stream wrapper failure")
+        with monkeypatch.context() as m:
+            m.setattr(auth.os, "fdopen", fail_wrapper)
+            with pytest.raises(OSError):
+                if operation == "stage":
+                    archive.stage(archive.root_fd, data)
+                elif operation == "pending_guard":
+                    auth._pending_guard(archive.root_fd, "probe", data)
+                elif operation == "evidence_read":
+                    archive.read(archive.root_fd, path.name)
+                else:
+                    with auth._committed_attempt(archive, archive.root_fd, path.name, data):
+                        pytest.fail("stream failure was not propagated")
+        assert len(os.listdir("/proc/self/fd")) == baseline

@@ -1,12 +1,14 @@
 """Bounded Telegram challenge capture; capture alone never authenticates an Owner."""
 
 import hashlib
+import fcntl
 import logging
 import json
 import os
 import re
 import stat
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from threading import BoundedSemaphore, Lock
@@ -128,6 +130,19 @@ _KNOWN_LAYOUTS = {}
 _LAYOUT_LOCK = Lock()
 
 
+@contextmanager
+def _opened(name, flags, mode=0o600, *, dir_fd=None):
+    """Own an opened descriptor before any metadata or stream operation."""
+    fd = os.open(name, flags, mode, dir_fd=dir_fd)
+    try:
+        yield fd
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass  # Cleanup cannot change a finalized transaction outcome.
+
+
 class PinnedArchive:
     """No-follow walk from /; all later I/O is relative to retained descriptors.
 
@@ -141,18 +156,19 @@ class PinnedArchive:
         if not self.path.is_absolute() or ".." in self.path.parts or self.path == Path("/"):
             raise ValueError("absolute non-traversing archive path required")
         self.entries = []
+        self.owned_fds = []
         with _LAYOUT_LOCK:
             known = _KNOWN_LAYOUTS.get(str(self.path))
         flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
         try:
-            fd = os.open("/", flags)
+            fd = self.open_directory("/", flags)
             self.entries.append((None, None, fd, _identity(os.fstat(fd))))
             _safe_directory(os.fstat(fd), private=False)
             for index, name in enumerate(self.path.parts[1:]):
                 private = index >= len(self.path.parts) - 3
                 parent_fd = self.entries[-1][2]
                 try:
-                    fd = os.open(name, flags, dir_fd=parent_fd)
+                    fd = self.open_directory(name, flags, dir_fd=parent_fd)
                 except FileNotFoundError:
                     if known is not None or not create:
                         raise
@@ -161,7 +177,7 @@ class PinnedArchive:
                     except FileExistsError:
                         pass
                     os.fsync(parent_fd)
-                    fd = os.open(name, flags, dir_fd=parent_fd)
+                    fd = self.open_directory(name, flags, dir_fd=parent_fd)
                 self.entries.append((parent_fd, name, fd, _identity(os.fstat(fd))))
                 _safe_directory(os.fstat(fd), private=private)
                 if known is not None and self.entries[-1][3] != known[len(self.entries) - 1]:
@@ -174,7 +190,7 @@ class PinnedArchive:
                     os.fsync(self.root_fd)
                 except FileExistsError:
                     pass
-            fd = os.open("consumed", flags, dir_fd=self.root_fd)
+            fd = self.open_directory("consumed", flags, dir_fd=self.root_fd)
             self.entries.append((self.root_fd, "consumed", fd, _identity(os.fstat(fd))))
             _safe_directory(os.fstat(fd), private=True)
             self.consumed_fd = fd
@@ -218,6 +234,11 @@ class PinnedArchive:
             self.close()
             raise
 
+    def open_directory(self, name, flags, *, dir_fd=None):
+        fd = os.open(name, flags, dir_fd=dir_fd)
+        self.owned_fds.append(fd)  # Registration precedes even the first fstat.
+        return fd
+
     def validate(self):
         for parent, name, fd, identity in self.entries:
             if _identity(os.fstat(fd)) != identity:
@@ -228,17 +249,17 @@ class PinnedArchive:
                     raise ValueError("directory entry replaced")
 
     def read(self, directory_fd, name):
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
-                     dir_fd=directory_fd)
-        with os.fdopen(fd, "rb") as stream:
-            before = os.fstat(stream.fileno())
+        with _opened(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                     dir_fd=directory_fd) as fd:
+            before = os.fstat(fd)
             if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid()
                     or before.st_mode & 0o077):
                 raise ValueError("record must be a private custodian-owned regular file")
-            data = stream.read(65537)
+            with os.fdopen(fd, "rb", closefd=False) as stream:
+                data = stream.read(65537)
             if len(data) > 65536:
                 raise ValueError("record too large")
-            after = os.fstat(stream.fileno())
+            after = os.fstat(fd)
             linked = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
             if (_identity(before) != _identity(after) or _identity(after) != _identity(linked)
                     or before.st_size != after.st_size or before.st_mtime_ns != after.st_mtime_ns):
@@ -248,18 +269,30 @@ class PinnedArchive:
     def stage(self, directory_fd, data):
         self.validate()
         name = "." + str(uuid4()) + ".tmp"
-        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                     0o600, dir_fd=directory_fd)
+        created = False
         try:
-            with os.fdopen(fd, "wb") as stream:
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
+            with _opened(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         dir_fd=directory_fd) as fd:
+                created = True
+                with os.fdopen(fd, "wb", closefd=False) as stream:
+                    stream.write(data)
+                    stream.flush()
+                    os.fsync(fd)
             self.validate()
             return name
         except BaseException:
-            self.cleanup(directory_fd, name)
+            if created:
+                self.cleanup(directory_fd, name)
             raise
+
+    def current_objects(self, directory_fd, objects):
+        """Validate the pinned chain and the returned names' exact linked objects."""
+        self.validate()
+        for name, identity in objects.items():
+            current = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            if _identity(current) != identity:
+                raise ValueError("committed object replaced or missing")
+        self.validate()
 
     @staticmethod
     def cleanup(directory_fd, name):
@@ -271,12 +304,13 @@ class PinnedArchive:
                 pass
 
     def close(self):
-        for _, _, fd, _ in reversed(self.entries):
+        for fd in reversed(self.owned_fds):
             try:
                 os.close(fd)
             except OSError:
                 pass
         self.entries = []
+        self.owned_fds = []
 
     def __enter__(self):
         return self
@@ -292,59 +326,166 @@ def _completion(name, data):
                             "state": PublicationState.DURABLY_PUBLISHED.value})
 
 
-def _publish(archive, directory_fd, name, data):
-    """The completion link is the final commit point, AFTER required fsyncs.
+_UNCERTAIN_ATTEMPTS = set()
+_ATTEMPT_LOCK = Lock()
 
-    Its absence always rejects verification. Its survival is not required for
-    safety: a lost completion link denies authentication rather than promoting
-    uncertain data. No fallible durability operation follows that commit point.
-    """
-    payload_stage = completion_stage = None
-    state = PublicationState.NOT_PUBLISHED
+
+def _attempt_record(name, data, state):
+    return canonical_bytes({"schema_version": "aios-telegram-auth-attempt-v1",
+                            "filename": name,
+                            "transport_sha256": hashlib.sha256(data).hexdigest(),
+                            "state": state})
+
+
+def _append_attempt(fd, name, data, state):
+    line = _attempt_record(name, data, state)
+    os.lseek(fd, 0, os.SEEK_END)
+    view = memoryview(line)
+    while view:
+        written = os.write(fd, view)
+        if written <= 0:
+            raise OSError("attempt journal write failed")
+        view = view[written:]
+    os.fsync(fd)
+
+
+def _pending_guard(directory_fd, name, data):
     try:
+        with _opened(name + ".pending", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                     dir_fd=directory_fd) as fd:
+            with os.fdopen(fd, "wb", closefd=False) as stream:
+                stream.write(_attempt_record(name, data, "PENDING"))
+                stream.flush()
+                os.fsync(fd)
+        os.fsync(directory_fd)
+    except FileExistsError:
+        # Any existing guard denies verification; do not overwrite it.
+        pass
+
+
+def _reject_uncertain(fd, directory_fd, name, data, identity):
+    if identity is not None:
+        with _ATTEMPT_LOCK:
+            _UNCERTAIN_ATTEMPTS.add(tuple(identity))
+    # The durable guard was established before completion. Keep it on every
+    # failure, including inability to append a terminal journal entry. Restore it
+    # if an error-after-effect occurred while retiring it on the success path.
+    try:
+        _pending_guard(directory_fd, name, data)
+    except OSError:
+        logging.getLogger(__name__).critical(
+            "Telegram auth attempt guard persistence failed; archive requires custody review")
+    try:
+        _append_attempt(fd, name, data, "UNCERTAIN")
+    except OSError:
+        logging.getLogger(__name__).critical(
+            "Telegram auth attempt journal persistence failed; retained guard denies authentication")
+
+
+@contextmanager
+def _committed_attempt(archive, directory_fd, name, data):
+    attempt_name = name + ".attempt"
+    with _opened(attempt_name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                 dir_fd=directory_fd) as fd:
+        fcntl.flock(fd, fcntl.LOCK_SH)
         try:
-            os.stat(name + ".complete", dir_fd=directory_fd, follow_symlinks=False)
+            os.stat(name + ".pending", dir_fd=directory_fd, follow_symlinks=False)
         except FileNotFoundError:
             pass
         else:
-            raise FileExistsError("completion namespace already reserved")
-        payload_stage = archive.stage(directory_fd, data)
-        completion_stage = archive.stage(directory_fd, _completion(name, data))
-        archive.validate()
+            raise ValueError("attempt is still pending or uncertain")
+        metadata = os.fstat(fd)
+        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.geteuid()
+                or metadata.st_mode & 0o077):
+            raise ValueError("unsafe attempt journal")
+        with _ATTEMPT_LOCK:
+            if tuple(_identity(metadata)) in _UNCERTAIN_ATTEMPTS:
+                raise ValueError("attempt permanently uncertain")
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            journal = stream.read(65537)
+        expected = (_attempt_record(name, data, "PENDING")
+                    + _attempt_record(name, data, "COMMITTED"))
+        if journal != expected:
+            raise ValueError("attempt digest/state is not finally committed")
+        archive.current_objects(directory_fd, {attempt_name: _identity(metadata)})
+        yield
+        # The shared lock covers validation and challenge consumption. The
+        # publisher cannot expose a provisional COMMITTED line to a verifier.
+
+
+def _publish(archive, directory_fd, name, data):
+    """Locked PENDING -> COMMITTED, or terminal UNCERTAIN; certificate alone is insufficient."""
+    attempt_name = name + ".attempt"
+    try:
+        os.stat(name + ".complete", dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        pass
+    else:
+        raise FileExistsError("completion namespace already reserved")
+    with _opened(attempt_name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                 dir_fd=directory_fd) as attempt_fd:
+        fcntl.flock(attempt_fd, fcntl.LOCK_EX)
+        payload_stage = completion_stage = None
+        state = PublicationState.NOT_PUBLISHED
+        objects = {}
         try:
-            os.link(payload_stage, name, src_dir_fd=directory_fd,
-                    dst_dir_fd=directory_fd, follow_symlinks=False)
-        except OSError:
-            # A failed publication call can have an uncertain outcome. Attribute
-            # any surviving link to this staged inode, not a pre-existing record.
+            objects = {attempt_name: _identity(os.fstat(attempt_fd))}
+            _append_attempt(attempt_fd, name, data, "PENDING")
+            _pending_guard(directory_fd, name, data)
+            os.fsync(directory_fd)
+            payload_stage = archive.stage(directory_fd, data)
+            completion_stage = archive.stage(directory_fd, _completion(name, data))
+            objects[name] = _identity(os.stat(payload_stage, dir_fd=directory_fd, follow_symlinks=False))
+            objects[name + ".complete"] = _identity(os.stat(completion_stage, dir_fd=directory_fd, follow_symlinks=False))
+            archive.validate()
             try:
-                linked = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
-                staged = os.stat(payload_stage, dir_fd=directory_fd, follow_symlinks=False)
-                if _identity(linked) == _identity(staged):
-                    state = PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
-            except FileNotFoundError:
-                pass
+                os.link(payload_stage, name, src_dir_fd=directory_fd,
+                        dst_dir_fd=directory_fd, follow_symlinks=False)
             except OSError:
-                state = PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
-            raise
-        state = PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
-        os.fsync(directory_fd)
-        if archive.read(directory_fd, name) != data:
-            raise ValueError("published bytes failed verification")
-        archive.validate()
-        # All payload durability and identity checks have succeeded. Publishing
-        # this already-fsynced certificate is the last fallible operation.
-        os.link(completion_stage, name + ".complete", src_dir_fd=directory_fd,
-                dst_dir_fd=directory_fd, follow_symlinks=False)
-    except FileExistsError:
-        if state == PublicationState.NOT_PUBLISHED:
-            raise  # Includes replay; never replace the existing marker.
-        raise PublicationError(state) from None
-    except (OSError, ValueError):
-        raise PublicationError(state) from None
-    finally:
-        archive.cleanup(directory_fd, payload_stage)
-        archive.cleanup(directory_fd, completion_stage)
+                try:
+                    if _identity(os.stat(name, dir_fd=directory_fd, follow_symlinks=False)) == objects[name]:
+                        state = PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    state = PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
+                raise
+            state = PublicationState.PUBLISHED_DURABILITY_UNCERTAIN
+            os.fsync(directory_fd)
+            if archive.read(directory_fd, name) != data:
+                raise ValueError("published bytes failed verification")
+            archive.validate()  # Immediately before completion publication.
+            os.link(completion_stage, name + ".complete", src_dir_fd=directory_fd,
+                    dst_dir_fd=directory_fd, follow_symlinks=False)
+            archive.current_objects(directory_fd, objects)  # Immediately after.
+            os.fsync(directory_fd)
+            if archive.read(directory_fd, name + ".complete") != _completion(name, data):
+                raise ValueError("completion readback failed")
+            archive.current_objects(directory_fd, objects)
+            # Required transaction cleanup happens before final state. A failure
+            # here is uncertain too; never suppress an observed post-link error.
+            os.unlink(payload_stage, dir_fd=directory_fd)
+            payload_stage = None
+            os.unlink(completion_stage, dir_fd=directory_fd)
+            completion_stage = None
+            os.fsync(directory_fd)
+            # Provisional until post-state-sync namespace validation succeeds.
+            # Readers cannot see it as authoritative while this lock is held.
+            _append_attempt(attempt_fd, name, data, "COMMITTED")
+            archive.current_objects(directory_fd, objects)
+            os.unlink(name + ".pending", dir_fd=directory_fd)
+            # Losing this deletion on crash denies authentication, never enables
+            # it. Recheck the returned namespace before exposing committed state.
+            archive.current_objects(directory_fd, objects)
+        except BaseException as error:
+            _reject_uncertain(attempt_fd, directory_fd, name, data, objects.get(attempt_name))
+            if isinstance(error, FileExistsError) and state == PublicationState.NOT_PUBLISHED:
+                raise
+            if not isinstance(error, Exception):
+                raise
+            raise PublicationError(state) from None
+        # On failure retain any remaining staging aliases alongside the final
+        # artifacts and terminal state for inspection. Do not retry publication.
 
 
 def _store(data, root):
@@ -474,6 +615,11 @@ def verify_and_consume(evidence_path, challenge, *, root=EVIDENCE_ROOT, verified
 
 def _verify_pinned(archive, path, challenge, verified_at):
     data = archive.read(archive.root_fd, path.name)
+    with _committed_attempt(archive, archive.root_fd, path.name, data):
+        return _verify_committed(archive, path, data, challenge, verified_at)
+
+
+def _verify_committed(archive, path, data, challenge, verified_at):
     certificate = archive.read(archive.root_fd, path.name + ".complete")
     if certificate != _completion(path.name, data):
         raise ValueError("evidence lacks successful durability completion")
