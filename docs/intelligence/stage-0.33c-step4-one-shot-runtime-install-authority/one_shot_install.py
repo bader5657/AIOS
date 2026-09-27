@@ -569,10 +569,17 @@ def check_no_args_root() -> None:
     os.umask(0o077)
 
 
+def _git_command(*args: str) -> tuple[str, ...]:
+    # Command-line disabling cannot be undone by inherited replacement settings:
+    # both subprocess helpers construct a fresh PATH-only environment.
+    return ("/usr/bin/git", "--no-replace-objects", "-c",
+            "safe.directory=/opt/aios-src", "-C", str(REPOSITORY), *args)
+
+
 def run_git(*args: str) -> str:
     try:
         completed = subprocess.run(
-            ("/usr/bin/git", "-c", "safe.directory=/opt/aios-src", "-C", str(REPOSITORY), *args),
+            _git_command(*args),
             check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, env={"PATH": "/usr/bin:/bin"},
         )
@@ -584,7 +591,7 @@ def run_git(*args: str) -> str:
 def _git_bytes(*args: str) -> bytes:
     try:
         return subprocess.run(
-            ("/usr/bin/git", "-c", "safe.directory=/opt/aios-src", "-C", str(REPOSITORY), *args),
+            _git_command(*args),
             check=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin"},
         ).stdout
@@ -627,7 +634,11 @@ def _protected_record(path: Path, stage: str) -> bytes:
             descriptors.append(os.open(component, os.O_RDONLY | os.O_DIRECTORY |
                                        os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=descriptors[-1]))
         parent = os.fstat(descriptors[-1])
-        _require(parent.st_uid == 0 and parent.st_gid == pwd.getpwnam("aiosadmin").pw_gid
+        governed_gid = pwd.getpwnam("aiosadmin").pw_gid
+        parent_signature = lambda i: (i.st_dev, i.st_ino, i.st_mode, i.st_uid,
+                                      i.st_gid, i.st_mtime_ns, i.st_ctime_ns)
+        _require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0
+                 and parent.st_gid == governed_gid
                  and stat.S_IMODE(parent.st_mode) == 0o750, stage)
         fd = os.open(path.name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
                      dir_fd=descriptors[-1])
@@ -653,6 +664,14 @@ def _protected_record(path: Path, stage: str) -> bytes:
                      and not stat.S_IMODE(info.st_mode) & 0o022
                      and stat.S_IMODE(info.st_mode) & 0o100
                      and (info.st_dev, info.st_ino) == (entry.st_dev, entry.st_ino), stage)
+        final_parent = os.fstat(descriptors[-2])
+        final_entry = os.stat(path.parent.name, dir_fd=descriptors[-3], follow_symlinks=False)
+        _require(stat.S_ISDIR(final_parent.st_mode) and final_parent.st_uid == 0
+                 and final_parent.st_gid == governed_gid
+                 and stat.S_IMODE(final_parent.st_mode) == 0o750
+                 and not stat.S_IMODE(final_parent.st_mode) & 0o022
+                 and parent_signature(parent) == parent_signature(final_parent)
+                 == parent_signature(final_entry), stage)
         return b"".join(chunks)
     except (OSError, KeyError) as exc:
         raise Stop(PRECONDITION_FAILED, stage, errno_code=getattr(exc, "errno", None)) from exc
@@ -749,17 +768,101 @@ def _blob(commit: str, path: str | Path) -> bytes:
     return _git_bytes("cat-file", "blob", parts[2].decode("ascii"))
 
 
+def _parents(commit: str) -> tuple[str, ...]:
+    """Read original commit headers, never show/rev-list's grafted graph.
+
+    Git 2.43 still honors info/grafts even with --no-replace-objects. cat-file
+    returns the original bytes; deriving edges here also avoids shallow grafts.
+    Missing history fails closed instead of being treated as a root.
+    """
+    _commit(commit)
+    raw = _git_bytes("cat-file", "commit", commit)
+    _require(hashlib.sha1(b"commit " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+             == commit, "EVIDENCE_GIT")
+    header, sep, _ = raw.partition(b"\n\n")
+    _require(bool(sep), "EVIDENCE_GIT")
+    lines = header.split(b"\n")
+    _require(re.fullmatch(rb"tree [0-9a-f]{40}", lines[0]) is not None, "EVIDENCE_GIT")
+    parents, end_of_parents = [], False
+    for line in lines[1:]:
+        if line.startswith(b"parent "):
+            # Git's parent block immediately follows the tree header. Never
+            # reinterpret a later arbitrary header as an ancestry edge.
+            _require(not end_of_parents, "EVIDENCE_GIT")
+            oid = line[7:]
+            _require(re.fullmatch(rb"[0-9a-f]{40}", oid) is not None, "EVIDENCE_GIT")
+            parents.append(oid.decode("ascii"))
+        else:
+            end_of_parents = True
+    _require(len(set(parents)) == len(parents), "EVIDENCE_GIT")
+    return tuple(parents)
+
+
+def _ancestors(commit: str) -> set[str]:
+    pending, seen = [commit], set()
+    while pending:
+        current = pending.pop()
+        if current not in seen:
+            seen.add(current)
+            pending.extend(_parents(current))
+    return seen
+
+
 def _ancestor(old: str, new: str) -> None:
     _commit(old)
-    _commit(new)
-    run_git("merge-base", "--is-ancestor", old, new)
+    _require(old in _ancestors(new), "EVIDENCE_ANCESTRY")
+
+
+def _record_changes(parent: str, commit: str) -> list[tuple[bytes, bytes]]:
+    # Two explicit trees, not a Git parent walk. No rename folding or path
+    # discovery: inspect only deltas in the governed evidence namespace.
+    raw = _git_bytes("diff-tree", "--no-commit-id", "--no-renames", "-r",
+                     "--name-status", "-z", parent, commit, "--", EVIDENCE_PREFIX)
+    if not raw:
+        return []
+    parts = raw.split(b"\0")
+    _require(parts[-1] == b"" and len(parts) % 2 == 1, "EVIDENCE_GIT")
+    return list(zip(parts[:-1:2], parts[1:-1:2]))
+
+
+def _evidence_history(parents: tuple[str, ...], previous: str, path: str) -> None:
+    """Check both authenticated parent histories, including erased changes.
+
+    Only drafting A/M revisions of the selected new record on the reviewed
+    branch are allowed. Prior publication, other records, deletions and type
+    changes cannot be hidden by a clean final first-parent tree difference.
+    """
+    excluded = _ancestors(previous)
+    first_history = _ancestors(parents[0])
+    _require(previous in first_history, "PREDECESSOR_CONFLICT")
+    pending, seen = list(parents), set(excluded)
+    selected = path.encode()
+    while pending:
+        current = pending.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        edges = _parents(current)
+        _require(bool(edges), "PREDECESSOR_CONFLICT")
+        for index, parent in enumerate(edges):
+            changes = _record_changes(parent, current)
+            if current in first_history:
+                _require(not changes, "PREDECESSOR_CONFLICT")
+            else:
+                _require(all(name == selected and status in (b"A", b"M")
+                             for status, name in changes), "PREDECESSOR_CONFLICT")
+                # A prior evidence publication in the reviewed ancestry is
+                # not an unpublished draft revision, even at the same path.
+                if len(edges) > 1 and index == 0:
+                    _require((b"A", selected) not in changes, "PREDECESSOR_CONFLICT")
+        pending.extend(edges)
 
 
 def _review(review: dict[str, object], paths: tuple[Path, ...]) -> None:
     merge, reviewed = review["merge_sha"], review["reviewed_head_sha"]
     _commit(merge)
     _commit(reviewed)
-    parents = run_git("show", "-s", "--format=%P", merge).split()
+    parents = _parents(merge)
     _require(len(parents) == 2 and parents[1] == reviewed, "REVIEW_MERGE")
     for path in paths:
         _require(_blob(reviewed, path) == _blob(merge, path), "REVIEW_BLOB")
@@ -813,20 +916,15 @@ def read_recovery_evidence() -> dict[str, object]:
         _require(record["binding_id"] not in seen_ids, "PREDECESSOR_CYCLE")
         seen_ids.add(record["binding_id"])
         # Evidence must be the unique addition at its actual two-parent merge.
-        parents = run_git("show", "-s", "--format=%P", commit).split()
+        parents = _parents(commit)
         _require(len(parents) == 2 and _blob(parents[1], path) == data, "EVIDENCE_MERGE")
-        changes = _git_bytes("diff-tree", "--no-commit-id", "-r", "--name-status", "-z", parents[0], commit, "--", EVIDENCE_PREFIX)
-        _require(changes == b"A\0" + path.encode() + b"\0", "EVIDENCE_CONFLICT")
+        changes = _record_changes(parents[0], commit)
+        _require(changes == [(b"A", path.encode())], "EVIDENCE_CONFLICT")
         _verify_evidence_record(record, commit)
         selected = selected or record
         previous = record["supersedes"]
-        _ancestor(previous["commit"], parents[0])
         _require(previous["commit"] != commit, "PREDECESSOR_CYCLE")
-        # Bounded authenticated history, not directory/ref discovery. Any
-        # intervening record addition/modification is an observable skip/fork.
-        intervening = _git_bytes("log", "--format=%H", "--full-history", "-m",
-                                 previous["commit"] + ".." + parents[0], "--", EVIDENCE_PREFIX)
-        _require(not intervening.strip(), "PREDECESSOR_CONFLICT")
+        _evidence_history(parents, previous["commit"], path)
         commit, path, digest = previous["commit"], previous["path"], previous["transport_sha256"]
         if previous["kind"] == "r34-baseline":
             _require(sha256(_blob(commit, path)) == digest, "PREDECESSOR_HASH")

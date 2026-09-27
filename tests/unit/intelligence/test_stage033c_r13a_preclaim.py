@@ -66,7 +66,7 @@ class GitSafeDirectoryTests(unittest.TestCase):
                 if helper is executor.run_git:
                     expected["text"] = True
                 run.assert_called_once_with(
-                    ("/usr/bin/git", "-c", "safe.directory=/opt/aios-src", "-C",
+                    ("/usr/bin/git", "--no-replace-objects", "-c", "safe.directory=/opt/aios-src", "-C",
                      "/opt/aios-src", "rev-parse", "HEAD"), **expected,
                 )
 

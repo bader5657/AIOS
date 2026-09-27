@@ -509,3 +509,194 @@ def test_authenticated_chain_and_real_package_reach_claim_boundary(tmp_path,monk
 def test_locally_invalid_activation_time(graph,timestamp):
     graph.act['activated_at_utc']=timestamp
     assert graph.assert_stop().stage=='ACTIVATION_TIME'
+
+
+def _second_parent_attack(graph, variant='delete_replace'):
+    """Carry an earlier publication through reviewed ancestry, then hide it."""
+    first=graph.sel.copy()
+    record=copy.deepcopy(graph.record)
+    record['binding_id']='32345678-1234-1234-1234-123456789abc'
+    path=m.EVIDENCE_PREFIX+record['binding_id']+'.json'
+    graph.git('checkout','--detach',first['evidence_commit'])
+    if variant=='alter_restore_delete':
+        original=(graph.repo/first['evidence_path']).read_bytes()
+        graph.write(first['evidence_path'],b'altered historical evidence\n'); graph.commit()
+        graph.write(first['evidence_path'],original); graph.commit()
+    elif variant=='conflicting_successor':
+        conflict=copy.deepcopy(graph.record)
+        conflict['binding_id']='42345678-1234-1234-1234-123456789abc'
+        conflict_path=m.EVIDENCE_PREFIX+conflict['binding_id']+'.json'
+        graph.merge({conflict_path:canonical(conflict)})
+        graph.git('rm',conflict_path); graph.commit()
+    graph.git('rm',first['evidence_path']); graph.commit()
+    graph.write(path,canonical(record)); reviewed=graph.commit()
+    graph.git('checkout','--detach',graph.head)
+    graph.git('merge','--no-ff','--no-commit',reviewed); merged=graph.commit()
+    graph.sel.update(evidence_commit=merged,evidence_path=path,
+                     evidence_transport_sha256=m.sha256(canonical(record)))
+    graph.git('checkout','--detach',graph.head)
+    assert graph.git('diff-tree','--no-commit-id','-r','--name-status',graph.head,merged,'--',m.EVIDENCE_PREFIX)==f'A\t{path}'
+    graph.git('merge-base','--is-ancestor',first['evidence_commit'],reviewed)
+    return first
+
+
+def test_adversarial_second_parent_deleted_predecessor(graph):
+    _second_parent_attack(graph)
+    assert graph.assert_stop().stage=='PREDECESSOR_CONFLICT'
+
+
+@pytest.mark.parametrize('variant',['alter_restore_delete','conflicting_successor'])
+def test_reviewed_branch_erased_history_rejected(graph,variant):
+    _second_parent_attack(graph,variant)
+    assert graph.assert_stop().stage=='PREDECESSOR_CONFLICT'
+
+
+def test_valid_reviewed_draft_revisions_and_ordinary_history_pass(graph):
+    record=copy.deepcopy(graph.record)
+    path=graph.sel['evidence_path']
+    graph.git('checkout','--detach',graph.head)
+    graph.write(path,b'draft, not reviewed\n'); graph.commit()
+    graph.write(path,canonical(record)); reviewed=graph.commit()
+    graph.git('checkout','--detach',graph.head)
+    graph.git('merge','--no-ff','--no-commit',reviewed); merged=graph.commit()
+    graph.sel.update(evidence_commit=merged,evidence_transport_sha256=m.sha256(canonical(record)))
+    graph.git('checkout','--detach',graph.head)
+    assert graph.verify()==graph.reader['merge_sha']
+
+
+def _forge_reader_review(graph, overlay):
+    raw_parents=graph.git('show','-s','--format=%P',graph.head).split()
+    tree=graph.git('rev-parse',graph.head+'^{tree}')
+    fake=graph.git('commit-tree',tree,'-p',m.TRUST_MERGE,'-m','unreviewed replacement head')
+    replacement=graph.git('commit-tree',tree,'-p',m.TRUST_MERGE,'-p',fake,'-m','forged merge parents')
+    record=copy.deepcopy(graph.record); record['reader']['reviewed_head_sha']=fake
+    graph.republish(record)
+    if overlay=='replace':
+        graph.git('replace',graph.head,replacement)
+    else:
+        (graph.repo/'.git/info/grafts').write_text(graph.head+' '+m.TRUST_MERGE+' '+fake+'\n')
+    assert graph.git('show','-s','--format=%P',graph.head).split()[1]==fake
+    assert m._parents(graph.head)==tuple(raw_parents)
+    return fake
+
+
+def test_adversarial_replacement_parent_topology(graph):
+    _forge_reader_review(graph,'replace')
+    assert graph.assert_stop().stage=='REVIEW_MERGE'
+
+
+def test_legacy_graft_topology_inspects_original_commit(graph):
+    _forge_reader_review(graph,'graft')
+    assert graph.assert_stop().stage=='REVIEW_MERGE'
+
+
+def test_evidence_merge_replacement_cannot_forge_second_parent(graph):
+    original=graph.sel['evidence_commit']
+    reviewed=graph.git('show','-s','--format=%P',original).split()[1]
+    graph.sel['evidence_commit']=reviewed  # The original object has one parent.
+    graph.git('replace',reviewed,original)
+    assert len(graph.git('show','-s','--format=%P',reviewed).split())==2
+    assert len(m._parents(reviewed))==1
+    assert graph.assert_stop().stage=='EVIDENCE_MERGE'
+
+
+@pytest.mark.parametrize('kind',['blob','tree'])
+def test_replacement_blob_and_tree_are_not_used(graph,kind):
+    commit=graph.sel['evidence_commit']; path=graph.sel['evidence_path']
+    expected=canonical(graph.record)
+    blob=graph.git('rev-parse',commit+':'+path)
+    wrong_blob=graph.git('hash-object','-w','--stdin')  # Empty blob.
+    if kind=='blob':
+        graph.git('replace',blob,wrong_blob)
+        assert graph.git('cat-file','blob',blob)==''
+    else:
+        tree=graph.git('rev-parse',commit+'^{tree}')
+        empty_tree=graph.git('mktree')
+        graph.git('replace',tree,empty_tree)
+        assert graph.git('ls-tree',commit,'--',path)==''
+    assert m._blob(commit,path)==expected
+    assert graph.verify()==graph.reader['merge_sha']
+
+
+def test_hostile_inherited_git_settings_cannot_enable_overlays(graph,monkeypatch):
+    original=m._parents(graph.head)
+    _forge_reader_review(graph,'replace')
+    monkeypatch.setenv('GIT_REPLACE_REF_BASE','refs/replace/')
+    monkeypatch.setenv('GIT_NO_REPLACE_OBJECTS','0')
+    monkeypatch.setenv('GIT_GRAFT_FILE',str(graph.repo/'.git/info/hostile-grafts'))
+    monkeypatch.setenv('GIT_CONFIG_COUNT','1')
+    monkeypatch.setenv('GIT_CONFIG_KEY_0','core.useReplaceRefs')
+    monkeypatch.setenv('GIT_CONFIG_VALUE_0','true')
+    graph.git('config','core.useReplaceRefs','true')
+    assert m._parents(graph.head)==original
+    assert graph.assert_stop().stage=='REVIEW_MERGE'
+
+
+def _custody_read_with_transition(tmp_path, transition):
+    """Real non-root mode changes; only ownership/system-ancestor custody is faked.
+
+    Privileged uid/gid changes are injected, never performed on host paths.
+    Final-parent mode, inode, timestamps and chmod effects are never overwritten.
+    """
+    import stat
+    parent=tmp_path/'exact-parent'; parent.mkdir(mode=0o750)
+    path=parent/'selector'; data=canonical(selector()); path.write_bytes(data); path.chmod(0o400)
+    real_fstat, real_stat, real_read = os.fstat,os.stat,os.read
+    parent_identity=(parent.stat().st_dev,parent.stat().st_ino)
+    group=os.getgid(); changed=False
+    def metadata(raw):
+        attrs={k:getattr(raw,k) for k in dir(raw) if k.startswith('st_')}
+        if stat.S_ISDIR(raw.st_mode):
+            attrs.update(st_uid=0,st_gid=group)
+            if (raw.st_dev,raw.st_ino)!=parent_identity:
+                attrs['st_mode']=stat.S_IFDIR|0o750  # Unrelated /tmp ancestors only.
+            elif changed:
+                if transition=='gid': attrs['st_gid']=group+1
+                if transition=='uid': attrs['st_uid']=1001
+        else: attrs.update(st_uid=0,st_gid=0)
+        return SimpleNamespace(**attrs)
+    def reading(fd,size):
+        nonlocal changed
+        if not changed:
+            if transition=='mode': parent.chmod(0o755)
+            elif transition=='mode_restore': parent.chmod(0o755); parent.chmod(0o750)
+            changed=True
+        return real_read(fd,size)
+    with patch.object(m.os,'fstat',side_effect=lambda fd:metadata(real_fstat(fd))), \
+         patch.object(m.os,'stat',side_effect=lambda *a,**kw:metadata(real_stat(*a,**kw))), \
+         patch.object(m.os,'read',side_effect=reading), \
+         patch.object(m.pwd,'getpwnam',return_value=SimpleNamespace(pw_gid=group)), \
+         ExitStack() as stack:
+        spies=[stack.enter_context(patch.object(m,name,side_effect=AssertionError('side effect: '+name)))
+               for name in ('read_source','durable_claim','stage_and_publish','write_failure_result')]
+        publication=stack.enter_context(patch.object(m.os,'link',side_effect=AssertionError('publication')))
+        if transition=='stable': assert m._protected_record(path,'SELECTOR')==data
+        else:
+            with pytest.raises(m.Stop) as caught: m._protected_record(path,'SELECTOR')
+            assert caught.value.classification==m.PRECONDITION_FAILED and caught.value.stage=='SELECTOR'
+        for spy in spies+[publication]: spy.assert_not_called()
+
+
+def test_adversarial_final_parent_mode_change(tmp_path):
+    _custody_read_with_transition(tmp_path,'mode')
+
+
+@pytest.mark.parametrize('transition',['stable','gid','uid','mode_restore'])
+def test_final_parent_exact_custody_transition(tmp_path,transition):
+    _custody_read_with_transition(tmp_path,transition)
+
+
+@pytest.mark.parametrize('case',['late_parent','invalid_parent','duplicate_parent'])
+def test_raw_commit_parser_rejects_ambiguous_parent_headers(graph,case):
+    raw=m._git_bytes('cat-file','commit',graph.head)
+    header,body=raw.split(b'\n\n',1)
+    if case=='late_parent':
+        forged=header+b'\nparent '+graph.head.encode()+b'\n\n'+body
+    else:
+        lines=header.split(b'\n')
+        if case=='invalid_parent': lines[1]=b'parent not-a-commit'
+        else: lines.insert(2,lines[1])
+        forged=b'\n'.join(lines)+b'\n\n'+body
+    oid=subprocess.check_output(['git','-C',str(graph.repo),'hash-object','--literally','-t','commit','-w','--stdin'],input=forged).decode().strip()
+    with pytest.raises(m.Stop) as caught: m._parents(oid)
+    assert caught.value.classification==m.PRECONDITION_FAILED
