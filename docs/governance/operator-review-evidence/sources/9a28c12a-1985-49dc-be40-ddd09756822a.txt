@@ -1,0 +1,60 @@
+Initial commissioning preparation — Owner activation and appointment source receipt
+Source ID: 9a28c12a-1985-49dc-be40-ddd09756822a
+Recorded at actual current UTC: 2026-09-27T23:03:37.976006Z
+Timestamp meaning: current receipt creation for the direct instruction in this conversation, not an invented Telegram message time or earlier event. No backdating.
+Repository: bader5657/AIOS
+PR #305 reviewed HEAD: c5f3bf0e9787998e3c57c429d19a151d9ed5934a
+PR #305 actual merge: f90aaf4454956b1e10564e8e41c7afa2df289cea
+Actual merge first parent: efe859b2ae74b339c93fb3d6986ac6f2407a154c
+Current main verified: f90aaf4454956b1e10564e8e41c7afa2df289cea
+
+OWNER INSTRUCTION — EXACT ACTIVATION EXCERPT
+I ACTIVATE the exact merged PR #305 governance package for its declared
+development/bootstrap scope and AUTHORIZE preparation of the single genesis
+commission-process publication required to commission the Operator Review
+Evidence Process.
+END EXCERPT
+
+Actor: authenticated Project Owner, Telegram numeric ID 961959058, exact username Bagusder21. Statement medium: current user-to-assistant conversation. The Telegram proof below independently establishes channel control and does not purport to contain this free-text instruction.
+Authentication PASS receipt: /opt/aios/data/authentication-evidence/telegram/consumed/ad0b3c61e20e677318604a39d76f1b83abec9b87eb567a9b0e0b4d17df267e8b.json
+Authentication receipt SHA-256: 25ca2550168f48a1d6fe9a9b93c0b1ceff89c78887efcac2b7c547be3966b07b
+Both evidence and consumption final COMMITTED markers and bound objects revalidated; no receiver change or new consumption.
+
+APPOINTMENTS AND DISCLOSURE
+At the Owner's explicit direction, the same authenticated Owner is appointed reviewer, custodian and verifier for p4s7-recovery, restricted to the declared development/bootstrap governance preparation and process commissioning scope. No additional person or production role is appointed.
+role_context mode: solo-project-owner-bootstrap
+combined_roles: reviewer, approver, custodian, verifier, commissioner, operator
+One human holds all disclosed roles; no independent human acceptance or second reviewer is claimed. AI assistance is advisory only. These named source appointments do not fabricate a UUID Actor attestation or complete the uncreated genesis decision.
+
+EXACT SCOPE
+GD-008, Operator Review Evidence Process v1, bounded legacy bootstrap amendment. Owner governance-package activation and permission to prepare a single genesis commission-process publication are retained. This is not a runtime/recovery activation and does not commission the process by itself.
+Excluded: PR #304 merge; selector publication; recovery activation; one-shot installation; recovery authority consumption; destructive production changes; irreversible production mutation; runtime/service/database changes; Step-4 closure; Step-5. No retrospective records, action-verification or admit-bootstrap records are authorized in this preparation.
+
+EXACT REVIEWED/MERGED PACKAGE BINDINGS
+docs/governance/GOVERNANCE_DECISION_008.md
+Git blob: ede802a33e12e8d0fca9ff9897d21d9ae0319e24
+SHA-256: ffbbafafd79b30d56d5b5a6824ff922bc23d68f0216305d7dab651b6b7bf5fa9
+docs/governance/operator-review-evidence/00_PROCESS.md
+Git blob: 12446be3c706d0c56c39719a41391abc4f16f2d7
+SHA-256: 7559912392c1543bf5edeadf978ff059f9f7a255b70a801009bf6203d51a5066
+docs/intelligence/stage-0.33c-p4s7-operator-evidence-bootstrap/00_LEGACY_BOOTSTRAP_AMENDMENT.md
+Git blob: 0097346aaa5b71d70e6d7302bdf92487e09fded3
+SHA-256: 473db6c19f8933043886dbb186ae4a72a2ac061ff8db0cf31a4e1e442a3de551
+
+INVENTORY AND PREREQUISITE STATUS
+Inventory source: docs/governance/operator-review-evidence/sources/0912456d-9d0a-4e0b-b88b-cdf65e4f8ac7.txt
+Inventory source SHA-256: 490503fff33c90a79bf26f459fae441ea9446b942731034638085a7ff2d38c0a
+Owner requested accountable completeness declaration, verbatim:
+Record the Project Owner's accountable declaration that, to the best of the
+   Owner's knowledge across all controlled channels, the supplied inventory is
+   complete and that no undisclosed conflicting positive authorization or
+   revocation is being withheld.
+End excerpt. This requested declaration is retained prospectively; this receipt does not assert that the Owner has reviewed the subsequently assembled candidate list or claim Git establishes completeness. Exact candidate-list confirmation and any off-register instructions/reservations remain pending.
+Schema section 2 lines 144–168 requires frozen payload digest, accountable human reviewer acceptance after payload checks, and separate later Owner approval. No such genesis-payload attestations exist yet; this preparation instruction is not substituted for them. No genesis JSON, payload digest, completed commissioning or publication PR is asserted. STOP under instruction item 7 for incomplete prerequisites.
+
+CUSTODY
+Dedicated local checkout: /home/aiosadmin/aios-genesis-commissioning
+Local branch: governance/initial-commissioning-preparation
+Primary source directory: /home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources
+Separate Owner-controlled archive: /home/aiosadmin/aios-approval-source-archive
+Protected files 0600, sources directory 0700, exclusive creation and no overwrite; exact separate copies, common Owner/local custody disclosed. Retain indefinitely. No claim of independent custody or storage-service immutability. These locations are recorded now for later Owner confirmation in the completed commissioning source.

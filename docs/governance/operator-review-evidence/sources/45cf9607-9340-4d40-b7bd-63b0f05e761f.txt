@@ -1,0 +1,96 @@
+P4S7 genesis trust evidence — current Project Owner/verifier confirmation of PR #305 human merge
+Source ID: 45cf9607-9340-4d40-b7bd-63b0f05e761f
+Actual current UTC confirmation recording time: 2026-09-27T23:46:09.047744Z
+Timestamp meaning: current prospective confirmation and receipt creation at the Owner's explicit instruction, not the historical merge time. No backdating or claim that this receipt existed earlier.
+Repository: bader5657/AIOS
+
+ACTOR, CHANNEL AND ROLE DISCLOSURE
+Authenticated Project Owner/verifier: Telegram numeric ID 961959058; exact username Bagusder21.
+Exact Actor: {"channel_id": "Telegram numeric ID 961959058; username Bagusder21", "name": "Project Owner — Bagusder21", "principal_id": "8577005f-37dd-48ce-9250-cf93707d8239"}
+role_context: {"combined_roles": ["reviewer", "approver", "custodian", "verifier", "commissioner", "operator"], "disclosure": "One authenticated human Project Owner, Telegram numeric ID 961959058, username Bagusder21, combines all listed roles only for development/bootstrap governance preparation and evidence/process commissioning. No independent human acceptance or second human is claimed. AI assistance is advisory only. Reviewer acceptance and separate later Owner approval remain sequential human attestations; production execution is excluded.", "mode": "solo-project-owner-bootstrap"}
+The same one human acts as Owner, reviewer, approver, custodian, verifier, commissioner and operator only for the disclosed development/bootstrap governance and process commissioning scope. No independent-human acceptance or second human is claimed. AI assistance is advisory only.
+Statement provenance: the current direct user-to-assistant instruction expressly requests a new receipt and supplies the eight first-person confirmations reproduced verbatim below. It is retained as the Owner/verifier's current directed confirmation, not represented as a Telegram free-text transcript. The source preserves 'performed/accepted' as supplied; it does not invent a narrower historical act or independently identify the GitHub account as a separate authenticated principal.
+Existing independently retained Telegram channel-control receipt: /opt/aios/data/authentication-evidence/telegram/consumed/ad0b3c61e20e677318604a39d76f1b83abec9b87eb567a9b0e0b4d17df267e8b.json
+Authentication receipt SHA-256: 25ca2550168f48a1d6fe9a9b93c0b1ceff89c78887efcac2b7c547be3966b07b
+Both original evidence and consumption final COMMITTED markers, object hashes/identities and the full pinned namespace were revalidated read-only. The channel proof is separate from this direct content statement; no new challenge, authentication consumption or runtime change occurred.
+
+BEGIN EXACT OWNER-SUPPLIED CONFIRMATIONS
+1. I personally authorized and performed/accepted the human merge of PR #305.
+
+2. The exact reviewed PR #305 HEAD was:
+   c5f3bf0e9787998e3c57c429d19a151d9ed5934a
+
+3. The actual resulting merge commit is:
+   f90aaf4454956b1e10564e8e41c7afa2df289cea
+
+4. The merge used the reviewed candidate without changing the approved
+   governance content.
+
+5. The three PR #305 governance files in the merge are byte-identical to the
+   reviewed/approved HEAD.
+
+6. This confirmation is made NOW with the actual current UTC timestamp.
+   It is not backdated and does not claim a historical receipt existed earlier.
+
+7. AI assistance remains advisory only.
+
+8. This confirmation supplies genesis trust evidence only.
+   It does NOT authorize:
+   - PR #304 merge
+   - retrospective revalidations
+   - selector publication
+   - recovery activation
+   - one-shot installation
+   - recovery authority consumption
+   - runtime/service/database changes
+   - Step-4 closure
+   - Step-5
+END EXACT OWNER-SUPPLIED CONFIRMATIONS
+
+INDEPENDENT TECHNICAL CORROBORATION — NOT HUMAN ACCEPTANCE
+Verified now at the recording time above.
+PR #305 GitHub metadata: {"headRefOid": "c5f3bf0e9787998e3c57c429d19a151d9ed5934a", "mergeCommit": {"oid": "f90aaf4454956b1e10564e8e41c7afa2df289cea"}, "mergedAt": "2026-09-27T22:58:19Z", "mergedBy": {"id": "U_kgDOEkW3BA", "is_bot": false, "login": "bader5657", "name": ""}, "number": 305, "state": "MERGED"}
+Reviewed HEAD: c5f3bf0e9787998e3c57c429d19a151d9ed5934a
+Actual merge commit: f90aaf4454956b1e10564e8e41c7afa2df289cea
+Actual merge parent count: 2
+First parent: efe859b2ae74b339c93fb3d6986ac6f2407a154c
+Second parent: c5f3bf0e9787998e3c57c429d19a151d9ed5934a
+Second parent equals the exact reviewed HEAD: PASS.
+All three files are regular 100644 Git blobs; exact reviewed/merged byte equality: PASS.
+[
+  {
+    "path": "docs/governance/GOVERNANCE_DECISION_008.md",
+    "reviewed_sha256": "ffbbafafd79b30d56d5b5a6824ff922bc23d68f0216305d7dab651b6b7bf5fa9",
+    "merged_sha256": "ffbbafafd79b30d56d5b5a6824ff922bc23d68f0216305d7dab651b6b7bf5fa9"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/00_PROCESS.md",
+    "reviewed_sha256": "7559912392c1543bf5edeadf978ff059f9f7a255b70a801009bf6203d51a5066",
+    "merged_sha256": "7559912392c1543bf5edeadf978ff059f9f7a255b70a801009bf6203d51a5066"
+  },
+  {
+    "path": "docs/intelligence/stage-0.33c-p4s7-operator-evidence-bootstrap/00_LEGACY_BOOTSTRAP_AMENDMENT.md",
+    "reviewed_sha256": "473db6c19f8933043886dbb186ae4a72a2ac061ff8db0cf31a4e1e442a3de551",
+    "merged_sha256": "473db6c19f8933043886dbb186ae4a72a2ac061ff8db0cf31a4e1e442a3de551"
+  }
+]
+The historical merge time reported by GitHub is 2026-09-27T22:58:19Z; it is not this confirmation's timestamp. The Owner's direct current statement supplies human confirmation; Git/API observations independently corroborate immutable identities and bytes and do not authenticate themselves.
+
+GENESIS ASSOCIATION AND SOURCE RELATIONSHIP
+Existing publication PR: #307; prior candidate HEAD: 6a5ae4197b6534fc7384992b9dce1206469f199c.
+Genesis record ID: 68275c03-c0dd-482f-96c6-2b9328a7c881
+Genesis record path: docs/governance/operator-review-evidence/decisions/68275c03-c0dd-482f-96c6-2b9328a7c881.json
+Complete record transport SHA-256: ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934
+Approved canonical payload SHA-256 (without LF): d7983ee403e1c23897b7dfc6556716035d6e2c448e53dcfd4ef1521fbd94d71b
+Existing payload owner_source (unchanged): {"path": "docs/governance/operator-review-evidence/sources/72611441-20e3-4b20-98a4-ad1120df9769.txt", "transport_sha256": "605f7f71a48b969de5779022239f374c389e32c26c552648d36ee471c3ff5456"}
+Existing reviewer acceptance source (unchanged): {"path": "docs/governance/operator-review-evidence/sources/757762ae-93a8-4b25-9c31-becf6ee6639c.txt", "transport_sha256": "1dacd4af5cc881abda1c745575cb73d6e081048e2ab9092cfe6a9af687ab9f28"}
+Existing Owner approval source (unchanged): {"path": "docs/governance/operator-review-evidence/sources/46e06490-20fc-4aca-92e9-81f2e39fb839.txt", "transport_sha256": "aaa1a64f5febbef86f9c3f096bcf323b4a46da06aacf319dab216eee4742a670"}
+This supplemental source closes the missing direct human authentication evidence identified in the exact-HEAD review of #307, under process section 4's initial trust ceremony. It accompanies the record in the same candidate tree and binds it by exact ID/path/transport and payload digests. The closed decision schema has no additional genesis-trust-source field and does not require replacing the already-approved owner_source; neither the payload, envelope nor existing source references are changed. This receipt is not a new decision, payload approval or independent-human acceptance.
+
+LIMITS AND LIFECYCLE
+The user authorizes updating existing PR #307 only. No merge, effective commissioning, retrospective records, bootstrap admission, selector, recovery activation, installation, authority consumption, runtime/service/database change, Step-4 closure or Step-5 is authorized. Nine unfinished items remain pending. PR #301's separate later acceptance gate remains unresolved and is not waived. New exact-HEAD publication review and separate Owner publication authorization remain required, followed by human merge and post-merge verification before commissioning becomes effective. No future merge identity for #307 is invented.
+
+CUSTODY
+Working source: /home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/45cf9607-9340-4d40-b7bd-63b0f05e761f.txt
+Separate exact Owner-controlled archive copy: /home/aiosadmin/aios-approval-source-archive/45cf9607-9340-4d40-b7bd-63b0f05e761f.txt
+Exclusive creation, files mode 0600; all existing source receipts and frozen payload preserved unchanged. Common local Owner custody, no independent custody or immutable-storage claim. Retain indefinitely. Git candidate publication uses a regular 100644 blob.
