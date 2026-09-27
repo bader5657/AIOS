@@ -1,0 +1,56 @@
+PR #305 — prospective solo-project-owner bootstrap approval source receipt
+
+Source receipt ID: 1d3466b9-4d25-492e-9317-22fba2e2dbe7
+Approval recorded at UTC: 2026-09-27T20:16:35.324524Z
+Timestamp meaning: actual current UTC receipt creation/recording time from the host clock; no earlier review, message or approval occurrence timestamp is inferred. The user declares review completed before approval; no separate event times are fabricated.
+Repository: bader5657/AIOS
+PR: 305
+PR URL: https://github.com/bader5657/AIOS/pull/305
+Exact reviewed and approved HEAD: c5f3bf0e9787998e3c57c429d19a151d9ed5934a
+Observed remote state immediately before recording: OPEN; mergeCommit null; exact HEAD matched; autoMergeRequest null.
+Actor as stated by source: Project Owner, current conversation user.
+Source channel: current user-to-assistant conversation; latest explicit review and approval instruction.
+Capture method: exact UTF-8 copy of the user statement below, recorded by the assistant at the user's explicit instruction.
+Role mode: solo-project-owner-bootstrap.
+Explicit combined roles accepted by this statement: reviewer, approver, custodian, commissioner; development and bootstrap only.
+Disclosure: one human Project Owner; no second human reviewer and no independent human acceptance claimed. AI assistance is advisory only. This receipt does not appoint additional roles or claim commissioning occurred.
+Authentication status: direct conversation declaration captured; this receipt does not itself establish externally authenticated real-world identity, an appointed channel, or source/payload-digest confirmation. No second human is required for the amended bootstrap path.
+Publication status: local unpublished pre-record source receipt, not a governed JSON attestation, serial Owner decision register entry, accepted main-history publication, or commissioned archive.
+
+BEGIN EXACT USER STATEMENT
+As Project Owner, I have reviewed PR #305 at exact HEAD c5f3bf0e9787998e3c57c429d19a151d9ed5934a and I APPROVE the amended solo-project-owner bootstrap governance for its stated scope. I explicitly accept the combined reviewer/approver/custodian/commissioner roles for development and bootstrap only. AI assistance is advisory. This approval does not authorize destructive production changes, irreversible mutation, recovery authority consumption, one-shot installation, final production activation, Step-4 closure, or Step-5. Record this approval prospectively with the actual current timestamp. Do not backdate it.
+END EXACT USER STATEMENT
+
+EXACT APPROVED FILE BINDINGS
+These digests cover the exact committed bytes at the approved HEAD. They establish byte identity, not independent human acceptance or actor authentication.
+
+Path: docs/governance/GOVERNANCE_DECISION_008.md
+Git blob: ede802a33e12e8d0fca9ff9897d21d9ae0319e24
+Bytes: 7215
+Transport SHA-256: ffbbafafd79b30d56d5b5a6824ff922bc23d68f0216305d7dab651b6b7bf5fa9
+
+Path: docs/governance/operator-review-evidence/00_PROCESS.md
+Git blob: 12446be3c706d0c56c39719a41391abc4f16f2d7
+Bytes: 39043
+Transport SHA-256: 7559912392c1543bf5edeadf978ff059f9f7a255b70a801009bf6203d51a5066
+
+Path: docs/intelligence/stage-0.33c-p4s7-operator-evidence-bootstrap/00_LEGACY_BOOTSTRAP_AMENDMENT.md
+Git blob: 0097346aaa5b71d70e6d7302bdf92487e09fded3
+Bytes: 11806
+Transport SHA-256: 473db6c19f8933043886dbb186ae4a72a2ac061ff8db0cf31a4e1e442a3de551
+
+SCOPE AND LIFECYCLE
+The source explicitly records the Owner's completed review declaration and approval of the amended governance at the exact HEAD above, with combined roles disclosed. No AI review is converted into human independence.
+The approved package limits solo mode to development, bootstrap, governance preparation, non-destructive validation and evidence/process commissioning. Acceptance of the commissioner role is not an instruction that performs commissioning.
+Excluded by the exact approval: destructive production changes, irreversible mutation, recovery authority consumption, one-shot installation, final production activation, Step-4 closure and Step-5.
+The package's high-risk production boundary still requires an independent human reviewer or a separately approved future governance amendment explicitly accepting solo-owner production risk, plus all applicable gates. This approval is not that future amendment.
+PR #304 remains held: this captured approval does not complete activation, commissioning, retrospective evidence, publication, admission or its separately authorized review/merge gates.
+No merge, activation, commissioning, operational action, approval-window renewal or future merge identity is asserted or performed by this receipt. PR #305's approved HEAD is unchanged.
+No carry-forward to another HEAD; any mismatch requires new exact-HEAD review/approval.
+Earlier receipts for HEAD 383590da546cec78ff9dad543e67f78f3228d837 remain unchanged historical sources. Their earlier role requirements are not asserted as current bootstrap blockers and their approval is not reused for this HEAD.
+Exact PR/HEAD binding, canonical evidence rules for any later governed record, actual timestamps, immutable retention and no-backdating remain mandatory. Publication and source authentication remain distinct from this capture.
+
+RETENTION
+Primary local receipt: /home/aiosadmin/aios-pr305-approval-retention/docs/governance/operator-review-evidence/sources/1d3466b9-4d25-492e-9317-22fba2e2dbe7.txt
+Separate exact archive copy: /home/aiosadmin/aios-approval-source-archive/1d3466b9-4d25-492e-9317-22fba2e2dbe7.txt
+Both copies are exclusively created with mode 0600 in protected local directories. They are preserved without overwriting earlier receipts. Both are in the same local environment; this is separate-copy retention, not independent custody or an immutable storage-service claim.

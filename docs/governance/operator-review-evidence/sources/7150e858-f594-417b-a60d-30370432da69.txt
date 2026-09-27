@@ -1,0 +1,69 @@
+PR #305 — prospective direct Owner content confirmation source receipt
+
+Source receipt ID: 7150e858-f594-417b-a60d-30370432da69
+Recorded at actual current UTC: 2026-09-27T22:56:44.552927Z
+Timestamp meaning: current capture of the Owner's direct instruction in this conversation. No prior Telegram message timestamp or earlier confirmation time is asserted. No backdating. Original approval timestamp and original source bytes remain unchanged.
+Repository: bader5657/AIOS
+PR: 305
+Exact HEAD: c5f3bf0e9787998e3c57c429d19a151d9ed5934a
+Approval record ID: 1d3466b9-4d25-492e-9317-22fba2e2dbe7
+Approval-source SHA-256: 7829cba82ab8b2c661d77d7fd13982bff800b2dbaf13fd90ead404da02d17d72
+
+ACTOR, SOURCE AND SEPARATE AUTHENTICATION
+Actor: Project Owner; Telegram numeric ID 961959058; exact username Bagusder21.
+Statement source: current direct user-to-assistant instruction to record this confirmation, expressly binding the already authenticated Telegram principal. The Owner instructs use of this governance source-receipt process for the content confirmation. This is not represented as a Telegram transcript or as free text retained by the Telegram receiver.
+Confirmation method: prospective governance source receipt at the Owner's explicit direction in the current conversation, linked to the existing independently retained channel-control PASS. The present instruction is the content attestation; the referenced challenge exchange is channel proof only.
+Telegram authentication PASS receipt: /opt/aios/data/authentication-evidence/telegram/consumed/ad0b3c61e20e677318604a39d76f1b83abec9b87eb567a9b0e0b4d17df267e8b.json
+Authentication receipt SHA-256: 25ca2550168f48a1d6fe9a9b93c0b1ceff89c78887efcac2b7c547be3966b07b
+Telegram challenge evidence: /opt/aios/data/authentication-evidence/telegram/26ce7754-6d80-427c-a85b-9d55b6f0360c.b7fa901e9cfadde30717430df39b3f6624021af06058270da7f6bc585020626d.json
+Authentication verified at UTC: 2026-09-27T22:49:49.029071Z
+Existing final COMMITTED markers and all marker-bound objects for both the evidence and consumption receipt were revalidated against the PR #306 protocol. No new Telegram capture or consumption occurred.
+
+DIRECT OWNER CONFIRMATION RECORDED NOW
+At the current recording time above, the Owner expressly directs that the approval-source digest 7829cba82ab8b2c661d77d7fd13982bff800b2dbaf13fd90ead404da02d17d72 is confirmed, with its meaning as approval of PR #305 at exact HEAD c5f3bf0e9787998e3c57c429d19a151d9ed5934a, under approval record 1d3466b9-4d25-492e-9317-22fba2e2dbe7.
+Exact governance scope: GD-008; Operator Review Evidence Process; bounded legacy bootstrap amendment for PR #299/#300/#302/#303. Development/bootstrap governance only. The exact three approved files and digests are listed below.
+role_context: solo-project-owner-bootstrap.
+Combined roles: reviewer, approver, custodian, commissioner, as previously expressly accepted for development/bootstrap only. One human Owner combines these roles. This is solo-owner self-verification, not independent human corroboration. No second human or independent-human acceptance is claimed. AI assistance remains advisory and records the Owner's instruction; it does not supply human approval.
+Excluded: destructive production changes, irreversible data mutation, recovery authority consumption, one-shot installation, final production activation, Step-4 closure and Step-5. No PR #304 or PR #306 modification, runtime/service/database change, selector publication, activation or commissioning is authorized or performed by this receipt. No scope expansion or approval-window renewal.
+
+EXACT EXCERPTS FROM THE CURRENT OWNER INSTRUCTION
+BEGIN EXCERPT 1
+Complete the missing direct Owner confirmation prerequisite using the governance
+operator-review-evidence source-receipt process, NOT the Telegram auth-evidence
+receiver.
+END EXCERPT 1
+BEGIN EXCERPT 2
+The receipt must state prospectively, with current actual UTC timestamp, that
+   the authenticated Owner confirms:
+   - the approval-source digest above
+   - its meaning as approval of PR #305
+   - the exact governance scope
+   - the combined solo-owner roles
+   - AI assistance is advisory
+   - prohibited high-risk production actions remain excluded
+END EXCERPT 2
+BEGIN EXCERPT 3
+Do not claim the Telegram receiver retained this free-text confirmation.
+   The source receipt is the governance artifact for the statement.
+END EXCERPT 3
+BEGIN EXCERPT 4
+Stop before merge.
+END EXCERPT 4
+
+EXACT APPROVED FILE SHA-256 BINDINGS
+docs/governance/GOVERNANCE_DECISION_008.md
+ffbbafafd79b30d56d5b5a6824ff922bc23d68f0216305d7dab651b6b7bf5fa9
+docs/governance/operator-review-evidence/00_PROCESS.md
+7559912392c1543bf5edeadf978ff059f9f7a255b70a801009bf6203d51a5066
+docs/intelligence/stage-0.33c-p4s7-operator-evidence-bootstrap/00_LEGACY_BOOTSTRAP_AMENDMENT.md
+473db6c19f8933043886dbb186ae4a72a2ac061ff8db0cf31a4e1e442a3de551
+
+PRE-MERGE RETENTION AND READINESS
+Process references are to the exact approved HEAD c5f3bf0e9787998e3c57c429d19a151d9ed5934a, not the stale working-tree copy: section 1 lines 39–45 and 94–112 covers role disclosure and source confirmation; section 3 lines 217–223 expressly distinguishes authentic pre-merge source retention from completed post-merge records; section 6 lines 451–480 specifies custody, separate publication and separate copies of unpublished receipts. These support retained pre-merge receipts for this initial proposal. No completed future-merge record or prior publication of this source receipt is required for that pre-merge phase. This is not a register decision or an unpublished positive recovery authority.
+Direct Owner content confirmation: SATISFIED by the present express instruction, retained with source provenance above and separate channel authentication evidence.
+Substantive exact-HEAD human review/approval/content-confirmation prerequisites: SATISFIED on the inspected evidence. Remote HEAD and exact three-file digests rechecked unchanged. Any future merge still requires a fresh remote-head check and an Owner instruction permitting that action; the current instruction explicitly stops before merge. No claim that merge/publication/post-merge verification or commissioning has occurred.
+
+CUSTODY
+Primary protected working copy: /home/aiosadmin/aios-pr305-approval-retention/docs/governance/operator-review-evidence/sources/7150e858-f594-417b-a60d-30370432da69.txt
+Separate Owner-controlled archive copy: /home/aiosadmin/aios-approval-source-archive/7150e858-f594-417b-a60d-30370432da69.txt
+Exclusive creation; mode 0600; exact matching UTF-8/LF bytes. Both copies share this local environment and common Owner custody; no independent custody or immutable-storage-service claim. Retain indefinitely without overwrite; future corrections use new linked receipts. Unpublished, uncommitted governance source receipt only; no governed JSON record or register entry created.
