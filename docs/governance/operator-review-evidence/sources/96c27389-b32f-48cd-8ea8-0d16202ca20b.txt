@@ -1,0 +1,86 @@
+PR #307 — current exact-HEAD human publication review adoption and Owner publication authorization
+Source ID: 96c27389-b32f-48cd-8ea8-0d16202ca20b
+Actual current UTC authorization recording time: 2026-09-27T23:51:34.515350Z
+Timestamp meaning: prospective recording now at the Owner's explicit instruction; no historical review/message time invented, no backdating. The Owner declares review and adoption complete before authorizing publication; no separate earlier adoption timestamp is fabricated.
+Repository: bader5657/AIOS
+PR: 307
+Exact authorized HEAD: 06776edf4261950f4370cc701229a4e1783959a2
+Base observed before recording: f90aaf4454956b1e10564e8e41c7afa2df289cea
+Genesis record ID: 68275c03-c0dd-482f-96c6-2b9328a7c881
+Genesis record path: docs/governance/operator-review-evidence/decisions/68275c03-c0dd-482f-96c6-2b9328a7c881.json
+Canonical payload SHA-256 without LF: d7983ee403e1c23897b7dfc6556716035d6e2c448e53dcfd4ef1521fbd94d71b
+Complete record transport SHA-256 including LF: ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934
+
+ACTOR, CUSTODIAN AND AUTHENTICATION
+Authenticated Project Owner and named human custodian: Telegram numeric ID 961959058; exact username Bagusder21.
+Actor: {"channel_id": "Telegram numeric ID 961959058; username Bagusder21", "name": "Project Owner — Bagusder21", "principal_id": "8577005f-37dd-48ce-9250-cf93707d8239"}
+Role context: {"combined_roles": ["reviewer", "approver", "custodian", "verifier", "commissioner", "operator"], "disclosure": "One authenticated human Project Owner, Telegram numeric ID 961959058, username Bagusder21, combines all listed roles only for development/bootstrap governance preparation and evidence/process commissioning. No independent human acceptance or second human is claimed. AI assistance is advisory only. Reviewer acceptance and separate later Owner approval remain sequential human attestations; production execution is excluded.", "mode": "solo-project-owner-bootstrap"}
+One human intentionally combines the disclosed reviewer, approver, custodian, verifier, commissioner and operator roles only for the permitted development/bootstrap governance and evidence/process commissioning scope. No second human, independent-human acceptance or independent custody is claimed. AI assistance is advisory; this direct Owner statement supplies human adoption and authorization.
+Statement medium: current direct user-to-assistant conversation. The exact statement below is not represented as Telegram free text. Existing independently retained channel-control evidence: /opt/aios/data/authentication-evidence/telegram/consumed/ad0b3c61e20e677318604a39d76f1b83abec9b87eb567a9b0e0b4d17df267e8b.json
+Authentication receipt SHA-256: 25ca2550168f48a1d6fe9a9b93c0b1ceff89c78887efcac2b7c547be3966b07b
+Both final COMMITTED markers, object digests/identities and full pinned namespace revalidated read-only before recording. No new challenge or consumption.
+
+BEGIN EXACT PROJECT OWNER STATEMENT
+As Project Owner, I explicitly AUTHORIZE publication of PR #307 at exact HEAD:
+
+06776edf4261950f4370cc701229a4e1783959a2
+
+for the single genesis commission-process publication.
+
+Custodian:
+- Project Owner
+- Telegram numeric ID: 961959058
+- Telegram username: Bagusder21
+- role_context: solo-project-owner-bootstrap
+
+I confirm:
+- I have reviewed and adopted the CLEAN exact-HEAD publication review findings
+- the genesis payload remains unchanged
+- the complete record and ten source receipts are internally consistent
+- the reconciled 32-entry inventory is accepted for this commissioning scope
+- the supplemental PR #305 merge-authentication receipt is accepted
+- AI assistance is advisory only
+- no independent-human acceptance is claimed
+- PR #301's later acceptance gate remains unresolved
+- the nine unfinished items remain pending
+
+I authorize publication/merge of this exact PR #307 HEAD only.
+
+This authorization does NOT authorize:
+- PR #304 merge
+- retrospective revalidations yet
+- bootstrap admission
+- selector publication
+- recovery activation
+- one-shot installation
+- recovery authority consumption
+- runtime/service/database changes
+- Step-4 closure
+- Step-5
+
+Record this publication authorization prospectively with the actual current UTC
+timestamp.
+
+Do not backdate.
+
+After recording:
+- verify remote PR #307 HEAD still matches exactly
+- report publication authorization receipt ID/path
+- report whether all human-merge prerequisites for PR #307 are satisfied
+- do not merge automatically
+
+Stop before merge.
+END EXACT PROJECT OWNER STATEMENT
+
+VALIDATION AND MEANING
+Before capture, revalidated exact candidate bytes, closed schemas/canonical JSON, all source and archive digests, frozen payload equality, reviewer acceptance and separate later Owner approval, inventory GitRefs, PR #305 package equality/topology, supplemental human merge-confirmation receipt and authentication evidence. The prior AI CLEAN report remains advisory; the Owner now expressly personally adopts its exact-HEAD publication findings. This is current human adoption and explicit publication authorization, not fabricated independent review.
+The existing eleven candidate files are one genesis record and ten source receipts. This authorization is valid only for the named HEAD and named custodian, not another candidate, successor or operational action. Any changed HEAD requires new exact-HEAD human review and publication authorization. A stop/revocation or changed prerequisite prevents reliance.
+The Owner's direction to stop before merge controls this turn. No merge or automatic merge is performed. The remote HEAD will be rechecked after receipt retention. No unknown future PR #307 merge SHA is included.
+Human merge prerequisites on the validated candidate comprise disclosed human payload review, separate Owner payload approval, complete inventory and genesis trust sources, exact-HEAD human publication review adoption, and this separate publication authorization naming the HEAD and custodian. GitHub technical mergeability is a separate observation, not human acceptance.
+Publication/merge alone does not complete commissioning: the appointed verifier must perform and retain the process-required actual merge identity/topology, reviewed-head second-parent and byte-equality checks and authentication after merge. PR #301's later gate and the nine unfinished items remain pending. All listed production and subsequent recovery actions remain excluded.
+
+RETENTION WITHOUT CANDIDATE MUTATION
+Working receipt: /home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/96c27389-b32f-48cd-8ea8-0d16202ca20b.txt
+Separate exact Owner-controlled archive copy: /home/aiosadmin/aios-approval-source-archive/96c27389-b32f-48cd-8ea8-0d16202ca20b.txt
+Protected exclusive creation, file mode 0600, no overwrite; exact copies retained indefinitely in common local Owner custody, not independent storage.
+Retained locally outside the approved candidate commit. Process section 6 separates exact-final-HEAD authorization from post-merge verification/linked retention; adding this receipt to the already-reviewed PR would change the authorized HEAD. It is not staged, committed, pushed or inserted into the approved payload. Preserve for later governed retention with post-merge verification. Existing candidate and historical source bytes remain unchanged.

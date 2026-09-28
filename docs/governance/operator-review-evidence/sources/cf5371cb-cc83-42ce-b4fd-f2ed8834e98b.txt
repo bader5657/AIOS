@@ -1,0 +1,38 @@
+PR #307 post-merge publication verifier channel authentication — PASS
+Source ID: cf5371cb-cc83-42ce-b4fd-f2ed8834e98b
+Recorded current UTC: 2026-09-28T00:05:13.856176Z
+Protocol verified_at_utc: 2026-09-28T00:05:13.843017Z
+Purpose: post-merge genesis publication verifier authentication
+Authenticated Owner/verifier: Telegram numeric ID 961959058; exact username Bagusder21.
+Role model: solo-project-owner-bootstrap. Same one human holds the disclosed reviewer/approver/custodian/verifier/commissioner/operator roles in development/bootstrap governance only. No independent-human acceptance. AI assistance advisory only.
+Challenge issue ID: 44a4f01c-f18c-4fd1-b347-e34db3376d30
+Trusted issue record path: /home/aiosadmin/aios-approval-source-archive/telegram-challenges/44a4f01c-f18c-4fd1-b347-e34db3376d30.json
+Trusted issue record SHA-256: 88e858892464a366a6dc515ecb740a30804623a550125cf614afd6ccde55f06e
+Challenge SHA-256: 6082fe08bff1cc6e3fdd2ac16a26ef3cb436e1f4561c1ea99ce25988aba8eddd
+Issue UTC: 2026-09-27T23:57:02.178865Z
+Expiry UTC: 2026-09-28T00:07:02.178865Z
+PR: 307
+Reviewed HEAD: 06776edf4261950f4370cc701229a4e1783959a2
+Actual merge: a7b0c979c0195b91f778d0d5e69b296af6378620
+Genesis record ID: 68275c03-c0dd-482f-96c6-2b9328a7c881
+Record transport SHA-256: ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934
+
+VERIFIED EVIDENCE
+update_id: 850302445
+message_id: 61
+Telegram timestamp: 2026-09-28T00:03:07.000000Z
+Local received UTC: 2026-09-28T00:03:08.113099Z
+Private chat: 961959058; type private.
+Exact sender ID/username, exact original issued challenge text including lowercase k, validity window, canonical evidence decode and filename/transport digest: PASS.
+Evidence path: /opt/aios/data/authentication-evidence/telegram/4bba1a6c-dd3e-477a-8920-0e690b073ee5.8297626eec766fc20d41d6b6efa247099e6c903e4d6f774495224e570a8d7cad.json
+Evidence transport SHA-256: 8297626eec766fc20d41d6b6efa247099e6c903e4d6f774495224e570a8d7cad
+Certificate, PENDING/PREPARED journal, permanent guard, final COMMITTED marker, pinned namespace/object identity and digests: PASS.
+No consumption artifacts existed before verification. The governed verify_and_consume was invoked exactly once, succeeded and durably retained consumption. Final consumption COMMITTED marker and all bound objects revalidated. Original issue record remains unchanged historical issue evidence; this outcome and permanent consumption marker establish consumed status.
+Consumption receipt path: /opt/aios/data/authentication-evidence/telegram/consumed/6082fe08bff1cc6e3fdd2ac16a26ef3cb436e1f4561c1ea99ce25988aba8eddd.json
+Consumption receipt SHA-256: b998a3a3fb639fda49491ded32b91e2ecffe92c062fb9195e49fda30ad188919
+The protocol's generic channel-auth purpose/approval_record_id field maps to the genesis ID; the trusted pre-issued challenge record above additionally binds the publication-verifier purpose, actual merge and record digest. No consumption schema was changed and its generic role disclosure does not grant new appointments.
+
+LIMITS
+This is channel authentication PASS only, not human post-merge content acceptance or commissioning. The latest chat repeated the uppercase-K variant, but the newly received Telegram message matches the original issued lowercase-k challenge exactly. The prior mismatched message 59/update 850302444 remains preserved and is not accepted or rewritten. No earlier challenge was reused.
+No PR #304 change, commissioning, retrospective records, bootstrap admission, selector, recovery activation, installation or recovery authority consumption. Only the expressly authorized authentication challenge was consumed; no service restart, code deployment or database change.
+Retain exact source copies in the preparation checkout and separate Owner-controlled archive, common local custody without independent-custody claim. No backdating or historical receipt rewrite. This receipt is local, not committed or published.

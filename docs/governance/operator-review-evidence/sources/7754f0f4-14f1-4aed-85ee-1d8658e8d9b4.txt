@@ -1,0 +1,107 @@
+PR #307 — prospective post-merge technical publication verification; human verifier acceptance pending
+Source ID: 7754f0f4-14f1-4aed-85ee-1d8658e8d9b4
+Actual current UTC verification recording time: 2026-09-27T23:54:58.543376Z
+Timestamp meaning: post-merge verification performed and recorded now, not historical merge time. No backdating.
+Repository: bader5657/AIOS
+PR: 307
+Reviewed and publication-authorized HEAD: 06776edf4261950f4370cc701229a4e1783959a2
+Actual base at merge / first parent: f90aaf4454956b1e10564e8e41c7afa2df289cea
+Actual publication merge commit: a7b0c979c0195b91f778d0d5e69b296af6378620
+Observed resulting main HEAD: a7b0c979c0195b91f778d0d5e69b296af6378620
+Merge method: ordinary two-parent merge commit via gh pr merge --merge --match-head-commit, under the Project Owner's current express merge instruction. No squash, rebase or auto-merge.
+Actual GitHub merge metadata: {"headRefOid": "06776edf4261950f4370cc701229a4e1783959a2", "mergeCommit": {"oid": "a7b0c979c0195b91f778d0d5e69b296af6378620"}, "mergedAt": "2026-09-27T23:53:17Z", "mergedBy": {"id": "U_kgDOEkW3BA", "is_bot": false, "login": "bader5657", "name": ""}, "number": 307, "state": "MERGED"}
+GitHub historical mergedAt is distinct from the current verification time. The operation was tool-executed at the human Owner's explicit direction; no independent human reviewer or separate manual UI action is claimed.
+
+AUTHORITIES AND ROLE DISCLOSURE
+Publication authorization receipt ID: 96c27389-b32f-48cd-8ea8-0d16202ca20b
+Authorization path: docs/governance/operator-review-evidence/sources/96c27389-b32f-48cd-8ea8-0d16202ca20b.txt
+Authorization SHA-256: e65eafbe0602824a47088378eb784078744441f700a0cb2736a01beb352b3e75
+Authorization and separate archive bytes verified unchanged. The current Owner instruction explicitly requested merging only this exact HEAD after rechecks and then performing post-merge verification only; it did not permit the next step.
+Appointed Owner/custodian/verifier: Telegram numeric ID 961959058, exact username Bagusder21, principal_id 8577005f-37dd-48ce-9250-cf93707d8239.
+Role context: {"combined_roles": ["reviewer", "approver", "custodian", "verifier", "commissioner", "operator"], "disclosure": "One authenticated human Project Owner, Telegram numeric ID 961959058, username Bagusder21, combines all listed roles only for development/bootstrap governance preparation and evidence/process commissioning. No independent human acceptance or second human is claimed. AI assistance is advisory only. Reviewer acceptance and separate later Owner approval remain sequential human attestations; production execution is excluded.", "mode": "solo-project-owner-bootstrap"}
+Existing independently retained channel-control receipt: /opt/aios/data/authentication-evidence/telegram/consumed/ad0b3c61e20e677318604a39d76f1b83abec9b87eb567a9b0e0b4d17df267e8b.json
+Authentication receipt SHA-256: 25ca2550168f48a1d6fe9a9b93c0b1ceff89c78887efcac2b7c547be3966b07b
+Both retained COMMITTED markers, bound object hashes/identities and full namespace were technically revalidated read-only. This does not substitute for the appointed human verifier's personal authentication comparison and publication acceptance. AI assistance and these technical findings are advisory only; no independent-human acceptance or new human attestation is fabricated.
+
+POST-MERGE CHECKS — TECHNICAL PASS
+Remote PR mapping is MERGED with the exact reviewed HEAD and actual merge commit above.
+Exactly two parents: ["f90aaf4454956b1e10564e8e41c7afa2df289cea", "06776edf4261950f4370cc701229a4e1783959a2"]. Second parent equals reviewed HEAD: PASS.
+All eleven reviewed files are regular 100644 merged blobs and byte-identical: PASS.
+First-parent diff is exactly eleven additions under docs/governance/operator-review-evidence/: one genesis decision and ten receipts. No prior tracked artifact changed.
+Published genesis path: docs/governance/operator-review-evidence/decisions/68275c03-c0dd-482f-96c6-2b9328a7c881.json
+Genesis record ID: 68275c03-c0dd-482f-96c6-2b9328a7c881
+Complete record transport SHA-256: ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934
+Canonical payload SHA-256 (without LF): d7983ee403e1c23897b7dfc6556716035d6e2c448e53dcfd4ef1521fbd94d71b
+Canonical complete-record bytes, all direct SourceRefs, and exact receipt archive copies: PASS.
+Published genesis sequence: 1; predecessor: null.
+Exact reviewed/merged file digests:
+[
+  {
+    "path": "docs/governance/operator-review-evidence/decisions/68275c03-c0dd-482f-96c6-2b9328a7c881.json",
+    "reviewed_sha256": "ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934",
+    "merged_sha256": "ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/07fd0f82-b5b1-4e58-aab0-b2d1032669f2.txt",
+    "reviewed_sha256": "4dea00ac1448c7c3e3f68d78f22a0c1214d2695475327dc1f8b72774c2e8a212",
+    "merged_sha256": "4dea00ac1448c7c3e3f68d78f22a0c1214d2695475327dc1f8b72774c2e8a212"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/0912456d-9d0a-4e0b-b88b-cdf65e4f8ac7.txt",
+    "reviewed_sha256": "490503fff33c90a79bf26f459fae441ea9446b942731034638085a7ff2d38c0a",
+    "merged_sha256": "490503fff33c90a79bf26f459fae441ea9446b942731034638085a7ff2d38c0a"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/1d3466b9-4d25-492e-9317-22fba2e2dbe7.txt",
+    "reviewed_sha256": "7829cba82ab8b2c661d77d7fd13982bff800b2dbaf13fd90ead404da02d17d72",
+    "merged_sha256": "7829cba82ab8b2c661d77d7fd13982bff800b2dbaf13fd90ead404da02d17d72"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/46e06490-20fc-4aca-92e9-81f2e39fb839.txt",
+    "reviewed_sha256": "aaa1a64f5febbef86f9c3f096bcf323b4a46da06aacf319dab216eee4742a670",
+    "merged_sha256": "aaa1a64f5febbef86f9c3f096bcf323b4a46da06aacf319dab216eee4742a670"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/7150e858-f594-417b-a60d-30370432da69.txt",
+    "reviewed_sha256": "dab2fd9c6f8aad2aca766a3a4045f205018b29f56c71d268f7c181435d6c5cd7",
+    "merged_sha256": "dab2fd9c6f8aad2aca766a3a4045f205018b29f56c71d268f7c181435d6c5cd7"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/72611441-20e3-4b20-98a4-ad1120df9769.txt",
+    "reviewed_sha256": "605f7f71a48b969de5779022239f374c389e32c26c552648d36ee471c3ff5456",
+    "merged_sha256": "605f7f71a48b969de5779022239f374c389e32c26c552648d36ee471c3ff5456"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/757762ae-93a8-4b25-9c31-becf6ee6639c.txt",
+    "reviewed_sha256": "1dacd4af5cc881abda1c745575cb73d6e081048e2ab9092cfe6a9af687ab9f28",
+    "merged_sha256": "1dacd4af5cc881abda1c745575cb73d6e081048e2ab9092cfe6a9af687ab9f28"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/9080ad93-8404-4fbc-b415-8d00a75dd586.txt",
+    "reviewed_sha256": "02bf3ceb5450cc6f87692535a6c57c6ff982edc97beaab4aeaf9bc4aa0b9946b",
+    "merged_sha256": "02bf3ceb5450cc6f87692535a6c57c6ff982edc97beaab4aeaf9bc4aa0b9946b"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/9a28c12a-1985-49dc-be40-ddd09756822a.txt",
+    "reviewed_sha256": "d60ee77f1fbc6f18e82f2eeb58b82c9f178ec019db8b7bcc65818077ac0047d0",
+    "merged_sha256": "d60ee77f1fbc6f18e82f2eeb58b82c9f178ec019db8b7bcc65818077ac0047d0"
+  },
+  {
+    "path": "docs/governance/operator-review-evidence/sources/45cf9607-9340-4d40-b7bd-63b0f05e761f.txt",
+    "reviewed_sha256": "6390d1b33805dcc5026496c1430e0cecb0ee8eae32a370f7a7939646af4a55f3",
+    "merged_sha256": "6390d1b33805dcc5026496c1430e0cecb0ee8eae32a370f7a7939646af4a55f3"
+  }
+]
+PR #304 remains OPEN at e1a4459dc55ad9a15fe6dfc28dc11758a799c8c0. No operational action occurred: no retrospective review record, bootstrap action verification, admit-bootstrap, selector, recovery activation, installation, recovery authority consumption, runtime sync, service restart or database alteration. Only governance merge, read-only verification and local source retention were performed.
+
+COMMISSIONING DETERMINATION
+Status: PUBLISHED; TECHNICAL POST-MERGE VERIFICATION PASS; COMMISSIONING BLOCKED pending appointed human publication verifier acceptance.
+Process section 1 requires the appointed publication verifier to repeat authentication and compare retained receipts against direct confirmation before accepting publication; in solo mode the Owner performs and records that check. Section 6 requires appointed-verifier post-merge checks. The Owner's prior exact-HEAD adoption/authorization and instruction to run post-merge checks do not establish a later personal acceptance of the actual merge and results first produced afterward. This AI receipt cannot supply that human act.
+The published candidate register tip is GitRef commit a7b0c979c0195b91f778d0d5e69b296af6378620, path docs/governance/operator-review-evidence/decisions/68275c03-c0dd-482f-96c6-2b9328a7c881.json, transport SHA-256 ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934, sequence 1. It is not yet asserted as a commissioned effective tip.
+Exact next step: the already-appointed Owner/verifier personally reviews/adopts these actual post-merge findings, performs and confirms the required authentication/receipt comparison for the same human identity and scope, and explicitly accepts publication of this exact merge/genesis/digests in the disclosed solo-bootstrap mode. Retain that direct current confirmation prospectively. No independent human is required within this scope. Until then do not rely on commissioned-process authority.
+After that commissioning prerequisite is satisfied, fresh retrospective re-reviews still require a separately scoped Owner instruction under bootstrap amendment step 2. PR #301's later acceptance gate remains unresolved and unwaived. No operational scope is expanded.
+
+CUSTODY
+Working source: /home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/7754f0f4-14f1-4aed-85ee-1d8658e8d9b4.txt
+Separate exact Owner-controlled archive: /home/aiosadmin/aios-approval-source-archive/7754f0f4-14f1-4aed-85ee-1d8658e8d9b4.txt
+Files exclusively created mode 0600, original receipts unchanged, common local Owner custody without independent-custody or immutable-storage claim. Retain indefinitely locally for later governed publication linked to the now-known merge. No further commit, push or PR is authorized/performed by this receipt.

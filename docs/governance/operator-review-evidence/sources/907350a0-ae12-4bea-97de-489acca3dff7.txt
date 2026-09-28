@@ -1,0 +1,111 @@
+PR #299 retrospective re-validation — current authorization retention, technical findings and STOP
+Source ID: 907350a0-ae12-4bea-97de-489acca3dff7
+Actual current review/recording UTC: 2026-09-28T00:13:37.997259Z
+Classification of this work: retrospective-revalidation.
+Review disposition: CHANGES_REQUIRED; no completed review payload or record frozen.
+Fresh retrospective re-validation; not the original pre-merge review; original acceptance record unavailable.
+
+OWNER AUTHORIZATION — EXACT EXCERPTS FROM CURRENT DIRECT INSTRUCTION
+As Project Owner, I now explicitly authorize the bounded legacy retrospective
+re-validation workflow defined by the commissioned Operator Review Evidence
+Process and Legacy Bootstrap Amendment.
+
+This authorization is limited EXACTLY to fresh retrospective re-validation of
+these four immutable PR identities:
+
+PR #299
+reviewed HEAD:
+fd36b9abe6920ea807a070ea63589622e1d2e2cb
+merge:
+ba717f6990d775748f46d62ef03a696f1618077b
+
+PR #300
+reviewed HEAD:
+ed7f75551a118a96fc26e805057c1a875345c55a
+merge:
+8e9a8023742773b055e17dba002b2ebf07528118
+
+PR #302
+reviewed HEAD:
+f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368
+merge:
+b5fa2acaa66db799ebd8ec03d2a06a04e34753a2
+
+PR #303
+reviewed HEAD:
+dfdf98fbee0405b188530e9f374515ebc72ce1b2
+merge:
+5e296cd907c2e9f0c016097cb3c97e646893031f
+
+AI assistance is advisory.
+I personally adopt responsibility for the human review under
+solo-project-owner-bootstrap.
+
+Proceed with PR #299 ONLY first.
+END EXACT EXCERPTS
+The task excludes PR #304 merge, bootstrap admission, selector publication, recovery activation, installation, recovery authority consumption, runtime/service/database changes, Step-4 closure and Step-5. No automatic PR #300 work. Authorization to conduct a review is not human adoption of findings produced afterward and is not a historical human-merge confirmation.
+Authenticated Owner: Telegram numeric ID 961959058; username Bagusder21. Current direct conversation linked to retained authentication PASS cf5371cb-cc83-42ce-b4fd-f2ed8834e98b; no new authentication consumption. Combined reviewer/approver/custodian/verifier/commissioner/operator roles under solo-project-owner-bootstrap within development/bootstrap governance only. No independent-human acceptance; AI advisory analysis only.
+Commissioned genesis: 68275c03-c0dd-482f-96c6-2b9328a7c881 at a7b0c979c0195b91f778d0d5e69b296af6378620, sequence 1; current human acceptance source e27640cc-6757-40f9-8c85-f6c364f49cc2, SHA-256 486779c29bfa4f117859ec5ab36fc0cce32e82080cce93db63fc15b7d78e19f2.
+
+VERIFIED REPOSITORY FACTS
+GitHub metadata: {"files": [{"additions": 119, "changeType": "ADDED", "deletions": 0, "path": "docs/intelligence/stage-0.33c-p4s7-r32-recovery-bindings/00_RECOVERY_EXECUTOR_PACKAGE_BINDING_AMENDMENT.md"}, {"additions": 13, "changeType": "MODIFIED", "deletions": 1, "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md"}, {"additions": 49, "changeType": "MODIFIED", "deletions": 8, "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py"}, {"additions": 2, "changeType": "MODIFIED", "deletions": 2, "path": "tests/unit/intelligence/test_stage033c_orchestration.py"}, {"additions": 2, "changeType": "MODIFIED", "deletions": 1, "path": "tests/unit/intelligence/test_stage033c_r13a_preclaim.py"}, {"additions": 288, "changeType": "ADDED", "deletions": 0, "path": "tests/unit/intelligence/test_stage033c_recovery_binding.py"}, {"additions": 4, "changeType": "MODIFIED", "deletions": 1, "path": "tests/unit/intelligence/test_stage033c_registry_manifest_matrix.py"}], "headRefOid": "fd36b9abe6920ea807a070ea63589622e1d2e2cb", "mergeCommit": {"oid": "ba717f6990d775748f46d62ef03a696f1618077b"}, "mergedAt": "2026-09-27T00:32:54Z", "mergedBy": {"id": "U_kgDOEkW3BA", "is_bot": false, "login": "bader5657", "name": ""}, "number": 299, "state": "MERGED"}
+Original raw commit read with replacement objects disabled; all Git calls use GIT_NO_REPLACE_OBJECTS=1 and GIT_GRAFT_FILE=/dev/null. Original two-parent topology: ["94c1b012a7ae917a1daffc2d73f5e9fd48c3715d", "fd36b9abe6920ea807a070ea63589622e1d2e2cb"]; second parent exactly equals reviewed HEAD: PASS.
+All seven changed files have reviewed/merged byte equality. Required three artifact checks:
+[
+  {
+    "path": "docs/intelligence/stage-0.33c-p4s7-r32-recovery-bindings/00_RECOVERY_EXECUTOR_PACKAGE_BINDING_AMENDMENT.md",
+    "reviewed_sha256": "ea467d87ecef63f08e1c1a1a0f11d4e1824daac7aa8dd5985a0e869432b683fa",
+    "merged_sha256": "ea467d87ecef63f08e1c1a1a0f11d4e1824daac7aa8dd5985a0e869432b683fa"
+  },
+  {
+    "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py",
+    "reviewed_sha256": "da020dff0974acf0bb7fc22bc1b54f17d149ee8f11ace67420eb16cca73cd6be",
+    "merged_sha256": "da020dff0974acf0bb7fc22bc1b54f17d149ee8f11ace67420eb16cca73cd6be"
+  },
+  {
+    "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md",
+    "reviewed_sha256": "ee2b2b1d5e75653b8b432cb6c6476ea645318733f910b5292520074964ec4f26",
+    "merged_sha256": "ee2b2b1d5e75653b8b432cb6c6476ea645318733f910b5292520074964ec4f26"
+  }
+]
+Lineage checks, not separate reviews of later subjects:
+{
+  "package baseline": {
+    "ancestor": "ca7940b8b94237611a37189e0bed10b002167e78",
+    "descendant": "fd36b9abe6920ea807a070ea63589622e1d2e2cb",
+    "result": "PASS"
+  },
+  "PR299 to PR300": {
+    "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+    "descendant": "8e9a8023742773b055e17dba002b2ebf07528118",
+    "result": "PASS"
+  },
+  "PR299 to PR302": {
+    "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+    "descendant": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+    "result": "PASS"
+  },
+  "PR299 to PR303": {
+    "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+    "descendant": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+    "result": "PASS"
+  },
+  "PR299 to genesis publication": {
+    "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+    "descendant": "a7b0c979c0195b91f778d0d5e69b296af6378620",
+    "result": "PASS"
+  }
+}
+R30/R31A governance exists unchanged between first parent and reviewed HEAD. Static inspection of the R32 amendment/policy/executor diff shows split-source package binding, exact recovery approval identity/window/hash and Model B constraints, recovery-only marker identity, and default activation fail-closed until separate governance. These are preliminary static findings, not a completed CLEAN implementation review. No installer, live package, runtime or database accessed. Tests were not run after the human-evidence prerequisite blocked completion; PR historical test claims are not represented as newly executed tests.
+
+BLOCKING FINDINGS
+High: no direct authenticated PR #299 historical human-merge source found in the retained Owner source archive. Existing references to PR #299 are inventory/scope statements, not a firsthand statement identifying the historical actor/action. The current Owner instruction lists exact identities but does not personally attest the historical merge. GitHub mergedBy is factual metadata, not sufficient human authentication. Bootstrap amendment step 3 (lines 64–68) expressly preserves this requirement; Process section 3 requires human_merge_source and corroboration of the actual historical merge time. No synthetic SourceRef or null/sentinel can fill it.
+Historical timestamp evidence is unresolved for the completed payload: GitHub mergedAt=2026-09-27T00:32:54Z; raw merge committer UTC=2026-09-27T00:32:53Z. Preserve both observations; do not silently equate commit creation with merge occurrence, select an unsupported time, or invent microsecond precision. A direct authentic Owner/merger confirmation with firsthand event evidence must establish the merge actor/action and corroborate the historical occurrence time and supported precision. No historical merge_occurred_at_utc field is assigned here.
+Overall verdict CHANGES_REQUIRED for evidence completeness. No code defect conclusion or technically CLEAN full review claimed. Current review timestamp above is actual advisory review time, not human acceptance or an original pre-merge event. Human reviewer acceptance remains a later step after prerequisites and payload preparation.
+PR #301's separate later acceptance gate remains unresolved and unwaived; it is not expanded into the four-subject exception. It is not the reason for this PR #299 STOP.
+
+DISPOSITION
+Stop before freezing the PR #299 retrospective payload. No proposed review record ID/digest or completed governed record is created. Retain these current STOP findings under process sections 1/3/6. Required next evidence is an authenticated direct historical human-merge statement with corroborated occurrence time; then resume remaining substantive review and payload checks for this same immutable PR #299 identity. No publication, PR #300 review or subsequent action performed.
+Working source: /home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/907350a0-ae12-4bea-97de-489acca3dff7.txt
+Separate exact archive: /home/aiosadmin/aios-approval-source-archive/907350a0-ae12-4bea-97de-489acca3dff7.txt
+Protected exclusive 0600 files, common local Owner custody, no independent storage claim. Existing sources remain unchanged. No commit or push.

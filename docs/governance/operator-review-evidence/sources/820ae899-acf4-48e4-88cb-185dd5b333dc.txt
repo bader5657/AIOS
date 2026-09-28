@@ -1,0 +1,28 @@
+Source ID: 820ae899-acf4-48e4-88cb-185dd5b333dc
+PR #299 retrospective identity and merge verification — factual evidence only
+Actual current merge_verified_at_utc: 2026-09-28T00:19:28.506244Z
+Repository: bader5657/AIOS
+Exact GitHub mapping: {"files": [{"additions": 119, "changeType": "ADDED", "deletions": 0, "path": "docs/intelligence/stage-0.33c-p4s7-r32-recovery-bindings/00_RECOVERY_EXECUTOR_PACKAGE_BINDING_AMENDMENT.md"}, {"additions": 13, "changeType": "MODIFIED", "deletions": 1, "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md"}, {"additions": 49, "changeType": "MODIFIED", "deletions": 8, "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py"}, {"additions": 2, "changeType": "MODIFIED", "deletions": 2, "path": "tests/unit/intelligence/test_stage033c_orchestration.py"}, {"additions": 2, "changeType": "MODIFIED", "deletions": 1, "path": "tests/unit/intelligence/test_stage033c_r13a_preclaim.py"}, {"additions": 288, "changeType": "ADDED", "deletions": 0, "path": "tests/unit/intelligence/test_stage033c_recovery_binding.py"}, {"additions": 4, "changeType": "MODIFIED", "deletions": 1, "path": "tests/unit/intelligence/test_stage033c_registry_manifest_matrix.py"}], "headRefOid": "fd36b9abe6920ea807a070ea63589622e1d2e2cb", "mergeCommit": {"oid": "ba717f6990d775748f46d62ef03a696f1618077b"}, "mergedAt": "2026-09-27T00:32:54Z", "mergedBy": {"id": "U_kgDOEkW3BA", "is_bot": false, "login": "bader5657", "name": ""}, "number": 299, "state": "MERGED"}
+Original two parents: ["94c1b012a7ae917a1daffc2d73f5e9fd48c3715d", "fd36b9abe6920ea807a070ea63589622e1d2e2cb"]. Second parent equals reviewed HEAD.
+Every Git topology read disabled replacement refs and grafts using GIT_NO_REPLACE_OBJECTS=1, --no-replace-objects and GIT_GRAFT_FILE=/dev/null. Raw commit topology was separately inspected during this re-validation.
+Required lineage PASS: package baseline ca7940b8b94237611a37189e0bed10b002167e78, R30 f3188f8d61cccf58c2ad7f6c3b6bdbcf5acb1606 and first parent precede reviewed HEAD; PR299 merge precedes the fixed PR300/302/303 merges and commissioned genesis. This does not review those later subjects.
+Three required artifact checks: [
+  {
+    "path": "docs/intelligence/stage-0.33c-p4s7-r32-recovery-bindings/00_RECOVERY_EXECUTOR_PACKAGE_BINDING_AMENDMENT.md",
+    "reviewed_sha256": "ea467d87ecef63f08e1c1a1a0f11d4e1824daac7aa8dd5985a0e869432b683fa",
+    "merged_sha256": "ea467d87ecef63f08e1c1a1a0f11d4e1824daac7aa8dd5985a0e869432b683fa"
+  },
+  {
+    "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py",
+    "reviewed_sha256": "da020dff0974acf0bb7fc22bc1b54f17d149ee8f11ace67420eb16cca73cd6be",
+    "merged_sha256": "da020dff0974acf0bb7fc22bc1b54f17d149ee8f11ace67420eb16cca73cd6be"
+  },
+  {
+    "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md",
+    "reviewed_sha256": "ee2b2b1d5e75653b8b432cb6c6476ea645318733f910b5292520074964ec4f26",
+    "merged_sha256": "ee2b2b1d5e75653b8b432cb6c6476ea645318733f910b5292520074964ec4f26"
+  }
+]
+All seven PR files have reviewed/merged equality; tracked historical review checkout clean at exact HEAD. Git diff --check and compile-only executor check pass. R30 and R31A governing texts pre-exist unchanged in the reviewed candidate.
+Historical GitHub merge occurrence is 2026-09-27T00:32:54Z, corroborated by direct Owner source {"path": "docs/governance/operator-review-evidence/sources/34c0d5fc-352e-4a84-a7e9-74cc209c583a.txt", "transport_sha256": "54c7673c193b94781324e049824bf28fc38971f72562e9e7c1884426196d2e46"}. Raw committer time 2026-09-27T00:32:53Z is preserved as commit creation. Serializing the second-resolution merge value as 2026-09-27T00:32:54.000000Z does not claim independently measured microseconds.
+Current factual verification only; no API-only inference of human intent or original acceptance. AI assistance advisory. Common local protected Owner custody; no independent human acceptance.
