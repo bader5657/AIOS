@@ -1,0 +1,210 @@
+{
+  "activation_decision": {
+    "commit": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+    "path": "docs/governance/operator-review-evidence/decisions/7a3d51ee-1bb9-43c4-9896-f5eab11d305a.json",
+    "transport_sha256": "912d9283e92aea725a0c6f73e5b91cc66fc00710a0bfc4a1d2c4525ae41d4b3b"
+  },
+  "all_source_receipt_digests_exact": true,
+  "all_twelve_files_byte_identical": true,
+  "canonical_payload_sha256": "a2043e3061e2985285cf26cf3d2952075ad8d8a4174f9454bda14a739f0ef7da",
+  "effective_remedy": {
+    "commit": "0026912443ad6e4fffc814a3b59e6c7fddd2f696",
+    "path": "docs/intelligence/stage-0.33c-p4s7-pr301-acceptance-remedy/00_PR301_RETROSPECTIVE_ACCEPTANCE_REMEDY.md",
+    "transport_sha256": "8e8eb023827aa4cc6408c5dee6c12f1a39681d7143b4aa08ed1e4cef529237aa"
+  },
+  "entire_merge_tree_equals_reviewed_candidate": true,
+  "excluded_actions_performed": false,
+  "execution_authority": "Current explicit Project Owner instruction: merge PR312 only at exact authorized HEAD and perform post-merge verification only.",
+  "execution_method": "Assistant executed gh pr merge 312 --repo bader5657/AIOS --merge --match-head-commit 5fbe3ace44be29e2d10e39d2a43359892f39da08 under direct human instruction. GitHub mergedBy is metadata, not a claim that the human personally used the UI.",
+  "file_checks": [
+    {
+      "merged_sha256": "1fb0f5cabfbb7f4a47a19ede1e2f57df03616c09c74ebad4330ccf519d8512bd",
+      "path": "docs/governance/operator-review-evidence/reviews/769a75ca-fe08-4670-97ca-adc6f39fd383.json",
+      "reviewed_sha256": "1fb0f5cabfbb7f4a47a19ede1e2f57df03616c09c74ebad4330ccf519d8512bd"
+    },
+    {
+      "merged_sha256": "2596631b0e23a5c0f073299d3abda5b152bfa23e05d0f5d9b2c4298187a8f034",
+      "path": "docs/governance/operator-review-evidence/sources/17560118-b047-4a09-b741-fb13bb8bfb89.txt",
+      "reviewed_sha256": "2596631b0e23a5c0f073299d3abda5b152bfa23e05d0f5d9b2c4298187a8f034"
+    },
+    {
+      "merged_sha256": "a56459969a1f35a84c817176c888ca4e70ba3f3c955de04e6094f937d3596c1e",
+      "path": "docs/governance/operator-review-evidence/sources/3282b349-446b-4032-8731-758611775acf.txt",
+      "reviewed_sha256": "a56459969a1f35a84c817176c888ca4e70ba3f3c955de04e6094f937d3596c1e"
+    },
+    {
+      "merged_sha256": "fb46779b82b94a149ec42b6571463fae9a070caef1f52b48fbe9afb7d35f8342",
+      "path": "docs/governance/operator-review-evidence/sources/36c55bfa-fe2b-4f56-92d4-cab226cd4d17.txt",
+      "reviewed_sha256": "fb46779b82b94a149ec42b6571463fae9a070caef1f52b48fbe9afb7d35f8342"
+    },
+    {
+      "merged_sha256": "d3116f350d98cbd49476ef06884156a0c79a5544495152cc967ee5547004f8d3",
+      "path": "docs/governance/operator-review-evidence/sources/39399f28-98bc-4dc0-aef0-1afcb00a2b5e.txt",
+      "reviewed_sha256": "d3116f350d98cbd49476ef06884156a0c79a5544495152cc967ee5547004f8d3"
+    },
+    {
+      "merged_sha256": "0e9bdaff2151691f6aba19009592aab3a91898fe287ec70072b176fec3663bad",
+      "path": "docs/governance/operator-review-evidence/sources/44418820-7930-4b3a-9f38-75587bba6a31.txt",
+      "reviewed_sha256": "0e9bdaff2151691f6aba19009592aab3a91898fe287ec70072b176fec3663bad"
+    },
+    {
+      "merged_sha256": "9ad5fffcc5949f607ad83f4132f9c71fed1fcbec304a4652d76f5f4c5448a765",
+      "path": "docs/governance/operator-review-evidence/sources/67935d7d-bc75-47c8-9dc2-f81d1886c809.txt",
+      "reviewed_sha256": "9ad5fffcc5949f607ad83f4132f9c71fed1fcbec304a4652d76f5f4c5448a765"
+    },
+    {
+      "merged_sha256": "91f8fe061b7867dc9bb6df7c6bcb2b4af67b2356d047a0518af4efb442ef5c17",
+      "path": "docs/governance/operator-review-evidence/sources/9f796743-e00a-4d1a-9daf-fce1f289aaf4.txt",
+      "reviewed_sha256": "91f8fe061b7867dc9bb6df7c6bcb2b4af67b2356d047a0518af4efb442ef5c17"
+    },
+    {
+      "merged_sha256": "e6f9e76867af6327ce0a5316a9222e9eafea6df4a94ef0d851e68a2c31e4acb9",
+      "path": "docs/governance/operator-review-evidence/sources/b48a4efb-2f94-4072-8d69-fdcd68b2816f.txt",
+      "reviewed_sha256": "e6f9e76867af6327ce0a5316a9222e9eafea6df4a94ef0d851e68a2c31e4acb9"
+    },
+    {
+      "merged_sha256": "6c64714ca45abf271c64b6d03cbaaf466411e1aa98b59b0844fa93b2964fb163",
+      "path": "docs/governance/operator-review-evidence/sources/bf4e330d-b156-4e30-834a-871abe3f0769.txt",
+      "reviewed_sha256": "6c64714ca45abf271c64b6d03cbaaf466411e1aa98b59b0844fa93b2964fb163"
+    },
+    {
+      "merged_sha256": "357127eb4337c910952ac3ed5e827e03c186fe2ee7060306241c0c61acdc3ef7",
+      "path": "docs/governance/operator-review-evidence/sources/c8c2d322-f0d5-4bbb-b05e-429278439904.txt",
+      "reviewed_sha256": "357127eb4337c910952ac3ed5e827e03c186fe2ee7060306241c0c61acdc3ef7"
+    },
+    {
+      "merged_sha256": "e54d6243f880ab09fd1034743bf52d02e57047ddf9da3c856b492d2b05288f6d",
+      "path": "docs/governance/operator-review-evidence/sources/d1df8ce2-0edf-4993-abf9-11b399ed03eb.txt",
+      "reviewed_sha256": "e54d6243f880ab09fd1034743bf52d02e57047ddf9da3c856b492d2b05288f6d"
+    }
+  ],
+  "merge_metadata": {
+    "baseRefOid": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+    "files": [
+      {
+        "additions": 1,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/reviews/769a75ca-fe08-4670-97ca-adc6f39fd383.json"
+      },
+      {
+        "additions": 180,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/17560118-b047-4a09-b741-fb13bb8bfb89.txt"
+      },
+      {
+        "additions": 57,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/3282b349-446b-4032-8731-758611775acf.txt"
+      },
+      {
+        "additions": 32,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/36c55bfa-fe2b-4f56-92d4-cab226cd4d17.txt"
+      },
+      {
+        "additions": 34,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/39399f28-98bc-4dc0-aef0-1afcb00a2b5e.txt"
+      },
+      {
+        "additions": 78,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/44418820-7930-4b3a-9f38-75587bba6a31.txt"
+      },
+      {
+        "additions": 140,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/67935d7d-bc75-47c8-9dc2-f81d1886c809.txt"
+      },
+      {
+        "additions": 81,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/9f796743-e00a-4d1a-9daf-fce1f289aaf4.txt"
+      },
+      {
+        "additions": 84,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/b48a4efb-2f94-4072-8d69-fdcd68b2816f.txt"
+      },
+      {
+        "additions": 85,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/bf4e330d-b156-4e30-834a-871abe3f0769.txt"
+      },
+      {
+        "additions": 97,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/c8c2d322-f0d5-4bbb-b05e-429278439904.txt"
+      },
+      {
+        "additions": 126,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/d1df8ce2-0edf-4993-abf9-11b399ed03eb.txt"
+      }
+    ],
+    "headRefOid": "5fbe3ace44be29e2d10e39d2a43359892f39da08",
+    "mergeCommit": {
+      "oid": "ff6ef91748c469ab4fe62b05d79780317b30e52f"
+    },
+    "mergedAt": "2026-09-29T07:08:06Z",
+    "mergedBy": {
+      "id": "U_kgDOEkW3BA",
+      "is_bot": false,
+      "login": "bader5657",
+      "name": ""
+    },
+    "number": 312,
+    "state": "MERGED",
+    "url": "https://github.com/bader5657/AIOS/pull/312"
+  },
+  "next_step": "Appointed authenticated Project Owner/verifier personally adopts the actual PR312 publication findings, reviewed HEAD, actual merge, record ID and record transport digest with current timestamp and solo-role disclosure. No human adoption is fabricated by this receipt.",
+  "no_unexpected_historical_artifact_changed": true,
+  "parents": [
+    "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+    "5fbe3ace44be29e2d10e39d2a43359892f39da08"
+  ],
+  "pr": 312,
+  "pr302_resumed": false,
+  "pr302_status": "Still blocked pending complete authenticated publication verification and separate explicit resume instruction.",
+  "pre_merge_verification_receipt_id": "224ac395-ff8a-413e-9792-0dc5db446ee6",
+  "process_authority": {
+    "commit": "f90aaf4454956b1e10564e8e41c7afa2df289cea",
+    "path": "docs/governance/GOVERNANCE_DECISION_008.md",
+    "transport_sha256": "ffbbafafd79b30d56d5b5a6824ff922bc23d68f0216305d7dab651b6b7bf5fa9"
+  },
+  "publication_authorization_receipt_id": "659129d2-290c-4f85-a59d-913803ab93a0",
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/5571d58e-cf73-4645-8eb8-0758ee432e5a.txt",
+    "/home/aiosadmin/aios-approval-source-archive/5571d58e-cf73-4645-8eb8-0758ee432e5a.txt"
+  ],
+  "record_id": "769a75ca-fe08-4670-97ca-adc6f39fd383",
+  "record_status": "MERGED; technical verification PASS; still awaiting authenticated human verifier adoption before PUBLISHED / VERIFIED.",
+  "recorded_at_utc": "2026-09-29T07:09:19.317283Z",
+  "register_sequence_unchanged": 2,
+  "repository": "bader5657/AIOS",
+  "resulting_main_head": "ff6ef91748c469ab4fe62b05d79780317b30e52f",
+  "retention": "Protected exclusive local source copies under common Owner custody, retain indefinitely for later linked governance publication; outside the merged candidate.",
+  "retrospective_record_gitref": {
+    "commit": "ff6ef91748c469ab4fe62b05d79780317b30e52f",
+    "path": "docs/governance/operator-review-evidence/reviews/769a75ca-fe08-4670-97ca-adc6f39fd383.json",
+    "transport_sha256": "1fb0f5cabfbb7f4a47a19ede1e2f57df03616c09c74ebad4330ccf519d8512bd"
+  },
+  "role_context": "solo-project-owner-bootstrap; same Owner combines disclosed reviewer/approver/custodian/verifier/commissioner/operator roles. AI technical assistance advisory only; no independent-human acceptance or independent custody claimed.",
+  "source_id": "5571d58e-cf73-4645-8eb8-0758ee432e5a",
+  "stop_after_post_merge_verification": true,
+  "technical_verification": "PASS",
+  "timestamp_meaning": "Actual current UTC after technical post-merge verification, no backdating. Historical publication time is separately sourced GitHub mergedAt.",
+  "two_parent_topology_and_reviewed_second_parent_verified": true
+}

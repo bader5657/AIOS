@@ -1,0 +1,75 @@
+{
+  "activation_decision": {
+    "commit": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+    "path": "docs/governance/operator-review-evidence/decisions/7a3d51ee-1bb9-43c4-9896-f5eab11d305a.json",
+    "transport_sha256": "912d9283e92aea725a0c6f73e5b91cc66fc00710a0bfc4a1d2c4525ae41d4b3b"
+  },
+  "canonical_payload_sha256": "a2043e3061e2985285cf26cf3d2952075ad8d8a4174f9454bda14a739f0ef7da",
+  "checks": {
+    "all_reviewed_and_merged_bytes_identical": true,
+    "all_source_digests_exact": true,
+    "canonical_payload_and_transport_digests_unchanged": true,
+    "exact_two_parent_topology": true,
+    "historical_artifacts_unchanged": true,
+    "ordered_attestations_authorization_merge_verification_and_human_adoption": true,
+    "remedy_and_activation_refs_exact": true,
+    "reviewed_second_parent": true,
+    "twelve_additions_only": true
+  },
+  "current_register_tip": {
+    "record_id": "7a3d51ee-1bb9-43c4-9896-f5eab11d305a",
+    "sequence": 2
+  },
+  "determination": "All PR301 retrospective record publication prerequisites are satisfied, including current personal human verifier adoption. Only the narrow PR301 acceptance prerequisite for later bounded PR302 bootstrap reliance is satisfied prospectively.",
+  "effective_remedy": {
+    "commit": "0026912443ad6e4fffc814a3b59e6c7fddd2f696",
+    "path": "docs/intelligence/stage-0.33c-p4s7-pr301-acceptance-remedy/00_PR301_RETROSPECTIVE_ACCEPTANCE_REMEDY.md",
+    "transport_sha256": "8e8eb023827aa4cc6408c5dee6c12f1a39681d7143b4aa08ed1e4cef529237aa"
+  },
+  "excluded_actions_performed": false,
+  "human_acceptance_source": {
+    "recorded_at_utc": "2026-09-29T07:12:04.062207Z",
+    "source_id": "e6164b45-5205-4384-bc8e-90c4b790f399",
+    "transport_sha256": "be9a1b1619789d713cdb43ff3c55ba99d2e5589cb7ca539fc2ec2cb984314ad2"
+  },
+  "next_step": "A separate explicit Owner instruction is required before resuming PR302 review; no resumption performed.",
+  "pr302_resumed": false,
+  "process_authority": {
+    "commit": "f90aaf4454956b1e10564e8e41c7afa2df289cea",
+    "path": "docs/governance/GOVERNANCE_DECISION_008.md",
+    "transport_sha256": "ffbbafafd79b30d56d5b5a6824ff922bc23d68f0216305d7dab651b6b7bf5fa9"
+  },
+  "production_authority_created": false,
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/38112d3b-73ab-49b9-9a67-e23c6d879a05.txt",
+    "/home/aiosadmin/aios-approval-source-archive/38112d3b-73ab-49b9-9a67-e23c6d879a05.txt"
+  ],
+  "record_gitref": {
+    "commit": "ff6ef91748c469ab4fe62b05d79780317b30e52f",
+    "path": "docs/governance/operator-review-evidence/reviews/769a75ca-fe08-4670-97ca-adc6f39fd383.json",
+    "transport_sha256": "1fb0f5cabfbb7f4a47a19ede1e2f57df03616c09c74ebad4330ccf519d8512bd"
+  },
+  "record_id": "769a75ca-fe08-4670-97ca-adc6f39fd383",
+  "recorded_at_utc": "2026-09-29T07:16:06.735146Z",
+  "remote_metadata": {
+    "headRefOid": "5fbe3ace44be29e2d10e39d2a43359892f39da08",
+    "mergeCommit": {
+      "oid": "ff6ef91748c469ab4fe62b05d79780317b30e52f"
+    },
+    "mergedAt": "2026-09-29T07:08:06Z",
+    "number": 312,
+    "state": "MERGED"
+  },
+  "repository": "bader5657/AIOS",
+  "retention": "Exclusive protected local source and exact archive copy under common Owner custody; retain indefinitely for later governed linked publication. No historical receipt rewritten.",
+  "retrospective_semantics": "Fresh retrospective re-validation; not the original pre-merge review; original acceptance record unavailable.",
+  "role_context": "solo-project-owner-bootstrap; same Owner combines disclosed reviewer/approver/custodian/verifier/commissioner/operator roles. AI technical assistance advisory only; no independent-human acceptance or independent custody claimed.",
+  "source_id": "38112d3b-73ab-49b9-9a67-e23c6d879a05",
+  "status": "PUBLISHED / VERIFIED",
+  "technical_verification_source": {
+    "source_id": "5571d58e-cf73-4645-8eb8-0758ee432e5a",
+    "transport_sha256": "ebaca6b9675d5e166a9b97fc7c0141010e6b805ae3d417b62c79c7fd1e3dfb93"
+  },
+  "timestamp_meaning": "Current publication determination after verification and prospective human adoption; no backdating.",
+  "verified_main_head": "ff6ef91748c469ab4fe62b05d79780317b30e52f"
+}
