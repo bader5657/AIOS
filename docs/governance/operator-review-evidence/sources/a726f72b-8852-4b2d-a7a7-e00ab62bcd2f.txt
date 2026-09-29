@@ -1,0 +1,52 @@
+{
+  "actor": {
+    "channel_id": "Telegram numeric ID 961959058; username Bagusder21",
+    "name": "Project Owner — Bagusder21",
+    "principal_id": "8577005f-37dd-48ce-9250-cf93707d8239"
+  },
+  "actual_merge_commit": "27431c6c0304e0c8a0fc11bc853449667cee0f08",
+  "boundaries": "No PR304 review/modification/merge, selector publication, recovery activation, installation, recovery authority consumption, runtime/service/database changes, Step4 closure or Step5.",
+  "correction": "Receipt ID transcription correction only. The Owner expressly preserves previous findings, scope, restrictions, merge identity, record identity and acceptance statement. Historical receipts remain unchanged.",
+  "disposition": "Corrected adoption statement recorded prospectively and bound to the actual retained technical verification receipt. This source records the correction only; it does not independently assert a new effective-admission determination or authorize a subsequent action.",
+  "earlier_statement_reference": {
+    "description": "Previous authenticated human verifier adoption referenced by the current Owner statement",
+    "limitation": "A separately retained prior PR316 adoption statement and its erroneous receipt ID were not located in the designated working source archive or separate Owner archive. Neither is reconstructed or invented.",
+    "retained_source": null
+  },
+  "exact_owner_statement": "I confirm my authenticated human verifier adoption applies to the actual retained post-merge verification receipt d87deaee-304c-435c-bb12-1fc2caae914a for the already merged PR #316 sequence-3 admit-bootstrap publication. My previous findings, scope, restrictions, merge identity, record identity, and acceptance statement remain unchanged. The prior receipt ID was a transcription error only. Record this corrected adoption prospectively; do not alter historical receipts.",
+  "kind": "PR316 prospective corrected human verifier adoption of retained post-merge receipt",
+  "publication_pr": 316,
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/a726f72b-8852-4b2d-a7a7-e00ab62bcd2f.txt",
+    "/home/aiosadmin/aios-approval-source-archive/a726f72b-8852-4b2d-a7a7-e00ab62bcd2f.txt"
+  ],
+  "record_gitref": {
+    "commit": "27431c6c0304e0c8a0fc11bc853449667cee0f08",
+    "path": "docs/governance/operator-review-evidence/decisions/b4d0f531-3dc1-4aa1-8310-c3092b005172.json",
+    "transport_sha256": "545adba141f640c478d8c183bc1490ddc59a19ade2590e5b3df5c257022ac7bc"
+  },
+  "recorded_at_utc": "2026-09-29T19:56:44.727695Z",
+  "repository": "bader5657/AIOS",
+  "retention": "Exclusive 0600 files in existing protected 0700 directories. Exact separate copies under common Owner custody; no independent custody or independent-human acceptance claimed. Retain indefinitely for later governed linked publication.",
+  "reviewed_authorized_head": "886a0d0a8e4795550b1aec1d49e97a3980f8c1e1",
+  "role_context": {
+    "combined_roles": [
+      "reviewer",
+      "approver",
+      "custodian",
+      "verifier",
+      "commissioner",
+      "operator"
+    ],
+    "disclosure": "One authenticated human Project Owner, Telegram numeric ID 961959058, username Bagusder21, combines all listed roles only for development/bootstrap governance preparation and evidence/process commissioning. No independent human acceptance or second human is claimed. AI assistance is advisory only. Reviewer acceptance and separate later Owner approval remain sequential human attestations; production execution is excluded.",
+    "mode": "solo-project-owner-bootstrap"
+  },
+  "sequence": 3,
+  "source_id": "a726f72b-8852-4b2d-a7a7-e00ab62bcd2f",
+  "source_medium": "Current direct Owner conversation; not a Telegram transcript. Existing retained identity context; no new authentication challenge asserted.",
+  "technical_verification_source": {
+    "path": "docs/governance/operator-review-evidence/sources/d87deaee-304c-435c-bb12-1fc2caae914a.txt",
+    "transport_sha256": "5011fe4dc3dc198d20e6665f9191b0e62c7cfd2cb59e65829697458c2521f1b6"
+  },
+  "timestamp_meaning": "Actual current UTC recording time, not the time of the earlier adoption or merge. No backdating."
+}
