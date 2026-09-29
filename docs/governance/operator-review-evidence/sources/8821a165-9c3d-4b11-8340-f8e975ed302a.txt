@@ -1,0 +1,194 @@
+{
+  "archive_receipt_path": "/home/aiosadmin/aios-approval-source-archive/8821a165-9c3d-4b11-8340-f8e975ed302a.txt",
+  "artifact_checks": [
+    {
+      "bytes": 24311,
+      "merged_sha256": "39b0768d989c89fa64c6593834220f9846c6013e7e10c03ec5eec34cd78098c0",
+      "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md",
+      "reviewed_sha256": "39b0768d989c89fa64c6593834220f9846c6013e7e10c03ec5eec34cd78098c0"
+    },
+    {
+      "bytes": 77359,
+      "merged_sha256": "7b38ce601cbeb930a4277af8f4dfe66bbf4b7b9df9ad94059e504082f58a8beb",
+      "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py",
+      "reviewed_sha256": "7b38ce601cbeb930a4277af8f4dfe66bbf4b7b9df9ad94059e504082f58a8beb"
+    },
+    {
+      "bytes": 11823,
+      "merged_sha256": "d2bdaddb419c8710a9d687c0dfc973757334379d96d4db333381347446d823d5",
+      "path": "tests/unit/intelligence/test_stage033c_activation_serialization.py",
+      "reviewed_sha256": "d2bdaddb419c8710a9d687c0dfc973757334379d96d4db333381347446d823d5"
+    },
+    {
+      "bytes": 14060,
+      "merged_sha256": "5474e352b5ba0af32cb5305c5ddbb51cfc5d61a828c1c3445c262cb13736c2b7",
+      "path": "tests/unit/intelligence/test_stage033c_r13a_preclaim.py",
+      "reviewed_sha256": "5474e352b5ba0af32cb5305c5ddbb51cfc5d61a828c1c3445c262cb13736c2b7"
+    },
+    {
+      "bytes": 15746,
+      "merged_sha256": "fe968c2cc69051761df3cfe7f40f585ca078d387ccde5365f33b82614503a1e9",
+      "path": "tests/unit/intelligence/test_stage033c_recovery_binding.py",
+      "reviewed_sha256": "fe968c2cc69051761df3cfe7f40f585ca078d387ccde5365f33b82614503a1e9"
+    },
+    {
+      "bytes": 35431,
+      "merged_sha256": "af44eec8498e547e93e905e12e41dadcc2f55595c5671edc35d251f2f4d8328b",
+      "path": "tests/unit/intelligence/test_stage033c_recovery_reader.py",
+      "reviewed_sha256": "af44eec8498e547e93e905e12e41dadcc2f55595c5671edc35d251f2f4d8328b"
+    }
+  ],
+  "authorization": "Current direct Owner request permits PR302 retrospective preparation only and expressly requires STOP if human merge corroboration is missing.",
+  "blocking_findings": [
+    {
+      "finding": "No direct authenticated firsthand Owner/merger confirmation for PR302 found in working and archive source receipts. Existing references are identities, scope, inventory, lineage, or exclusions. PR299/300 confirmations do not cover PR302. GitHub mergedBy alone cannot prove human intent.",
+      "required_remedy": "Current firsthand Owner/merger confirmation of the exact PR302 reviewed HEAD, merge SHA, human actor/action and sourced occurrence time.",
+      "severity": "High"
+    },
+    {
+      "finding": "PR301 required acceptance remains unresolved. Commissioned retained determination explicitly requires its resolution before acceptance of PR302 as a compliant governed reader during re-validation/admission. PR301 is outside the four-subject retrospective exception.",
+      "required_remedy": "Authentic required PR301 acceptance evidence, or separately reviewed and explicitly Owner-approved narrow governance remedy. Do not invent original acceptance or silently extend the allowlist.",
+      "severity": "High"
+    }
+  ],
+  "canonical_payload_sha256": "Not assigned; payload not frozen",
+  "chain_role": "PR302 implements the PR301 protected-pin reader and R34 activation contract. Exact reader identity and later PR303 frozen values match repository bytes; this is not acceptance of PR301 or PR303 or a new operational binding. R34 remains the operational baseline until separate governed evidence supersession and selector publication.",
+  "classification": "retrospective-revalidation",
+  "custody": "Exclusive protected copies in common local Owner custody; no independent custody claim. Preserve all earlier sources unchanged.",
+  "executor_sha256": "7b38ce601cbeb930a4277af8f4dfe66bbf4b7b9df9ad94059e504082f58a8beb",
+  "findings": "Fresh retrospective re-validation; not the original pre-merge review; original acceptance record unavailable. Exact PR identity, original topology, replacement/graft-resistant lineage, all six changed-file reviewed/merged comparisons, executor/policy hashes and preserved contract/baseline checks PASS. CHANGES_REQUIRED for missing human-merge/time corroboration and unresolved PR301 acceptance prerequisite. No substantive implementation verdict or CLEAN payload is issued.",
+  "git_controls": "GIT_NO_REPLACE_OBJECTS=1; GIT_GRAFT_FILE=/dev/null; raw commit headers used for original topology.",
+  "github_merge_occurrence_observed_at_utc": "2026-09-27T02:32:38Z",
+  "github_metadata": {
+    "files": [
+      {
+        "additions": 12,
+        "changeType": "MODIFIED",
+        "deletions": 1,
+        "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/00_ONE_SHOT_RUNTIME_INSTALLATION_AUTHORITY.md"
+      },
+      {
+        "additions": 371,
+        "changeType": "MODIFIED",
+        "deletions": 86,
+        "path": "docs/intelligence/stage-0.33c-step4-one-shot-runtime-install-authority/one_shot_install.py"
+      },
+      {
+        "additions": 27,
+        "changeType": "MODIFIED",
+        "deletions": 15,
+        "path": "tests/unit/intelligence/test_stage033c_activation_serialization.py"
+      },
+      {
+        "additions": 6,
+        "changeType": "MODIFIED",
+        "deletions": 164,
+        "path": "tests/unit/intelligence/test_stage033c_r13a_preclaim.py"
+      },
+      {
+        "additions": 3,
+        "changeType": "MODIFIED",
+        "deletions": 2,
+        "path": "tests/unit/intelligence/test_stage033c_recovery_binding.py"
+      },
+      {
+        "additions": 702,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "tests/unit/intelligence/test_stage033c_recovery_reader.py"
+      }
+    ],
+    "headRefOid": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+    "mergeCommit": {
+      "oid": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2"
+    },
+    "mergedAt": "2026-09-27T02:32:38Z",
+    "mergedBy": {
+      "id": "U_kgDOEkW3BA",
+      "is_bot": false,
+      "login": "bader5657",
+      "name": ""
+    },
+    "number": 302,
+    "state": "MERGED",
+    "url": "https://github.com/bader5657/AIOS/pull/302"
+  },
+  "governance_gate_sources": [
+    {
+      "path": "docs/governance/operator-review-evidence/sources/9080ad93-8404-4fbc-b415-8d00a75dd586.txt",
+      "transport_sha256": "02bf3ceb5450cc6f87692535a6c57c6ff982edc97beaab4aeaf9bc4aa0b9946b"
+    },
+    {
+      "path": "docs/governance/operator-review-evidence/sources/72611441-20e3-4b20-98a4-ad1120df9769.txt",
+      "transport_sha256": "605f7f71a48b969de5779022239f374c389e32c26c552648d36ee471c3ff5456"
+    }
+  ],
+  "limits": "No PR303 review, PR304 modification, publication, bootstrap admission, selector, activation, one-shot install, recovery authority consumption, runtime/service/database change, Step-4 closure or Step-5. No executor/test execution or live private-source reads. PR301 later acceptance gate remains unresolved.",
+  "lineage_checks": [
+    {
+      "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+      "descendant": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "8e9a8023742773b055e17dba002b2ebf07528118",
+      "descendant": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "descendant": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "descendant": "dfdf98fbee0405b188530e9f374515ebc72ce1b2",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "descendant": "8c6fad7dfac5ebd609ad85a71f0147f2272fd2ed",
+      "result": "PASS"
+    }
+  ],
+  "merge_occurrence_status": "Repository-sourced historical time observed at second resolution, pending direct authenticated human corroboration; no completed payload merge_occurred_at_utc assigned.",
+  "merge_verified_at_utc": "2026-09-29T05:41:53.445939Z",
+  "original_parents": [
+    "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+    "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368"
+  ],
+  "policy_bound_executor_sha_matches": true,
+  "policy_sha256": "39b0768d989c89fa64c6593834220f9846c6013e7e10c03ec5eec34cd78098c0",
+  "pr301_contract_bytes_preserved": true,
+  "pr303_frozen_reader_executor_policy_identities_match": true,
+  "preliminary_reviewed_at_utc": "2026-09-29T05:41:53.446011Z",
+  "proposed_record_id": "Not assigned; payload not frozen",
+  "r34_baseline_bytes_preserved": true,
+  "raw_commit_created_at_utc": "2026-09-27T02:32:38Z",
+  "raw_commit_sha256": "128da5e576bb9de2d090102537c5a53013f8ef8eeb7378f65bdf5bc0ebcde455",
+  "recorded_at_utc": "2026-09-29T05:41:53.446011Z",
+  "repository": "bader5657/AIOS",
+  "review_verdict": "CHANGES_REQUIRED",
+  "reviewer_acceptance_next": false,
+  "role_context": {
+    "combined_roles": [
+      "reviewer",
+      "approver",
+      "custodian",
+      "verifier",
+      "commissioner",
+      "operator"
+    ],
+    "disclosure": "One authenticated Project Owner, Telegram numeric ID 961959058, username Bagusder21, combines listed roles within development/bootstrap governance only. No independent-human acceptance. AI assistance and current prerequisite checks advisory only.",
+    "mode": "solo-project-owner-bootstrap"
+  },
+  "security_review_status": "The three previously fixed findings (second-parent history bypass, refs/replace/graft overlays, final-parent custody TOCTOU) are identified in historical PR metadata but have not been freshly substantively reviewed or regression-tested in this turn because required prerequisites block continuation. Historical test counts are not new test results.",
+  "source_id": "8821a165-9c3d-4b11-8340-f8e975ed302a",
+  "subject": {
+    "merge_sha": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+    "pr_number": 302,
+    "reviewed_head_sha": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368"
+  },
+  "timestamp_meaning": "Actual current prerequisite inspection and STOP retention. Substantive retrospective review has not completed; no payload reviewed_at_utc or guessed historical timestamp assigned.",
+  "working_receipt_path": "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/8821a165-9c3d-4b11-8340-f8e975ed302a.txt"
+}

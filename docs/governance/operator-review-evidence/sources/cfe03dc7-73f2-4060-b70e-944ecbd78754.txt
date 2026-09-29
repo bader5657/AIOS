@@ -1,0 +1,41 @@
+{
+  "actor": {
+    "channel_id": "Telegram numeric ID 961959058; username Bagusder21",
+    "name": "Project Owner — Bagusder21",
+    "principal_id": "8577005f-37dd-48ce-9250-cf93707d8239"
+  },
+  "exact_statement_excerpt": "As Project Owner, I explicitly RESUME the bounded retrospective re-validation\nof PR #302 now that the PR #301 acceptance prerequisite is PUBLISHED / VERIFIED.",
+  "instruction_summary_not_verbatim": "Resume only exact PR302 subject, perform fresh identity/topology/raw lineage/byte and implementation-security review; verify fixed executor/policy, PR301 acceptance and PR303 fixed reader compatibility without starting PR303 review. If blocking findings STOP CHANGES_REQUIRED; if CLEAN freeze payload only. Preserve current review/verification/creation times and historical 2026-09-27T02:32:38.000000Z, retrospective meaning, solo roles and advisory AI. No publication, PR303 review, PR304 modification, bootstrap admission, selector, activation, one-shot install, recovery consumption, runtime/service/database change, Step4 closure or Step5.",
+  "kind": "Current Owner PR302 resumption instruction retention",
+  "pr301_dependency": {
+    "commit": "ff6ef91748c469ab4fe62b05d79780317b30e52f",
+    "path": "docs/governance/operator-review-evidence/reviews/769a75ca-fe08-4670-97ca-adc6f39fd383.json",
+    "transport_sha256": "1fb0f5cabfbb7f4a47a19ede1e2f57df03616c09c74ebad4330ccf519d8512bd"
+  },
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/cfe03dc7-73f2-4060-b70e-944ecbd78754.txt",
+    "/home/aiosadmin/aios-approval-source-archive/cfe03dc7-73f2-4060-b70e-944ecbd78754.txt"
+  ],
+  "recorded_at_utc": "2026-09-29T07:25:43.493377Z",
+  "retention": "Protected exclusive 0600 source and exact archive copy in common Owner custody; retain indefinitely. No independent storage claimed.",
+  "role_context": {
+    "combined_roles": [
+      "reviewer",
+      "approver",
+      "custodian",
+      "verifier",
+      "commissioner",
+      "operator"
+    ],
+    "disclosure": "One authenticated human Project Owner, Telegram numeric ID 961959058, username Bagusder21, combines all listed roles only for development/bootstrap governance preparation and evidence/process commissioning. No independent human acceptance or second human is claimed. AI assistance is advisory only. Reviewer acceptance and separate later Owner approval remain sequential human attestations; production execution is excluded.",
+    "mode": "solo-project-owner-bootstrap"
+  },
+  "source_id": "cfe03dc7-73f2-4060-b70e-944ecbd78754",
+  "source_medium": "Current direct Project Owner conversation, established Owner session; not a Telegram transcript.",
+  "subject": {
+    "merge_sha": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+    "pr_number": 302,
+    "reviewed_head_sha": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368"
+  },
+  "supersedes_prior_stop_only_for_resumption": "The historical STOP receipt remains unchanged; firsthand merge corroboration and the now-published PR301 prerequisite resolve its two blockers. This instruction explicitly resumes only the previously stopped PR302 review."
+}
