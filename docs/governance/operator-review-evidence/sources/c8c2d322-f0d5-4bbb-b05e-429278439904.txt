@@ -1,0 +1,97 @@
+{
+  "all_pre_merge_prerequisites_satisfied": true,
+  "currentness_basis": "Retained Owner cross-channel disclosure and current repository/session checks; no new conflicting notice received. No independent global no-conflict attestation is invented.",
+  "diff_sha256": "5a271ab2e146a543a2a1d9133434cd21882b2f2d36fb708b335ebbb3ad19e25d",
+  "exact_predecessor": {
+    "commit": "a7b0c979c0195b91f778d0d5e69b296af6378620",
+    "path": "docs/governance/operator-review-evidence/decisions/68275c03-c0dd-482f-96c6-2b9328a7c881.json",
+    "transport_sha256": "ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934"
+  },
+  "merge_performed": false,
+  "payload_unchanged": true,
+  "publication_authorization_receipt_id": "bf4e330d-b156-4e30-834a-871abe3f0769",
+  "publication_authorization_receipt_sha256": "6c64714ca45abf271c64b6d03cbaaf466411e1aa98b59b0844fa93b2964fb163",
+  "record_transport_sha256": "912d9283e92aea725a0c6f73e5b91cc66fc00710a0bfc4a1d2c4525ae41d4b3b",
+  "remaining_lifecycle": "Actual authorized two-parent merge, post-merge verification and authenticated human adoption are still future steps. No excluded operation is authorized by this check.",
+  "remedy_effective": false,
+  "remote_observation": {
+    "autoMergeRequest": null,
+    "baseRefOid": "0026912443ad6e4fffc814a3b59e6c7fddd2f696",
+    "files": [
+      {
+        "additions": 1,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/decisions/7a3d51ee-1bb9-43c4-9896-f5eab11d305a.json"
+      },
+      {
+        "additions": 71,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/07b461d0-9958-4038-b226-dcdd882094af.txt"
+      },
+      {
+        "additions": 77,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/4879694a-4d1f-4d16-98ed-74386f3a74c6.txt"
+      },
+      {
+        "additions": 66,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/56655a2d-0353-44d1-a490-5d9c70856056.txt"
+      },
+      {
+        "additions": 35,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/8fded3dc-61d0-4423-a501-d072b8552541.txt"
+      },
+      {
+        "additions": 34,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/95ee5aa3-85d4-4b51-9d2d-91af1f8f9a40.txt"
+      },
+      {
+        "additions": 79,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/a3515c0a-c71f-484a-89c4-bb1c99189d65.txt"
+      },
+      {
+        "additions": 51,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/cc0677e6-9cd5-4c54-b05e-41067df7189b.txt"
+      },
+      {
+        "additions": 78,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/d0a00197-a612-4a6b-9237-fd589f5491a6.txt"
+      },
+      {
+        "additions": 72,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/e896b39c-40f6-4c1d-ab41-80fd2a1125d7.txt"
+      }
+    ],
+    "headRefOid": "e72bf02789ee81d82de2674f0377d684d5acc83b",
+    "isDraft": false,
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "number": 311,
+    "reviewDecision": "",
+    "state": "OPEN",
+    "statusCheckRollup": []
+  },
+  "reviewed_ten_file_diff_unchanged": true,
+  "scope": "Exact PR311 governance-only publication merge. Retained personal human CLEAN publication review adoption and explicit Owner authorization naming HEAD and custodian; earlier reviewer acceptance and separate payload approval preserved.",
+  "source_id": "c8c2d322-f0d5-4bbb-b05e-429278439904",
+  "stop_before_merge": true,
+  "unique_accepted_register_sequence": 1,
+  "verified_at_utc": "2026-09-29T06:30:47.255041Z"
+}

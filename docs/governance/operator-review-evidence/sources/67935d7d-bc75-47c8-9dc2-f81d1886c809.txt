@@ -1,0 +1,140 @@
+{
+  "artifact_checks": [
+    {
+      "merged_sha256": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957",
+      "path": "docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md",
+      "reviewed_sha256": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957"
+    }
+  ],
+  "authority_source_digests": {
+    "17560118-b047-4a09-b741-fb13bb8bfb89": "2596631b0e23a5c0f073299d3abda5b152bfa23e05d0f5d9b2c4298187a8f034",
+    "3282b349-446b-4032-8731-758611775acf": "a56459969a1f35a84c817176c888ca4e70ba3f3c955de04e6094f937d3596c1e",
+    "36c55bfa-fe2b-4f56-92d4-cab226cd4d17": "fb46779b82b94a149ec42b6571463fae9a070caef1f52b48fbe9afb7d35f8342",
+    "9f796743-e00a-4d1a-9daf-fce1f289aaf4": "91f8fe061b7867dc9bb6df7c6bcb2b4af67b2356d047a0518af4efb442ef5c17",
+    "a3515c0a-c71f-484a-89c4-bb1c99189d65": "937f355faf66602bc55bbcf1bd07e6b80e1faa003987bcf358789e5de316ce32",
+    "cf5371cb-cc83-42ce-b4fd-f2ed8834e98b": "180a577c25151df500e64a649c760008f2b0fe40b23cb4ebf5e685df34b872f2",
+    "d1df8ce2-0edf-4993-abf9-11b399ed03eb": "e54d6243f880ab09fd1034743bf52d02e57047ddf9da3c856b492d2b05288f6d"
+  },
+  "checked_at_utc": "2026-09-29T06:45:31.912870Z",
+  "compatibility_bindings": {
+    "executor_sha256": "7b38ce601cbeb930a4277af8f4dfe66bbf4b7b9df9ad94059e504082f58a8beb",
+    "policy_sha256": "39b0768d989c89fa64c6593834220f9846c6013e7e10c03ec5eec34cd78098c0",
+    "pr303_merge": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+    "pr303_path": "docs/intelligence/stage-0.33c-p4s7-recovery-binding-supersession/00_FIRST_RECOVERY_EVIDENCE_BINDING_AUTHORITY.md",
+    "pr303_transport_sha256": "9592821f434c9147efa5ef5c69411bec4ab868fbde9cf8fc928bcac78334eaa2",
+    "reader_contract_constants": {
+      "EVIDENCE_KEYS": [
+        "activation_governance_reference",
+        "approval_id",
+        "authority_id",
+        "binding_id",
+        "executor_sha256",
+        "expected_runtime_head",
+        "package_payload_sha256",
+        "policy_reference",
+        "policy_sha256",
+        "r32",
+        "r34",
+        "reader",
+        "repository",
+        "schema_version",
+        "supersedes"
+      ],
+      "PREDECESSOR_KEYS": [
+        "commit",
+        "kind",
+        "path",
+        "transport_sha256"
+      ],
+      "REVIEW_KEYS": [
+        "merge_sha",
+        "pr_number",
+        "reviewed_head_sha"
+      ],
+      "SELECTOR_KEYS": [
+        "evidence_commit",
+        "evidence_path",
+        "evidence_transport_sha256",
+        "schema_version"
+      ],
+      "TRUST_MERGE": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "TRUST_SHA256": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957"
+    },
+    "reader_merge": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+    "reader_reviewed_head": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368"
+  },
+  "effective_remedy": {
+    "commit": "0026912443ad6e4fffc814a3b59e6c7fddd2f696",
+    "path": "docs/intelligence/stage-0.33c-p4s7-pr301-acceptance-remedy/00_PR301_RETROSPECTIVE_ACCEPTANCE_REMEDY.md",
+    "transport_sha256": "8e8eb023827aa4cc6408c5dee6c12f1a39681d7143b4aa08ed1e4cef529237aa"
+  },
+  "historical_merge_occurred_at_utc": "2026-09-27T01:40:45Z",
+  "limitations": "Technical facts only. Direct firsthand human merge/time corroboration is separately retained in 3282b349-446b-4032-8731-758611775acf; metadata is not human intent. No PR302 acceptance review, execution or live operational verification.",
+  "lineage": [
+    {
+      "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+      "descendant": "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88",
+      "pass": true
+    },
+    {
+      "ancestor": "8e9a8023742773b055e17dba002b2ebf07528118",
+      "descendant": "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88",
+      "pass": true
+    },
+    {
+      "ancestor": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "descendant": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+      "pass": true
+    },
+    {
+      "ancestor": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "descendant": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "pass": true
+    },
+    {
+      "ancestor": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "descendant": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+      "pass": true
+    }
+  ],
+  "method": "Replacement-disabled Git raw commit headers with object-ID integrity checks and explicit parent traversal; no graft-sensitive revision walk. Exact committed regular blobs.",
+  "pr_metadata": {
+    "baseRefOid": "8e9a8023742773b055e17dba002b2ebf07528118",
+    "files": [
+      {
+        "additions": 352,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md"
+      }
+    ],
+    "headRefOid": "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88",
+    "mergeCommit": {
+      "oid": "7f124e307d9a516b4ce278d800c92d29d476cf5e"
+    },
+    "mergedAt": "2026-09-27T01:40:45Z",
+    "mergedBy": {
+      "id": "U_kgDOEkW3BA",
+      "is_bot": false,
+      "login": "bader5657",
+      "name": ""
+    },
+    "number": 301,
+    "state": "MERGED",
+    "url": "https://github.com/bader5657/AIOS/pull/301"
+  },
+  "preserved_at_reader_review_and_merge": true,
+  "raw_committer_line": "committer GitHub <noreply@github.com> 1790473245 +0700",
+  "raw_merge_parents": [
+    "8e9a8023742773b055e17dba002b2ebf07528118",
+    "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88"
+  ],
+  "register_tip": {
+    "commit": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+    "path": "docs/governance/operator-review-evidence/decisions/7a3d51ee-1bb9-43c4-9896-f5eab11d305a.json",
+    "transport_sha256": "912d9283e92aea725a0c6f73e5b91cc66fc00710a0bfc4a1d2c4525ae41d4b3b"
+  },
+  "repository": "bader5657/AIOS",
+  "source_id": "67935d7d-bc75-47c8-9dc2-f81d1886c809",
+  "timestamp_precision": "Historical repository and human evidence is second-resolution. Schema representation uses .000000 solely as required fixed-width UTC formatting, not measured microsecond precision."
+}

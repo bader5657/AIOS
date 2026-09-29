@@ -1,0 +1,126 @@
+{
+  "artifact_checks": [
+    {
+      "commit": "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88",
+      "path": "docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md",
+      "transport_sha256": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957"
+    },
+    {
+      "commit": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "path": "docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md",
+      "transport_sha256": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957"
+    },
+    {
+      "commit": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+      "path": "docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md",
+      "transport_sha256": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957"
+    },
+    {
+      "commit": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "path": "docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md",
+      "transport_sha256": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957"
+    },
+    {
+      "commit": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+      "path": "docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md",
+      "transport_sha256": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957"
+    }
+  ],
+  "blocking_requirement": "PR310 remedy lifecycle step2 requires direct authenticated firsthand Owner/merger corroboration of this actual historical merge and sourced occurrence time before step3 substantive review.",
+  "canonical_payload_sha256": null,
+  "classification": "PR301-retrospective-prerequisite-check-STOP-not-a-review-payload",
+  "current_authority": {
+    "human_publication_acceptance_source_id": "9f796743-e00a-4d1a-9daf-fce1f289aaf4",
+    "register_commit": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+    "register_path": "docs/governance/operator-review-evidence/decisions/7a3d51ee-1bb9-43c4-9896-f5eab11d305a.json",
+    "register_sequence": 2,
+    "register_transport_sha256": "912d9283e92aea725a0c6f73e5b91cc66fc00710a0bfc4a1d2c4525ae41d4b3b",
+    "remedy_merge": "0026912443ad6e4fffc814a3b59e6c7fddd2f696",
+    "remedy_path": "docs/intelligence/stage-0.33c-p4s7-pr301-acceptance-remedy/00_PR301_RETROSPECTIVE_ACCEPTANCE_REMEDY.md"
+  },
+  "excluded_actions_performed": false,
+  "findings": "Fresh retrospective re-validation; not the original pre-merge review; original acceptance record unavailable. Technical identity, raw-object topology, lineage and artifact-byte prerequisites PASS. Required direct authenticated firsthand PR301 human merge/time corroboration is missing from retained sources. STOP before substantive review and payload freeze; do not infer human intent from GitHub metadata or PR302 confirmation.",
+  "historical_merge_occurred_at_utc_repository_evidence": "2026-09-27T01:40:45Z",
+  "historical_time_precision": "Seconds, from GitHub mergedAt and matching raw commit epoch; not a firsthand human statement.",
+  "human_corroboration_search": "Protected working sources and separate archive: exact HEAD/merge and PR301 references checked. Retained hits are technical metadata, governance preparation/activation, or checks for other subjects; no direct PR301 firsthand human merge/time statement found.",
+  "lineage_checks": [
+    {
+      "ancestor": "8e9a8023742773b055e17dba002b2ebf07528118",
+      "descendant": "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88",
+      "pass": true,
+      "relationship": "original base to reviewed HEAD"
+    },
+    {
+      "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+      "descendant": "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88",
+      "pass": true,
+      "relationship": "R32 runtime baseline to PR301"
+    },
+    {
+      "ancestor": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "descendant": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+      "pass": true,
+      "relationship": "PR301 merge to PR302 reviewed reader"
+    },
+    {
+      "ancestor": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "descendant": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "pass": true,
+      "relationship": "PR301 merge to PR302 merge"
+    },
+    {
+      "ancestor": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "descendant": "dfdf98fbee0405b188530e9f374515ebc72ce1b2",
+      "pass": true,
+      "relationship": "PR302 merge to PR303 reviewed authority"
+    },
+    {
+      "ancestor": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "descendant": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+      "pass": true,
+      "relationship": "PR303 merge to current publication"
+    }
+  ],
+  "lineage_method": "SHA1-validated raw cat-file commit objects with --no-replace-objects, explicit parent traversal; does not rely on graft-sensitive revision walking.",
+  "merge_verified_at_utc": "2026-09-29T06:41:05.570419Z",
+  "payload_frozen": false,
+  "pr_metadata": {
+    "baseRefOid": "8e9a8023742773b055e17dba002b2ebf07528118",
+    "files": [
+      {
+        "additions": 352,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/intelligence/stage-0.33c-p4s7-recovery-review-merge-evidence/00_RECOVERY_REVIEW_MERGE_EVIDENCE_CONTRACT.md"
+      }
+    ],
+    "headRefOid": "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88",
+    "mergeCommit": {
+      "oid": "7f124e307d9a516b4ce278d800c92d29d476cf5e"
+    },
+    "mergedAt": "2026-09-27T01:40:45Z",
+    "mergedBy": {
+      "id": "U_kgDOEkW3BA",
+      "is_bot": false,
+      "login": "bader5657",
+      "name": ""
+    },
+    "number": 301,
+    "state": "MERGED",
+    "url": "https://github.com/bader5657/AIOS/pull/301"
+  },
+  "proposed_review_record_id": null,
+  "raw_commit_committer_line": "committer GitHub <noreply@github.com> 1790473245 +0700",
+  "raw_merge_parents": [
+    "8e9a8023742773b055e17dba002b2ebf07528118",
+    "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88"
+  ],
+  "recorded_at_utc": "2026-09-29T06:41:05.570419Z",
+  "requested_confirmation": "Current firsthand confirmation of personally performed or explicitly directed human-authorized PR301 merge from fea48d292ad81182ae6f5327ce01f4e0ee6c6e88 to 7f124e307d9a516b4ce278d800c92d29d476cf5e, corroborating repository-sourced 2026-09-27T01:40:45Z; no original acceptance or historical independence claim.",
+  "reviewed_at_utc": null,
+  "reviewer_acceptance_next": false,
+  "role_context": "solo-project-owner-bootstrap; combined human reviewer/approver/custodian/verifier/commissioner/operator roles; AI advisory only; no independent-human acceptance or custody claimed.",
+  "source_id": "d1df8ce2-0edf-4993-abf9-11b399ed03eb",
+  "substantive_review_started": false,
+  "verdict": "CHANGES_REQUIRED"
+}
