@@ -1,0 +1,21 @@
+PR #307 verifier authentication — exact challenge mismatch / STOP
+Source ID: 324165f8-7da6-4e45-b935-0e63797487e5
+Current verification recording UTC: 2026-09-28T00:01:05.717750Z
+Challenge ID: 44a4f01c-f18c-4fd1-b347-e34db3376d30
+Issued challenge SHA-256: 6082fe08bff1cc6e3fdd2ac16a26ef3cb436e1f4561c1ea99ce25988aba8eddd
+Received challenge SHA-256: 566e74e5169e850d3b5d5137bdf675e5d376dca27eb4404379ab46d8adcea1dd
+Evidence path: /opt/aios/data/authentication-evidence/telegram/b5213b4d-8d30-45ed-a5c3-5cf4a99bef81.356d403ebd0319adb6a52c2d0012d05db6f5c815dc7d1628fa54a7458d58d21e.json
+Evidence transport SHA-256: 356d403ebd0319adb6a52c2d0012d05db6f5c815dc7d1628fa54a7458d58d21e
+update_id: 850302444
+message_id: 59
+Sender: Telegram numeric ID 961959058; username Bagusder21; private chat 961959058.
+Telegram timestamp: 2026-09-27T23:59:51.000000Z
+Local receiver timestamp: 2026-09-27T23:59:51.887287Z
+Issued UTC: 2026-09-27T23:57:02.178865Z
+Expiry UTC: 2026-09-28T00:07:02.178865Z
+
+PASS technical checks: valid decoded evidence, filename/transport digest, exact sender ID/username, private chat, timestamps within window, certificate, PENDING/PREPARED journal, permanent pending guard, final COMMITTED marker with bound object hashes/identities and namespace. No consumption artifacts for the originally issued challenge exist.
+FAIL exact text: original issued challenge ends HskILsGA (lowercase k); received message ends HsKILsGA (uppercase K). The current user message repeats the received variant, but does not change the immutable originally issued one-time challenge. No normalization or retroactive replacement is allowed.
+Overall authentication result: NOT PASS / STOP. No verify_and_consume invocation, no challenge consumption, no commissioning, no PR #304 change, no runtime/service/database change. Receiver retention alone does not constitute authentication PASS. The original challenge remains pending within its issued window; a matching message must independently pass all checks before consumption.
+Purpose/bindings remain: PR307; reviewed HEAD 06776edf4261950f4370cc701229a4e1783959a2; merge a7b0c979c0195b91f778d0d5e69b296af6378620; genesis 68275c03-c0dd-482f-96c6-2b9328a7c881; record transport ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934. No authorization or verifier content acceptance inferred.
+Current source retained in exact separate local Owner-controlled copies, no backdating, no independent-human acceptance claim.

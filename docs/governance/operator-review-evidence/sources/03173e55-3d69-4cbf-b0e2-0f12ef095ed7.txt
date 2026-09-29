@@ -1,0 +1,29 @@
+{
+  "all_human_merge_prerequisites_satisfied": true,
+  "archive_path": "/home/aiosadmin/aios-approval-source-archive/03173e55-3d69-4cbf-b0e2-0f12ef095ed7.txt",
+  "custody": "Two exact local Owner-controlled copies; common custody, no independent-human acceptance",
+  "exact_authorized_head_matches": true,
+  "merge_performed": false,
+  "post_merge_verification": "Pending actual human merge; not a pre-merge prerequisite",
+  "pr301_later_acceptance_gate": "unresolved",
+  "publication_authorization_receipt_id": "11bd393c-4a9e-4d72-93ee-babc07676356",
+  "publication_authorization_receipt_sha256": "4b9bdaba31c24c7f42e52a52490f4b43b75f7d257d29d897463c841e5e0bd921",
+  "remote_observation": {
+    "autoMergeRequest": null,
+    "baseRefOid": "a7b0c979c0195b91f778d0d5e69b296af6378620",
+    "headRefOid": "fb33a76424c4d9d129d68b157a9a42960ce72dc5",
+    "isDraft": false,
+    "mergeCommit": null,
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "number": 308,
+    "reviewDecision": "",
+    "state": "OPEN",
+    "statusCheckRollup": [],
+    "url": "https://github.com/bader5657/AIOS/pull/308"
+  },
+  "scope": "PR308 publication of PR299 retrospective-revalidation record only",
+  "source_id": "03173e55-3d69-4cbf-b0e2-0f12ef095ed7",
+  "verified_at_utc": "2026-09-29T04:59:27.803041Z",
+  "working_path": "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/03173e55-3d69-4cbf-b0e2-0f12ef095ed7.txt"
+}

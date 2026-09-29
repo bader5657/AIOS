@@ -1,0 +1,23 @@
+{
+  "acceptance_receipt_id": "a3515c0a-c71f-484a-89c4-bb1c99189d65",
+  "acceptance_receipt_sha256": "937f355faf66602bc55bbcf1bd07e6b80e1faa003987bcf358789e5de316ce32",
+  "determined_at_utc": "2026-09-29T06:05:26.549018Z",
+  "exact_next_step": "Preparation of a narrowly scoped supersede activation decision for the PR301 acceptance remedy. Expected sequence 2 with this exact predecessor if the register remains unchanged. Not created in this task.",
+  "genesis_human_acceptance_sha256": "486779c29bfa4f117859ec5ab36fc0cce32e82080cce93db63fc15b7d78e19f2",
+  "genesis_human_acceptance_source_id": "e27640cc-6757-40f9-8c85-f6c364f49cc2",
+  "limitations": "Read-only register determination plus immutable local source receipts. Does not assert a fresh global no-conflict/no-revocation PASS, create an activation decision or perform any excluded action. AI advisory only; no independent-human acceptance claimed.",
+  "observed_remote_main": "0026912443ad6e4fffc814a3b59e6c7fddd2f696",
+  "pr310_publication_merge_verification_gate_fully_satisfied": true,
+  "published_register_entry_count": 1,
+  "register_decision": "commission-process",
+  "register_sequence": 1,
+  "register_tip": {
+    "commit": "a7b0c979c0195b91f778d0d5e69b296af6378620",
+    "path": "docs/governance/operator-review-evidence/decisions/68275c03-c0dd-482f-96c6-2b9328a7c881.json",
+    "transport_sha256": "ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934"
+  },
+  "register_tip_record_id": "68275c03-c0dd-482f-96c6-2b9328a7c881",
+  "remaining_activation_requirements": "Frozen payload, human reviewer acceptance, separate Owner approval, authorized governance publication and authenticated publication verification under the existing serial register process.",
+  "remedy_effective": false,
+  "source_id": "fe4ac33a-7614-4850-8a8a-37bbb68069ee"
+}

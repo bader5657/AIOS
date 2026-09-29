@@ -1,0 +1,32 @@
+{
+  "classification": "exact-head-publication-review-stop",
+  "findings": [
+    {
+      "finding": "Requested HEAD contains 41 hexadecimal characters and differs from the actual 40-character remote PR HEAD. Exact-HEAD review target is not satisfied; no silent correction or substitution.",
+      "location": "Current user instruction, Exact candidate HEAD field; no repository file/line applies.",
+      "required_resolution": "Owner supplies a corrected exact-HEAD review instruction.",
+      "severity": "High"
+    }
+  ],
+  "merged": false,
+  "observed_remote_head": "c6a2b065ee89326aaae22a4e47e67b734d6b1bc2",
+  "pr": 313,
+  "pr303_started": false,
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/d6764908-ba24-4794-9ad0-9ad35eef344b.txt",
+    "/home/aiosadmin/aios-approval-source-archive/d6764908-ba24-4794-9ad0-9ad35eef344b.txt"
+  ],
+  "record_consistency_payload_dependency_and_human_merge_checks": "Not re-assessed in this attempt because the exact-HEAD gate failed. No candidate defect beyond the request mismatch is asserted.",
+  "record_id": "084bebe9-ee55-4314-99b8-357f418db9e8",
+  "recorded_at_utc": "2026-09-29T07:38:29.815581Z",
+  "remote_state": "OPEN",
+  "repository": "bader5657/AIOS",
+  "requested_head": "c6a2b065ee89326aaaae22a4e47e67b734d6b1bc2",
+  "retention": "Preserve this STOP and all prior evidence unchanged; exclusive local and archive copies in common Owner custody. No candidate commit changed.",
+  "review_verdict": "CHANGES_REQUIRED",
+  "role_context": "solo-project-owner-bootstrap; AI technical assistance advisory only; no human reviewer acceptance inferred.",
+  "runtime_state_changed": false,
+  "safe_to_proceed_to_publication_authorization": false,
+  "source_id": "d6764908-ba24-4794-9ad0-9ad35eef344b",
+  "substantive_review_performed": false
+}

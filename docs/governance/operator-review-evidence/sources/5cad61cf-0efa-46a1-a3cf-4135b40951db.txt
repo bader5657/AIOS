@@ -1,0 +1,103 @@
+{
+  "all_source_digests_exact": true,
+  "all_twelve_files_added_only": true,
+  "candidate": {
+    "autoMergeRequest": null,
+    "baseRefOid": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+    "files": [
+      {
+        "additions": 1,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/reviews/769a75ca-fe08-4670-97ca-adc6f39fd383.json"
+      },
+      {
+        "additions": 180,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/17560118-b047-4a09-b741-fb13bb8bfb89.txt"
+      },
+      {
+        "additions": 57,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/3282b349-446b-4032-8731-758611775acf.txt"
+      },
+      {
+        "additions": 32,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/36c55bfa-fe2b-4f56-92d4-cab226cd4d17.txt"
+      },
+      {
+        "additions": 34,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/39399f28-98bc-4dc0-aef0-1afcb00a2b5e.txt"
+      },
+      {
+        "additions": 78,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/44418820-7930-4b3a-9f38-75587bba6a31.txt"
+      },
+      {
+        "additions": 140,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/67935d7d-bc75-47c8-9dc2-f81d1886c809.txt"
+      },
+      {
+        "additions": 81,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/9f796743-e00a-4d1a-9daf-fce1f289aaf4.txt"
+      },
+      {
+        "additions": 84,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/b48a4efb-2f94-4072-8d69-fdcd68b2816f.txt"
+      },
+      {
+        "additions": 85,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/bf4e330d-b156-4e30-834a-871abe3f0769.txt"
+      },
+      {
+        "additions": 97,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/c8c2d322-f0d5-4bbb-b05e-429278439904.txt"
+      },
+      {
+        "additions": 126,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/d1df8ce2-0edf-4993-abf9-11b399ed03eb.txt"
+      }
+    ],
+    "headRefOid": "5fbe3ace44be29e2d10e39d2a43359892f39da08",
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "number": 312,
+    "state": "OPEN",
+    "url": "https://github.com/bader5657/AIOS/pull/312"
+  },
+  "limitations": "Publication candidate only. Requires exact-HEAD human publication review, separate Owner publication authorization, authorized merge and authenticated post-merge verification/adoption. No excluded action performed.",
+  "main_unchanged": true,
+  "merged": false,
+  "pr302_resumed": false,
+  "proposed_custodian": {
+    "channel_id": "Telegram numeric ID 961959058; username Bagusder21",
+    "name": "Project Owner \u2014 Bagusder21",
+    "principal_id": "8577005f-37dd-48ce-9250-cf93707d8239"
+  },
+  "ready_for_exact_head_publication_review": true,
+  "record_path": "docs/governance/operator-review-evidence/reviews/769a75ca-fe08-4670-97ca-adc6f39fd383.json",
+  "record_transport_sha256": "1fb0f5cabfbb7f4a47a19ede1e2f57df03616c09c74ebad4330ccf519d8512bd",
+  "remote_diff_matches_validated_commit": true,
+  "source_id": "5cad61cf-0efa-46a1-a3cf-4135b40951db",
+  "verified_at_utc": "2026-09-29T06:57:17.165365Z"
+}

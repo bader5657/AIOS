@@ -1,0 +1,27 @@
+{
+  "all_pre_merge_prerequisites_satisfied": false,
+  "exact_head_and_single_file_scope_unchanged": true,
+  "merge_performed": false,
+  "owner_approval_receipt_id": "07b461d0-9958-4038-b226-dcdd882094af",
+  "owner_approval_receipt_sha256": "ed98229c5fd3e21acf5baeeb696ab5a1854f4dfc5a3ab33f977d6b6d8150edb0",
+  "remaining_prerequisite": "Explicit Owner merge authorization naming exact HEAD, as required by amendment lines 58-63; approval is retained but merge authorization not inferred.",
+  "remote_observation": {
+    "autoMergeRequest": null,
+    "baseRefOid": "8c6fad7dfac5ebd609ad85a71f0147f2272fd2ed",
+    "files": [
+      {
+        "additions": 151,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/intelligence/stage-0.33c-p4s7-pr301-acceptance-remedy/00_PR301_RETROSPECTIVE_ACCEPTANCE_REMEDY.md"
+      }
+    ],
+    "headRefOid": "6d14a3a03d5ab3b49c6015edb6af3f894c3014cf",
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "number": 310,
+    "state": "OPEN"
+  },
+  "source_id": "33d39d27-b1ab-432e-8f61-139901f57d03",
+  "verified_at_utc": "2026-09-29T05:52:17.058100Z"
+}
