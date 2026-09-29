@@ -1,0 +1,34 @@
+{
+  "blocker": "User requires no revocation/STOP/conflicting Owner decision and no competing sequence2 before freeze. Process section4 requires current Owner disclosure of pending reservations and off-register instructions. Current instruction confirms no subsequent published decision but supplies no complete current cross-channel disclosure. A request is pending; no absence or human declaration is inferred.",
+  "classification": "preparation-stop-observation-not-a-register-decision",
+  "decided_at_utc": null,
+  "governance_and_inherited_inventory_gitrefs_verified": 35,
+  "known_preparation_archives_sequence2_payloads": [],
+  "next_step": "Obtain current authenticated Owner disclosure, then repeat freshness checks and freeze only if unambiguous.",
+  "no_publication_merge_or_revalidation_performed": true,
+  "observed_remote_main": "0026912443ad6e4fffc814a3b59e6c7fddd2f696",
+  "open_pr_checks": [
+    {
+      "decision_paths": [],
+      "head": "e6ac77a3b287d839f6f8709da0c4652a332083c1",
+      "pr": 1
+    },
+    {
+      "decision_paths": [],
+      "head": "e1a4459dc55ad9a15fe6dfc28dc11758a799c8c0",
+      "pr": 304
+    }
+  ],
+  "payload_created": false,
+  "payload_frozen": false,
+  "pr310_merge_topology_document_and_acceptance_receipts_verified": true,
+  "published_register_entry_count": 1,
+  "published_register_tip": "68275c03-c0dd-482f-96c6-2b9328a7c881",
+  "recorded_at_utc": "2026-09-29T06:09:36.452446Z",
+  "reviewer_acceptance_next": false,
+  "scope_of_checks": "Remote main, open PR files, known local genesis/retrospective preparation directories and separate approval archive, exact retained source copies and authority GitRefs. Not proof of absence across all Owner-controlled channels.",
+  "sequence": 1,
+  "source_id": "95ee5aa3-85d4-4b51-9d2d-91af1f8f9a40",
+  "status": "STOP_BEFORE_FREEZE_PENDING_OWNER_DISCLOSURE",
+  "task": "Prepare narrow PR301 remedy sequence-2 supersede payload only"
+}

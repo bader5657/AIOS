@@ -1,0 +1,35 @@
+{
+  "all_pre_merge_prerequisites_satisfied": true,
+  "artifact_transport_sha256": "8e8eb023827aa4cc6408c5dee6c12f1a39681d7143b4aa08ed1e4cef529237aa",
+  "diff_sha256": "77bc4637ecb1209f9ea5a249a8d5bbf14d46712113f140acbecf95038b365832",
+  "limitations": "Local receipts retained in two protected copies under common Owner custody, not published. Actual two-parent human merge and authenticated post-merge verification remain future steps, followed by separately authorized register activation before PR301 re-validation. No PR302 acceptance or excluded action authorized or performed.",
+  "merge_authorization_receipt_id": "56655a2d-0353-44d1-a490-5d9c70856056",
+  "merge_authorization_receipt_sha256": "52df892a9e1eb976ec717906a9ae07b32f6453a7d1acd57ade90dab80cbdf20f",
+  "merge_performed": false,
+  "prior_owner_approval_receipt_id": "07b461d0-9958-4038-b226-dcdd882094af",
+  "remote_diff_equals_exact_approved_base_to_head_diff": true,
+  "remote_observation": {
+    "autoMergeRequest": null,
+    "baseRefOid": "8c6fad7dfac5ebd609ad85a71f0147f2272fd2ed",
+    "files": [
+      {
+        "additions": 151,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/intelligence/stage-0.33c-p4s7-pr301-acceptance-remedy/00_PR301_RETROSPECTIVE_ACCEPTANCE_REMEDY.md"
+      }
+    ],
+    "headRefOid": "6d14a3a03d5ab3b49c6015edb6af3f894c3014cf",
+    "isDraft": false,
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "number": 310,
+    "reviewDecision": "",
+    "state": "OPEN",
+    "statusCheckRollup": []
+  },
+  "scope": "PR310 exact-HEAD governance-only human merge; advisory verification of retained human review adoption, separate Owner approval and current explicit merge authorization. No AI human acceptance is claimed.",
+  "source_id": "8fded3dc-61d0-4423-a501-d072b8552541",
+  "stop_before_merge": true,
+  "verified_at_utc": "2026-09-29T05:57:30.458102Z"
+}

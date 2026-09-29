@@ -1,0 +1,66 @@
+PR #310 — prospective Project Owner human merge authorization
+Source ID: 56655a2d-0353-44d1-a490-5d9c70856056
+Actual current UTC recording time: 2026-09-29T05:56:46.068918Z
+Timestamp meaning: current recording of the Owner statement, not a historical event time; no backdating.
+Repository: bader5657/AIOS
+Exact authorized HEAD: 6d14a3a03d5ab3b49c6015edb6af3f894c3014cf
+Artifact: docs/intelligence/stage-0.33c-p4s7-pr301-acceptance-remedy/00_PR301_RETROSPECTIVE_ACCEPTANCE_REMEDY.md
+Approved artifact transport SHA-256: 8e8eb023827aa4cc6408c5dee6c12f1a39681d7143b4aa08ed1e4cef529237aa
+Prior separate Owner approval and human CLEAN review adoption: 07b461d0-9958-4038-b226-dcdd882094af
+Prior approval source SHA-256: ed98229c5fd3e21acf5baeeb696ab5a1854f4dfc5a3ab33f977d6b6d8150edb0
+
+ACTOR AND ROLE DISCLOSURE
+Current direct Owner-to-assistant conversation in the established Owner session; not a Telegram transcript. Existing identity/channel-control source: cf5371cb-cc83-42ce-b4fd-f2ed8834e98b.
+Project Owner: Telegram numeric ID 961959058; username Bagusder21; principal ID 8577005f-37dd-48ce-9250-cf93707d8239, as retained in the prior approval.
+Mode: solo-project-owner-bootstrap. One human combines the disclosed reviewer, approver, custodian, verifier, commissioner and operator roles for bounded development/bootstrap governance. No second human, independent human acceptance or independent custody is claimed. AI assistance remains advisory only; this receipt records the human's statement and supplies no AI approval or authentication.
+
+BEGIN EXACT PROJECT OWNER STATEMENT
+As Project Owner, I explicitly AUTHORIZE the human merge of PR #310 at exact HEAD:
+
+6d14a3a03d5ab3b49c6015edb6af3f894c3014cf
+
+This merge authorization is limited strictly to the PR #301 retrospective
+acceptance remedy governance document already reviewed CLEAN and separately
+approved.
+
+I confirm:
+- the PR #310 HEAD remains unchanged
+- the single-file diff remains unchanged
+- this is a governance-only merge
+- this does not itself perform the PR #301 retrospective re-validation
+- this does not automatically satisfy PR #302
+- AI assistance remains advisory only
+
+This merge authorization does NOT authorize:
+- PR #302 retrospective acceptance yet
+- PR #304 merge
+- bootstrap admission
+- selector publication
+- recovery activation
+- one-shot installation
+- recovery authority consumption
+- runtime/service/database changes
+- Step-4 closure
+- Step-5
+
+Record this merge authorization prospectively with the actual current UTC timestamp.
+Do not backdate.
+
+After recording:
+1. verify remote PR #310 HEAD is still exactly
+   6d14a3a03d5ab3b49c6015edb6af3f894c3014cf
+2. confirm the one-file diff is unchanged
+3. report merge authorization receipt ID/path
+4. report whether all pre-merge prerequisites are now satisfied
+
+Do not merge automatically.
+Stop before merge.
+END EXACT PROJECT OWNER STATEMENT
+
+DISPOSITION
+Explicit human merge authorization is now retained for this exact HEAD and governance-only scope. Remote HEAD and diff verification follow recording and will be retained separately. This is not evidence that a merge occurred. Stop before merge. No commit, push, merge or auto-merge is authorized for the assistant by this instruction. No PR301 re-validation, PR302 acceptance, register activation or other excluded action is performed or inferred. Actual remedy effectiveness still requires actual human merge, authenticated post-merge verification and separately governed register activation.
+
+RETENTION
+Working receipt: /home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/56655a2d-0353-44d1-a490-5d9c70856056.txt
+Separate exact archive copy: /home/aiosadmin/aios-approval-source-archive/56655a2d-0353-44d1-a490-5d9c70856056.txt
+Exclusive 0600 creation in existing 0700 directories; no overwrite. Common local Owner custody; no independent-storage claim. Retain indefinitely for later governed linked retention. Receipt is local and outside the approved candidate commit.

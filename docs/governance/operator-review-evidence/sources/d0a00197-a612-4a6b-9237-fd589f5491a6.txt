@@ -1,0 +1,78 @@
+{
+  "all_other_historical_artifacts_unchanged": true,
+  "base_to_merge_changes": [
+    {
+      "path": "docs/intelligence/stage-0.33c-p4s7-pr301-acceptance-remedy/00_PR301_RETROSPECTIVE_ACCEPTANCE_REMEDY.md",
+      "status": "A"
+    }
+  ],
+  "document_byte_identical": true,
+  "document_transport_sha256": "8e8eb023827aa4cc6408c5dee6c12f1a39681d7143b4aa08ed1e4cef529237aa",
+  "excluded_actions_performed": false,
+  "execution_authority": "Current direct Project Owner instruction: Merge PR #310 only; exact HEAD and one governance document only; two-parent merge method; post-merge verification only; stop afterward.",
+  "execution_method": "Assistant executed gh pr merge 310 --repo bader5657/AIOS --merge --match-head-commit 6d14a3a03d5ab3b49c6015edb6af3f894c3014cf under explicit current human instruction. GitHub mergedBy identity is metadata, not a claim that the human personally operated the UI.",
+  "four_pr_legacy_exception_unchanged": true,
+  "historical_pr301_transport_sha256_by_commit": {
+    "0026912443ad6e4fffc814a3b59e6c7fddd2f696": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957",
+    "7f124e307d9a516b4ce278d800c92d29d476cf5e": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957",
+    "8c6fad7dfac5ebd609ad85a71f0147f2272fd2ed": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957",
+    "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88": "7b9e5ee9daf7b9ffe387b63ebff6629d97546a27eb0f5207271ac5ec1fb9f957"
+  },
+  "legacy_amendment_transport_sha256": "473db6c19f8933043886dbb186ae4a72a2ac061ff8db0cf31a4e1e442a3de551",
+  "merge_authorization_source_id": "56655a2d-0353-44d1-a490-5d9c70856056",
+  "merge_metadata": {
+    "baseRefOid": "8c6fad7dfac5ebd609ad85a71f0147f2272fd2ed",
+    "files": [
+      {
+        "additions": 151,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/intelligence/stage-0.33c-p4s7-pr301-acceptance-remedy/00_PR301_RETROSPECTIVE_ACCEPTANCE_REMEDY.md"
+      }
+    ],
+    "headRefOid": "6d14a3a03d5ab3b49c6015edb6af3f894c3014cf",
+    "mergeCommit": {
+      "oid": "0026912443ad6e4fffc814a3b59e6c7fddd2f696"
+    },
+    "mergedAt": "2026-09-29T05:59:37Z",
+    "mergedBy": {
+      "id": "U_kgDOEkW3BA",
+      "is_bot": false,
+      "login": "bader5657",
+      "name": ""
+    },
+    "number": 310,
+    "state": "MERGED",
+    "url": "https://github.com/bader5657/AIOS/pull/310"
+  },
+  "merge_tree_equals_candidate_tree": true,
+  "next_step": "Obtain current human verifier adoption of these exact post-merge findings; then separately authorize preparation of the narrow register activation decision. Do not begin PR301 retrospective re-validation or PR302 review. No next action executed.",
+  "owner_approval_source_id": "07b461d0-9958-4038-b226-dcdd882094af",
+  "parents": [
+    "8c6fad7dfac5ebd609ad85a71f0147f2272fd2ed",
+    "6d14a3a03d5ab3b49c6015edb6af3f894c3014cf"
+  ],
+  "pr": 310,
+  "pre_merge_verification_source_id": "8fded3dc-61d0-4423-a501-d072b8552541",
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/d0a00197-a612-4a6b-9237-fd589f5491a6.txt",
+    "/home/aiosadmin/aios-approval-source-archive/d0a00197-a612-4a6b-9237-fd589f5491a6.txt"
+  ],
+  "recorded_at_utc": "2026-09-29T06:01:09.045403Z",
+  "remaining_prerequisites": [
+    "Authenticated appointed human verifier adoption of the actual post-merge findings and exact merge/document identity; this advisory receipt does not fabricate that human attestation.",
+    "Explicit narrowly scoped supersede decision in the existing serial Owner register, identifying affected decisions and the exact merged remedy plus GD-008/process/legacy basis; preserve other effects, with bootstrap_verification and selector null and appointments empty.",
+    "Complete the decision predecessor/sequence, human reviewer acceptance, separate Owner approval, governance publication and authenticated post-merge verification requirements. Activation is ineffective until authenticated publication is verified."
+  ],
+  "remedy_status": "BLOCKED_NOT_EFFECTIVE",
+  "repository": "bader5657/AIOS",
+  "resulting_remote_main_head": "0026912443ad6e4fffc814a3b59e6c7fddd2f696",
+  "retention": "Exclusive 0600 local receipt copies in existing protected 0700 directories under common Owner custody. Retain indefinitely for later governed linked publication; not committed or published in PR310.",
+  "role_context": "solo-project-owner-bootstrap: one Owner combines disclosed reviewer, approver, custodian, verifier, commissioner and operator roles. Common Owner custody, no independent human acceptance or independent custody claimed. AI assistance and these verification findings remain advisory. Existing identity/channel-control source cf5371cb-cc83-42ce-b4fd-f2ed8834e98b.",
+  "second_parent_equals_reviewed_head": true,
+  "serial_decision_register_unchanged": true,
+  "source_id": "d0a00197-a612-4a6b-9237-fd589f5491a6",
+  "stop_after_post_merge_verification": true,
+  "timestamp_meaning": "Actual current UTC after post-merge verification; no backdating. Historical merge time is separately sourced GitHub metadata.",
+  "verification_method": "Read actual GitHub metadata and remote main; inspect raw commit parents and blobs with git --no-replace-objects; compare complete tree and exact base-to-merge path delta. No historical re-review performed."
+}
