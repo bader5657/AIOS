@@ -1,0 +1,136 @@
+{
+  "all_human_merge_prerequisites_satisfied": true,
+  "authorized_head": "c6a2b065ee89326aaae22a4e47e67b734d6b1bc2",
+  "canonical_payload_sha256": "170d5e2266ec30b9a98e53c8d89bd1643ed37715b652bd937d8df2c60be143a8",
+  "complete_record_transport_sha256": "9d35598df9c6b3170cb4203b3595a1bb4919cd5e1d41c3605f4f61dde3113d86",
+  "diff_sha256": "fb83ddf45b941e5673e24b2afe344e2c2ec30badf3058ad20b692fe458c29062",
+  "limitations": "Current repository/session checks show no new conflicting notice; cross-channel authority rests on retained human statements, not global absence inferred from Git. All excluded actions remain withheld.",
+  "merge_performed": false,
+  "ordered_reviewer_acceptance_and_owner_approval_valid": true,
+  "payload_unchanged": true,
+  "pr301_published_verified_dependency_satisfied": true,
+  "pr303_started": false,
+  "publication_authorization_receipt_id": "ee0d18c9-424a-491d-84a9-50be5d1dc074",
+  "publication_authorization_receipt_sha256": "25fd34b0abc508be919a6ab6580dd121a5f28be79676366db13e32f878bad82e",
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/29d3341e-42f1-4e41-a146-ec5ae8560d09.txt",
+    "/home/aiosadmin/aios-approval-source-archive/29d3341e-42f1-4e41-a146-ec5ae8560d09.txt"
+  ],
+  "record_id": "084bebe9-ee55-4314-99b8-357f418db9e8",
+  "remaining_lifecycle": "Actual authorized two-parent merge, post-merge verification and authenticated human verifier adoption remain required before PUBLISHED / VERIFIED. Stop before merge under current instruction.",
+  "remote_observation": {
+    "autoMergeRequest": null,
+    "baseRefOid": "ff6ef91748c469ab4fe62b05d79780317b30e52f",
+    "files": [
+      {
+        "additions": 1,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/reviews/084bebe9-ee55-4314-99b8-357f418db9e8.json"
+      },
+      {
+        "additions": 236,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/00c231b5-a27a-43e2-98e3-d3777774636b.txt"
+      },
+      {
+        "additions": 45,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/1d68b190-ec30-442f-8671-7e9c06d5aed0.txt"
+      },
+      {
+        "additions": 87,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/1e3e5188-2126-4f46-a6e2-8a697924bfc4.txt"
+      },
+      {
+        "additions": 106,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/224ac395-ff8a-413e-9792-0dc5db446ee6.txt"
+      },
+      {
+        "additions": 84,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/2e561b8b-a453-4275-8615-06b5308d1ebf.txt"
+      },
+      {
+        "additions": 75,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/38112d3b-73ab-49b9-9a67-e23c6d879a05.txt"
+      },
+      {
+        "additions": 214,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/515e1a71-6f44-4941-923d-1c98d201e56f.txt"
+      },
+      {
+        "additions": 210,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/5571d58e-cf73-4645-8eb8-0758ee432e5a.txt"
+      },
+      {
+        "additions": 81,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/659129d2-290c-4f85-a59d-913803ab93a0.txt"
+      },
+      {
+        "additions": 194,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/8821a165-9c3d-4b11-8340-f8e975ed302a.txt"
+      },
+      {
+        "additions": 41,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/cfe03dc7-73f2-4060-b70e-944ecbd78754.txt"
+      },
+      {
+        "additions": 84,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/da937cd5-a723-4a10-95f9-4ad2c28d2423.txt"
+      },
+      {
+        "additions": 76,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/e6164b45-5205-4384-bc8e-90c4b790f399.txt"
+      },
+      {
+        "additions": 135,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/e671b7ee-8219-4ec4-90c5-f826985cbe2f.txt"
+      },
+      {
+        "additions": 88,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/f002747a-3ad4-4196-920d-36ec21e6d0fd.txt"
+      }
+    ],
+    "headRefOid": "c6a2b065ee89326aaae22a4e47e67b734d6b1bc2",
+    "isDraft": false,
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "state": "OPEN",
+    "statusCheckRollup": []
+  },
+  "reviewed_sixteen_file_diff_unchanged": true,
+  "role_context": "solo-project-owner-bootstrap; common Owner custody; AI assistance advisory only; no independent-human acceptance claimed.",
+  "scope": "PR313 publication of exact PR302 retrospective record only; current personal Owner adoption and authorization naming exact HEAD and custodian retained. Existing CLEAN review remains applicable to identical committed bytes.",
+  "source_id": "29d3341e-42f1-4e41-a146-ec5ae8560d09",
+  "source_receipts_checked": 66,
+  "stop_before_merge": true,
+  "verified_at_utc": "2026-09-29T08:45:40.204783Z"
+}

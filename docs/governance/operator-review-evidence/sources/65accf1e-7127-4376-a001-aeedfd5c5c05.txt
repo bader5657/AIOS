@@ -1,0 +1,36 @@
+{
+  "actor": {
+    "channel_id": "Telegram numeric ID 961959058; username Bagusder21",
+    "name": "Project Owner — Bagusder21",
+    "principal_id": "8577005f-37dd-48ce-9250-cf93707d8239"
+  },
+  "actual_remote_merge_sha": "b07306517070ba18c32cc604ad2515f6704f80f3",
+  "all_publication_prerequisites_satisfied": false,
+  "authorized_head": "c6a2b065ee89326aaae22a4e47e67b734d6b1bc2",
+  "disposition": "STOP: preserve the statement without correction; it is not yet a valid exact-merge adoption. Request direct Owner confirmation of the actual merge identity. Prior technical PASS remains unchanged; this is a current acceptance identity mismatch, not a reopened technical review defect.",
+  "exact_owner_statement": "As the authenticated Project Owner/verifier under solo-project-owner-bootstrap,\nI personally adopt and ACCEPT the actual post-merge publication verification\nfindings for the PR #302 retrospective record publication.\n\nPR #313 merge commit:\nb07306517a070ba18c32cc604ad2515f6704f80f3\n\nAuthorized reviewed HEAD:\nc6a2b065ee89326aaae22a4e47e67b734d6b1bc2\n\nRetrospective record ID:\n084bebe9-ee55-4314-99b8-357f418db9e8\n\nRecord transport SHA-256:\n9d35598df9c6b3170cb4203b3595a1bb4919cd5e1d41c3605f4f61dde3113d86\n\nTechnical publication verification receipt:\nc1157806-a726-4d2e-81c4-151f0dca61a9\n\nI confirm:\n- exact two-parent merge topology is accepted\n- the authorized reviewed HEAD is the governed second parent\n- all 16 published files are byte-identical to the authorized candidate\n- the retrospective review record bytes are unchanged\n- all 66 linked receipt and dependency digests remain exact\n- PR #301 dependency references remain valid\n- no unexpected historical artifact changed\n- this remains a fresh retrospective re-validation, not the original pre-merge review\n- AI assistance is advisory only\n- no independent-human acceptance is claimed\n\nI accept this publication for the bounded legacy bootstrap evidence process only.\n\nThis acceptance does NOT authorize:\n- PR #303 review automatically\n- PR #304 merge\n- bootstrap admission\n- selector publication\n- recovery activation\n- one-shot installation\n- recovery authority consumption\n- runtime/service/database changes\n- Step-4 closure\n- Step-5\n\nRecord this acceptance prospectively with the actual current UTC timestamp.\n\nIf all publication prerequisites are now satisfied:\nreport PR #302 retrospective record status as PUBLISHED / VERIFIED.\n\nDo not start PR #303 automatically.\nStop after publication determination.",
+  "excluded_actions_performed": false,
+  "kind": "PR313 human post-merge adoption statement retained with exact-identity STOP",
+  "next_step": "Owner/verifier confirms that the acceptance applies to actual merge b07306517070ba18c32cc604ad2515f6704f80f3, with the same record, receipt, scope and exclusions.",
+  "pr303_started": false,
+  "publication_status": "PUBLISHED; awaiting corrected authenticated human verifier adoption",
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/65accf1e-7127-4376-a001-aeedfd5c5c05.txt",
+    "/home/aiosadmin/aios-approval-source-archive/65accf1e-7127-4376-a001-aeedfd5c5c05.txt"
+  ],
+  "record_id": "084bebe9-ee55-4314-99b8-357f418db9e8",
+  "record_transport_sha256": "9d35598df9c6b3170cb4203b3595a1bb4919cd5e1d41c3605f4f61dde3113d86",
+  "recorded_at_utc": "2026-09-29T08:51:48.042684Z",
+  "retention": "Retain indefinitely. Exclusive 0600 files in protected 0700 directories, separate exact archive under common Owner custody. No prior receipt or record rewritten.",
+  "role_context": "solo-project-owner-bootstrap; same human combines disclosed reviewer, approver, custodian, verifier, commissioner and operator roles. AI assistance advisory only; no independent-human acceptance or independent custody claimed.",
+  "source_id": "65accf1e-7127-4376-a001-aeedfd5c5c05",
+  "source_medium": "Current direct Owner conversation in the established session, not a Telegram transcript. Existing identity/channel-control source cf5371cb-cc83-42ce-b4fd-f2ed8834e98b; no new authentication consumption.",
+  "supplied_merge_sha": "b07306517a070ba18c32cc604ad2515f6704f80f3",
+  "supplied_merge_sha_length": 41,
+  "technical_verification_source": {
+    "path": "docs/governance/operator-review-evidence/sources/c1157806-a726-4d2e-81c4-151f0dca61a9.txt",
+    "transport_sha256": "048f11c7ec7ca334a264c4a04831a8c02348218ea1b8d6e6a3e351b2a78eda9e"
+  },
+  "timestamp_meaning": "Actual current prospective recording of the exact received statement; no backdating.",
+  "verification": "GitHub PR313 is MERGED with the exact authorized HEAD and actual merge above. Existing technical receipt digest and archive copy match. The supplied 41-character merge identifier differs from the actual 40-character merge SHA."
+}

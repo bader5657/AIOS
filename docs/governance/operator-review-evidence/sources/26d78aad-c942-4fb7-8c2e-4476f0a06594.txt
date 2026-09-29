@@ -1,0 +1,30 @@
+{
+  "actual_merge_sha": "b07306517070ba18c32cc604ad2515f6704f80f3",
+  "authorized_reviewed_head": "c6a2b065ee89326aaae22a4e47e67b734d6b1bc2",
+  "boundaries": "No PR303 review, PR304 modification/merge, bootstrap admission, selector publication, recovery activation, one-shot install, recovery authority consumption, runtime/service/database changes, Step4 closure or Step5. Stop after publication determination.",
+  "correction": "Owner expressly confirms the prior merge identifier was a transcription error only and adopts the actual merge with the same record, technical receipt, findings, scope and exclusions. This new source resolves the exact-identity STOP prospectively; the original statement is neither rewritten nor silently normalized.",
+  "disposition": "Corrected personal human adoption is retained. Current publication prerequisite revalidation follows separately; no new technical finding or prior timestamp is fabricated.",
+  "earlier_adoption_source": {
+    "path": "docs/governance/operator-review-evidence/sources/65accf1e-7127-4376-a001-aeedfd5c5c05.txt",
+    "transport_sha256": "a3f593253e4a12f3234c0bc99427a92e05bff348668c00db6666f5b0906e8109"
+  },
+  "exact_owner_statement": "I confirm my previous authenticated human verifier adoption applies to the actual PR #313 merge commit b07306517070ba18c32cc604ad2515f6704f80f3, with the same retrospective record 084bebe9-ee55-4314-99b8-357f418db9e8, technical verification receipt c1157806-a726-4d2e-81c4-151f0dca61a9, scope, findings, and exclusions. My previous merge SHA contained a transcription error only. Record this corrected adoption prospectively; do not alter historical receipts.",
+  "kind": "PR313 corrected authenticated human verifier adoption",
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/26d78aad-c942-4fb7-8c2e-4476f0a06594.txt",
+    "/home/aiosadmin/aios-approval-source-archive/26d78aad-c942-4fb7-8c2e-4476f0a06594.txt"
+  ],
+  "record_id": "084bebe9-ee55-4314-99b8-357f418db9e8",
+  "record_transport_sha256": "9d35598df9c6b3170cb4203b3595a1bb4919cd5e1d41c3605f4f61dde3113d86",
+  "recorded_at_utc": "2026-09-29T08:54:29.725374Z",
+  "retention": "Exclusive 0600 files in protected 0700 directories, exact separate archive under common Owner custody. Retain indefinitely.",
+  "role_context": "solo-project-owner-bootstrap; Project Owner Telegram numeric ID 961959058, username Bagusder21, principal 8577005f-37dd-48ce-9250-cf93707d8239 combines disclosed reviewer, approver, custodian, verifier, commissioner and operator roles. Human self-verification, not independent corroboration. AI assistance advisory only; no independent-human acceptance or independent custody claimed.",
+  "scope": "Bounded legacy bootstrap evidence process only. Fresh retrospective re-validation; not the original pre-merge review; original acceptance record unavailable.",
+  "source_id": "26d78aad-c942-4fb7-8c2e-4476f0a06594",
+  "source_medium": "Current direct established Owner conversation, not a Telegram transcript; identity/channel-control evidence cf5371cb-cc83-42ce-b4fd-f2ed8834e98b. No new challenge or consumption.",
+  "technical_verification_source": {
+    "path": "docs/governance/operator-review-evidence/sources/c1157806-a726-4d2e-81c4-151f0dca61a9.txt",
+    "transport_sha256": "048f11c7ec7ca334a264c4a04831a8c02348218ea1b8d6e6a3e351b2a78eda9e"
+  },
+  "timestamp_meaning": "Actual current prospective recording; no backdating. Earlier receipts remain unchanged."
+}

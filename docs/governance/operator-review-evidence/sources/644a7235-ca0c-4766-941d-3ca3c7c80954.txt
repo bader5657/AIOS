@@ -1,0 +1,61 @@
+{
+  "all_publication_prerequisites_satisfied": true,
+  "boundaries": "No PR303 review, PR304 modification/merge, bootstrap admission, selector publication, recovery activation, one-shot install, recovery authority consumption, runtime/service/database changes, Step4 closure or Step5. Stop after publication determination.",
+  "canonical_payload_sha256": "170d5e2266ec30b9a98e53c8d89bd1643ed37715b652bd937d8df2c60be143a8",
+  "checks": {
+    "all_66_source_digests_and_archive_copies_exact": true,
+    "all_sixteen_files_byte_identical": true,
+    "corrected_authenticated_human_adoption_binds_actual_merge": true,
+    "exact_remote_merge_identity": true,
+    "historical_receipts_unchanged": true,
+    "no_unexpected_historical_artifact_changed": true,
+    "pr301_dependency_unchanged_and_satisfied": true,
+    "raw_two_parent_topology_and_reviewed_second_parent": true,
+    "record_and_attested_payload_unchanged": true
+  },
+  "corrected_human_adoption_source": {
+    "path": "docs/governance/operator-review-evidence/sources/26d78aad-c942-4fb7-8c2e-4476f0a06594.txt",
+    "transport_sha256": "f8e2ae938f67a338f405463258a7226176ff8d2774c89552b6101b4e0a9b4722"
+  },
+  "determination": "The prior exact-merge identity STOP is resolved by the current explicit human correction. Technical publication verification and authenticated human adoption now both bind the actual PR313 merge and unchanged PR302 retrospective record. PUBLISHED / VERIFIED for the bounded legacy bootstrap evidence process only; no original historical acceptance or operational authority is inferred.",
+  "determined_at_utc": "2026-09-29T08:54:31.030961Z",
+  "earlier_identity_stop_source": {
+    "path": "docs/governance/operator-review-evidence/sources/65accf1e-7127-4376-a001-aeedfd5c5c05.txt",
+    "transport_sha256": "a3f593253e4a12f3234c0bc99427a92e05bff348668c00db6666f5b0906e8109"
+  },
+  "excluded_actions_performed": false,
+  "kind": "PR302 retrospective publication determination after corrected human adoption",
+  "original_merge_parents": [
+    "ff6ef91748c469ab4fe62b05d79780317b30e52f",
+    "c6a2b065ee89326aaae22a4e47e67b734d6b1bc2"
+  ],
+  "pr303_started": false,
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/644a7235-ca0c-4766-941d-3ca3c7c80954.txt",
+    "/home/aiosadmin/aios-approval-source-archive/644a7235-ca0c-4766-941d-3ca3c7c80954.txt"
+  ],
+  "record_gitref": {
+    "commit": "b07306517070ba18c32cc604ad2515f6704f80f3",
+    "path": "docs/governance/operator-review-evidence/reviews/084bebe9-ee55-4314-99b8-357f418db9e8.json",
+    "transport_sha256": "9d35598df9c6b3170cb4203b3595a1bb4919cd5e1d41c3605f4f61dde3113d86"
+  },
+  "record_id": "084bebe9-ee55-4314-99b8-357f418db9e8",
+  "remote_metadata": {
+    "headRefOid": "c6a2b065ee89326aaae22a4e47e67b734d6b1bc2",
+    "mergeCommit": {
+      "oid": "b07306517070ba18c32cc604ad2515f6704f80f3"
+    },
+    "mergedAt": "2026-09-29T08:47:54Z",
+    "state": "MERGED"
+  },
+  "repository": "bader5657/AIOS",
+  "retention": "Exclusive 0600 files in protected 0700 directories, exact separate archive under common Owner custody. Retain indefinitely.",
+  "role_context": "solo-project-owner-bootstrap; Project Owner Telegram numeric ID 961959058, username Bagusder21, principal 8577005f-37dd-48ce-9250-cf93707d8239 combines disclosed reviewer, approver, custodian, verifier, commissioner and operator roles. Human self-verification, not independent corroboration. AI assistance advisory only; no independent-human acceptance or independent custody claimed.",
+  "scope": "Bounded legacy bootstrap evidence process only. Fresh retrospective re-validation; not the original pre-merge review; original acceptance record unavailable.",
+  "source_id": "644a7235-ca0c-4766-941d-3ca3c7c80954",
+  "status": "PUBLISHED / VERIFIED",
+  "technical_verification_source": {
+    "path": "docs/governance/operator-review-evidence/sources/c1157806-a726-4d2e-81c4-151f0dca61a9.txt",
+    "transport_sha256": "048f11c7ec7ca334a264c4a04831a8c02348218ea1b8d6e6a3e351b2a78eda9e"
+  }
+}
