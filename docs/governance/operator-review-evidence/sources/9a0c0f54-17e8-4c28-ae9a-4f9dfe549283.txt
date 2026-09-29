@@ -1,0 +1,234 @@
+{
+  "archive_receipt_path": "/home/aiosadmin/aios-approval-source-archive/9a0c0f54-17e8-4c28-ae9a-4f9dfe549283.txt",
+  "checks": {
+    "all_12_files_byte_identical": true,
+    "all_source_digests_and_archived_copies_exact": true,
+    "complete_tree_equals_reviewed_tree": true,
+    "exact_two_parents": true,
+    "no_historical_tracked_artifacts_changed": true,
+    "only_expected_12_additions_vs_first_parent": true,
+    "payload_unchanged": true,
+    "second_parent_is_reviewed_head": true
+  },
+  "complete_record_transport_sha256": "731769ce74976f867e802fb1985d8ebcc2af7084131b0f5762520915332f757e",
+  "custody": "Exclusive 0600 files in existing protected 0700 directories, separate exact local copies in common Owner custody. Retain indefinitely for later linked retention; no independent storage claimed.",
+  "execution_provenance": "Owner explicitly instructed Merge PR #308 only in the current direct conversation, conditional on unchanged exact HEAD/diff and mergeability. Assistant executed gh pr merge --merge --match-head-commit for that exact HEAD under this instruction. GitHub mergedBy is metadata, not proof the human personally operated the CLI.",
+  "file_checks": [
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/reviews/6dc33ea0-8eca-476a-9513-b49d6415461e.json",
+      "transport_sha256": "731769ce74976f867e802fb1985d8ebcc2af7084131b0f5762520915332f757e"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/34c0d5fc-352e-4a84-a7e9-74cc209c583a.txt",
+      "transport_sha256": "54c7673c193b94781324e049824bf28fc38971f72562e9e7c1884426196d2e46"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/4cac1845-80b4-407f-be9d-a4e2d88f504c.txt",
+      "transport_sha256": "9161a1af3cac4e284a230d44f6fa3fc153b06149f59d3f81bbfa9a529da5f532"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/6d6faf6b-0fe1-4756-b871-8c9c8acfa626.txt",
+      "transport_sha256": "a16d2f921da25952a67cce53842482c7042b52430def5d84876fd015da524982"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/7754f0f4-14f1-4aed-85ee-1d8658e8d9b4.txt",
+      "transport_sha256": "956571b49c65362c3734127a78ad47596271d6f46399afb1fd0e5b9b1d9dafcf"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/820ae899-acf4-48e4-88cb-185dd5b333dc.txt",
+      "transport_sha256": "182710ae67bd5f44c6dec1966141b72bafdcc9dec29afa11eef0e4fedae5c3d3"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/8828c5d9-65a5-4c17-a321-da63becc72ef.txt",
+      "transport_sha256": "8940e8d2ea7224b107f445a65fe87e3f4def04e78de33787bc1afee680b28070"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/907350a0-ae12-4bea-97de-489acca3dff7.txt",
+      "transport_sha256": "0bee66ecdded972f350ac840387b7e7feca1c65de29df64202ece0824bd5f5ef"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/96c27389-b32f-48cd-8ea8-0d16202ca20b.txt",
+      "transport_sha256": "e65eafbe0602824a47088378eb784078744441f700a0cb2736a01beb352b3e75"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/cf5371cb-cc83-42ce-b4fd-f2ed8834e98b.txt",
+      "transport_sha256": "180a577c25151df500e64a649c760008f2b0fe40b23cb4ebf5e685df34b872f2"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/e27640cc-6757-40f9-8c85-f6c364f49cc2.txt",
+      "transport_sha256": "486779c29bfa4f117859ec5ab36fc0cce32e82080cce93db63fc15b7d78e19f2"
+    },
+    {
+      "byte_identical": true,
+      "path": "docs/governance/operator-review-evidence/sources/e826f8cc-b675-4dbd-acc4-1c36198c6f64.txt",
+      "transport_sha256": "404f4d02563ff7adb75c01e8e6be0e3e7b0a9e304e52ef33069f67487337320b"
+    }
+  ],
+  "git_identity_controls": "Replacement objects disabled; graft file /dev/null; topology read from raw commit",
+  "limits": "PR301 later acceptance gate unresolved. No PR300 review, PR304 modification/merge, bootstrap admission, selector, recovery activation, one-shot install, recovery authority consumption, runtime/service/database changes, Step-4 closure or Step-5 performed.",
+  "merge_metadata": {
+    "autoMergeRequest": null,
+    "baseRefName": "main",
+    "files": [
+      {
+        "additions": 1,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/reviews/6dc33ea0-8eca-476a-9513-b49d6415461e.json"
+      },
+      {
+        "additions": 18,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/34c0d5fc-352e-4a84-a7e9-74cc209c583a.txt"
+      },
+      {
+        "additions": 68,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/4cac1845-80b4-407f-be9d-a4e2d88f504c.txt"
+      },
+      {
+        "additions": 88,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/6d6faf6b-0fe1-4756-b871-8c9c8acfa626.txt"
+      },
+      {
+        "additions": 107,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/7754f0f4-14f1-4aed-85ee-1d8658e8d9b4.txt"
+      },
+      {
+        "additions": 28,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/820ae899-acf4-48e4-88cb-185dd5b333dc.txt"
+      },
+      {
+        "additions": 79,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/8828c5d9-65a5-4c17-a321-da63becc72ef.txt"
+      },
+      {
+        "additions": 111,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/907350a0-ae12-4bea-97de-489acca3dff7.txt"
+      },
+      {
+        "additions": 86,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/96c27389-b32f-48cd-8ea8-0d16202ca20b.txt"
+      },
+      {
+        "additions": 38,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/cf5371cb-cc83-42ce-b4fd-f2ed8834e98b.txt"
+      },
+      {
+        "additions": 103,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/e27640cc-6757-40f9-8c85-f6c364f49cc2.txt"
+      },
+      {
+        "additions": 12,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/e826f8cc-b675-4dbd-acc4-1c36198c6f64.txt"
+      }
+    ],
+    "headRefOid": "fb33a76424c4d9d129d68b157a9a42960ce72dc5",
+    "mergeCommit": {
+      "oid": "0bc880036ec4d914bb85882f1729afef136c4397"
+    },
+    "mergedAt": "2026-09-29T05:01:35Z",
+    "mergedBy": {
+      "id": "U_kgDOEkW3BA",
+      "is_bot": false,
+      "login": "bader5657",
+      "name": ""
+    },
+    "number": 308,
+    "state": "MERGED",
+    "url": "https://github.com/bader5657/AIOS/pull/308"
+  },
+  "merge_sha": "0bc880036ec4d914bb85882f1729afef136c4397",
+  "next_step": "Obtain and retain the appointed Owner/verifier direct authenticated post-merge confirmation of this receipt, merge SHA and record digest under solo-project-owner-bootstrap. Do not start PR300 automatically.",
+  "parents": [
+    "a7b0c979c0195b91f778d0d5e69b296af6378620",
+    "fb33a76424c4d9d129d68b157a9a42960ce72dc5"
+  ],
+  "payload_sha256": "0aaf76ccc28f4ccb6c8173b9bf48a423cafec66a415bfac2c754eee3afc9790d",
+  "pr_number": 308,
+  "publication_authorization": {
+    "source_id": "11bd393c-4a9e-4d72-93ee-babc07676356",
+    "transport_sha256": "4b9bdaba31c24c7f42e52a52490f4b43b75f7d257d29d897463c841e5e0bd921"
+  },
+  "publication_status": "PUBLISHED; technical post-merge checks VERIFIED; governed human publication-verifier acceptance remains pending",
+  "raw_commit_sha256": "8abd7e4808eb8d072fd3549b7b88d2b8dc89cb5e9e5a34a6f56e12c3a6cfeaa3",
+  "record_id": "6dc33ea0-8eca-476a-9513-b49d6415461e",
+  "record_path": "docs/governance/operator-review-evidence/reviews/6dc33ea0-8eca-476a-9513-b49d6415461e.json",
+  "recorded_at_utc": "2026-09-29T05:02:46.786148Z",
+  "remaining_prerequisite": "Under Process section 1 (authentication before accepting publication) and section 6 (appointed human verifier), Owner acting as verifier must authenticate and personally adopt these actual post-merge findings and exact merge/record identities. Pre-merge authorization is not a post-merge human statement. No new post-merge human acceptance or PR308-specific authentication result is fabricated.",
+  "repository": "bader5657/AIOS",
+  "resulting_remote_main_head": "0bc880036ec4d914bb85882f1729afef136c4397",
+  "reviewed_authorized_head": "fb33a76424c4d9d129d68b157a9a42960ce72dc5",
+  "role_context": {
+    "disclosure": "One human combines appointed roles. AI assistance and these technical findings are advisory only; no independent-human acceptance or post-merge human adoption is inferred.",
+    "mode": "solo-project-owner-bootstrap",
+    "owner": "Project Owner; Telegram numeric ID 961959058; username Bagusder21"
+  },
+  "source_and_authority_references_checked": [
+    {
+      "commit": "a7b0c979c0195b91f778d0d5e69b296af6378620",
+      "path": "docs/intelligence/stage-0.33c-p4s7-operator-evidence-bootstrap/00_LEGACY_BOOTSTRAP_AMENDMENT.md",
+      "transport_sha256": "473db6c19f8933043886dbb186ae4a72a2ac061ff8db0cf31a4e1e442a3de551"
+    },
+    {
+      "path": "docs/governance/operator-review-evidence/sources/34c0d5fc-352e-4a84-a7e9-74cc209c583a.txt",
+      "transport_sha256": "54c7673c193b94781324e049824bf28fc38971f72562e9e7c1884426196d2e46"
+    },
+    {
+      "path": "docs/governance/operator-review-evidence/sources/820ae899-acf4-48e4-88cb-185dd5b333dc.txt",
+      "transport_sha256": "182710ae67bd5f44c6dec1966141b72bafdcc9dec29afa11eef0e4fedae5c3d3"
+    },
+    {
+      "commit": "a7b0c979c0195b91f778d0d5e69b296af6378620",
+      "path": "docs/governance/GOVERNANCE_DECISION_008.md",
+      "transport_sha256": "ffbbafafd79b30d56d5b5a6824ff922bc23d68f0216305d7dab651b6b7bf5fa9"
+    },
+    {
+      "path": "docs/governance/operator-review-evidence/sources/e826f8cc-b675-4dbd-acc4-1c36198c6f64.txt",
+      "transport_sha256": "404f4d02563ff7adb75c01e8e6be0e3e7b0a9e304e52ef33069f67487337320b"
+    },
+    {
+      "path": "docs/governance/operator-review-evidence/sources/8828c5d9-65a5-4c17-a321-da63becc72ef.txt",
+      "transport_sha256": "8940e8d2ea7224b107f445a65fe87e3f4def04e78de33787bc1afee680b28070"
+    },
+    {
+      "path": "docs/governance/operator-review-evidence/sources/6d6faf6b-0fe1-4756-b871-8c9c8acfa626.txt",
+      "transport_sha256": "a16d2f921da25952a67cce53842482c7042b52430def5d84876fd015da524982"
+    }
+  ],
+  "source_id": "9a0c0f54-17e8-4c28-ae9a-4f9dfe549283",
+  "technical_verification": "PASS",
+  "timestamp_meaning": "Actual current post-merge technical verification recording time; no backdating. GitHub mergedAt is separately retained at reported second resolution.",
+  "working_receipt_path": "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/9a0c0f54-17e8-4c28-ae9a-4f9dfe549283.txt"
+}

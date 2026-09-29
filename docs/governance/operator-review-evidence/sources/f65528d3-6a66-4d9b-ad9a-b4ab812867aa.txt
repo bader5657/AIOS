@@ -1,0 +1,114 @@
+{
+  "artifact_path": "docs/intelligence/stage-0.33c-p4s7-recovery-activation/00_RECOVERY_ACTIVATION_GOVERNANCE.md",
+  "byte_count": 15344,
+  "closed_activation_keys": [
+    "schema_version",
+    "authority_id",
+    "expected_runtime_head",
+    "executor_sha256",
+    "policy_reference",
+    "approval_id",
+    "package_payload_sha256",
+    "activated_at_utc"
+  ],
+  "diff_check": "PASS; one governance-only addition",
+  "executor_digest_and_policy_binding_match": true,
+  "git_controls": "GIT_NO_REPLACE_OBJECTS=1; GIT_GRAFT_FILE=/dev/null; raw commit topology",
+  "historical_context_bytes_equal_inspected_files": [
+    "docs/intelligence/stage-0.33c-p4s7-approval-expiry-recovery/00_APPROVAL_EXPIRY_RECOVERY_AMENDMENT.md",
+    "docs/intelligence/stage-0.33c-p4s7-recovery-private-source/00_RECOVERY_PRIVATE_SOURCE_FILESYSTEM_GOVERNANCE.md",
+    "docs/intelligence/stage-0.33c-p4s7-r32-recovery-bindings/00_RECOVERY_EXECUTOR_PACKAGE_BINDING_AMENDMENT.md"
+  ],
+  "historical_executor_activation_reader_disabled": true,
+  "limitations": "Factual Git/API/static evidence only; human confirmation is separate source 07766e45-4be4-4bd4-a9be-8cc551f1ee65. No executor imported or run; no operational verification; no PR302 substantive review.",
+  "lineage": [
+    {
+      "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+      "descendant": "ed7f75551a118a96fc26e805057c1a875345c55a",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "8e9a8023742773b055e17dba002b2ebf07528118",
+      "descendant": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "descendant": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "8e9a8023742773b055e17dba002b2ebf07528118",
+      "descendant": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "descendant": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "descendant": "a7b0c979c0195b91f778d0d5e69b296af6378620",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "a7b0c979c0195b91f778d0d5e69b296af6378620",
+      "descendant": "0bc880036ec4d914bb85882f1729afef136c4397",
+      "result": "PASS"
+    }
+  ],
+  "merge_verified_at_utc": "2026-09-29T05:15:30.550686Z",
+  "parents": [
+    "ba717f6990d775748f46d62ef03a696f1618077b",
+    "ed7f75551a118a96fc26e805057c1a875345c55a"
+  ],
+  "pr301_contract_preserved_at_reader": true,
+  "pr_metadata": {
+    "files": [
+      {
+        "additions": 274,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/intelligence/stage-0.33c-p4s7-recovery-activation/00_RECOVERY_ACTIVATION_GOVERNANCE.md"
+      }
+    ],
+    "headRefOid": "ed7f75551a118a96fc26e805057c1a875345c55a",
+    "mergeCommit": {
+      "oid": "8e9a8023742773b055e17dba002b2ebf07528118"
+    },
+    "mergedAt": "2026-09-27T01:17:47Z",
+    "mergedBy": {
+      "id": "U_kgDOEkW3BA",
+      "is_bot": false,
+      "login": "bader5657",
+      "name": ""
+    },
+    "number": 300,
+    "state": "MERGED",
+    "url": "https://github.com/bader5657/AIOS/pull/300"
+  },
+  "r34_preserved_through_current_chain": true,
+  "raw_commit_sha256": "343ceef9bfcab73308627b0d9036c938f6616dcf5445bd006207ea025896161e",
+  "recorded_at_utc": "2026-09-29T05:15:30.636303Z",
+  "relative_links_resolve_at_reviewed_head": [
+    "docs/intelligence/stage-0.33c-p4s7-approval-expiry-recovery/00_APPROVAL_EXPIRY_RECOVERY_AMENDMENT.md",
+    "docs/intelligence/stage-0.33c-p4s7-recovery-private-source/00_RECOVERY_PRIVATE_SOURCE_FILESYSTEM_GOVERNANCE.md",
+    "docs/intelligence/stage-0.33c-p4s7-r32-recovery-bindings/00_RECOVERY_EXECUTOR_PACKAGE_BINDING_AMENDMENT.md"
+  ],
+  "repository": "bader5657/AIOS",
+  "reviewed_and_merged_sha256": "299296d106d6d661ac2fd55b1442b9980485d7f2bdf64b228fbfebbbb73dcf31",
+  "shared_binding_checks": [
+    "7bc638e2-e1f4-4e87-a54a-4d0df031b130",
+    "3a478d87-5c4f-4778-9f88-2228f4d7167f",
+    "2026-09-26T23:24:12.093093Z",
+    "2026-10-03T23:24:12.093093Z",
+    "be7a1750eb77ae77e8f020fc3f29c5f047cf88d1720a387f50f58f58c877962e",
+    "e3c66fddf815c57f17baad49926c44588279d60cb4e78df867e0ae2189237a6d",
+    "6ea5fc118e375ac035f321110198eb43811fb5b991a095554c15d0a6cbeb16c9",
+    "1579e7fffd93bd0dc35d31539c9703b21482c486eee14aaed5535ab3a87dc367",
+    "c006afcad84984baea6af164067fdd4cfc31cdcac5f86baf7b1ceefd6e4c5065",
+    "da020dff0974acf0bb7fc22bc1b54f17d149ee8f11ace67420eb16cca73cd6be"
+  ],
+  "source_id": "f65528d3-6a66-4d9b-ad9a-b4ab812867aa"
+}
