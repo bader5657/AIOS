@@ -1,0 +1,19 @@
+PR #307 post-merge verifier authentication — evidence unavailable / STOP
+Source ID: 711afb9d-2816-4523-b2f2-8df547d428ab
+Actual checked/recorded UTC: 2026-09-27T23:58:36.494955Z
+Authenticated principal expected: Telegram numeric ID 961959058; username Bagusder21.
+Challenge ID: 44a4f01c-f18c-4fd1-b347-e34db3376d30
+Challenge SHA-256: 6082fe08bff1cc6e3fdd2ac16a26ef3cb436e1f4561c1ea99ce25988aba8eddd
+Issued UTC: 2026-09-27T23:57:02.178865Z
+Expires UTC: 2026-09-28T00:07:02.178865Z
+Purpose: post-merge genesis publication verifier authentication
+PR: 307
+Reviewed HEAD: 06776edf4261950f4370cc701229a4e1783959a2
+Merge commit: a7b0c979c0195b91f778d0d5e69b296af6378620
+Genesis record ID: 68275c03-c0dd-482f-96c6-2b9328a7c881
+Record transport SHA-256: ae1c8e147b816ef30551fe8965437834ba3c0daa21544e440027b41501d65934
+
+User reports sending the challenge from @Bagusder21. Read-only inspection of the trusted receiver archive /opt/aios/data/authentication-evidence/telegram found no matching challenge evidence at this check. The archive currently contains two evidence JSON files for earlier challenges; neither matches this challenge. No consumption receipt for this challenge exists. This observation does not assert that the user failed to send the message; delivery/ingestion cause is undetermined.
+Authentication result: NOT PASS / STOP due to missing trusted receiver evidence. Challenge remains pending; no replacement, mutation, authentication consumption, inferred acceptance or commissioning. Earlier challenges are not reused. Validity has not expired at the check time.
+No runtime/service/database change. Preserve this current observation; a later newly available evidence file must undergo the governed verification before PASS. Channel authentication, even if later PASS, does not itself supply human post-merge content acceptance.
+Common local Owner custody; advisory AI verification only; no independent-human acceptance. Exact separate source copies retained prospectively; no backdating.

@@ -1,0 +1,102 @@
+{
+  "all_candidate_source_digests_verified": true,
+  "checked_at_utc": "2026-09-29T06:23:46.487041Z",
+  "effective": false,
+  "files_added": [
+    "docs/governance/operator-review-evidence/decisions/7a3d51ee-1bb9-43c4-9896-f5eab11d305a.json",
+    "docs/governance/operator-review-evidence/sources/07b461d0-9958-4038-b226-dcdd882094af.txt",
+    "docs/governance/operator-review-evidence/sources/4879694a-4d1f-4d16-98ed-74386f3a74c6.txt",
+    "docs/governance/operator-review-evidence/sources/56655a2d-0353-44d1-a490-5d9c70856056.txt",
+    "docs/governance/operator-review-evidence/sources/8fded3dc-61d0-4423-a501-d072b8552541.txt",
+    "docs/governance/operator-review-evidence/sources/95ee5aa3-85d4-4b51-9d2d-91af1f8f9a40.txt",
+    "docs/governance/operator-review-evidence/sources/a3515c0a-c71f-484a-89c4-bb1c99189d65.txt",
+    "docs/governance/operator-review-evidence/sources/cc0677e6-9cd5-4c54-b05e-41067df7189b.txt",
+    "docs/governance/operator-review-evidence/sources/d0a00197-a612-4a6b-9237-fd589f5491a6.txt",
+    "docs/governance/operator-review-evidence/sources/e896b39c-40f6-4c1d-ab41-80fd2a1125d7.txt"
+  ],
+  "limitations": "Candidate preparation only. Prior Owner cross-channel disclosure plus current available checks; no independent/global no-conflict attestation. Requires human exact-HEAD publication review and explicit publication authorization naming custodian before merge; actual post-merge verification and human adoption afterward.",
+  "main_unchanged": true,
+  "merged": false,
+  "proposed_custodian": {
+    "channel_id": "Telegram numeric ID 961959058; username Bagusder21",
+    "name": "Project Owner \u2014 Bagusder21",
+    "principal_id": "8577005f-37dd-48ce-9250-cf93707d8239"
+  },
+  "publication_candidate": {
+    "autoMergeRequest": null,
+    "baseRefOid": "0026912443ad6e4fffc814a3b59e6c7fddd2f696",
+    "files": [
+      {
+        "additions": 1,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/decisions/7a3d51ee-1bb9-43c4-9896-f5eab11d305a.json"
+      },
+      {
+        "additions": 71,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/07b461d0-9958-4038-b226-dcdd882094af.txt"
+      },
+      {
+        "additions": 77,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/4879694a-4d1f-4d16-98ed-74386f3a74c6.txt"
+      },
+      {
+        "additions": 66,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/56655a2d-0353-44d1-a490-5d9c70856056.txt"
+      },
+      {
+        "additions": 35,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/8fded3dc-61d0-4423-a501-d072b8552541.txt"
+      },
+      {
+        "additions": 34,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/95ee5aa3-85d4-4b51-9d2d-91af1f8f9a40.txt"
+      },
+      {
+        "additions": 79,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/a3515c0a-c71f-484a-89c4-bb1c99189d65.txt"
+      },
+      {
+        "additions": 51,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/cc0677e6-9cd5-4c54-b05e-41067df7189b.txt"
+      },
+      {
+        "additions": 78,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/d0a00197-a612-4a6b-9237-fd589f5491a6.txt"
+      },
+      {
+        "additions": 72,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/governance/operator-review-evidence/sources/e896b39c-40f6-4c1d-ab41-80fd2a1125d7.txt"
+      }
+    ],
+    "headRefOid": "e72bf02789ee81d82de2674f0377d684d5acc83b",
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "number": 311,
+    "state": "OPEN",
+    "url": "https://github.com/bader5657/AIOS/pull/311"
+  },
+  "ready_for_exact_head_human_publication_review": true,
+  "record_path": "docs/governance/operator-review-evidence/decisions/7a3d51ee-1bb9-43c4-9896-f5eab11d305a.json",
+  "record_transport_sha256": "912d9283e92aea725a0c6f73e5b91cc66fc00710a0bfc4a1d2c4525ae41d4b3b",
+  "remote_diff_equals_validated_local_diff": true,
+  "source_id": "53181d80-ca94-4046-a9e5-0b0e833d6146"
+}
