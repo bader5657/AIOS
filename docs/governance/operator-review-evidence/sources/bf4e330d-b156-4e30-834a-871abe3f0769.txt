@@ -1,0 +1,85 @@
+PR #311 — exact-HEAD human publication review adoption and publication/merge authorization
+Source ID: bf4e330d-b156-4e30-834a-871abe3f0769
+Actual current UTC recording time: 2026-09-29T06:29:44.549480Z
+Timestamp meaning: prospective recording of the current human authorization; no backdating.
+Repository: bader5657/AIOS
+Exact authorized HEAD: e72bf02789ee81d82de2674f0377d684d5acc83b
+Decision record ID: 7a3d51ee-1bb9-43c4-9896-f5eab11d305a
+Complete record transport SHA-256: 912d9283e92aea725a0c6f73e5b91cc66fc00710a0bfc4a1d2c4525ae41d4b3b
+Canonical payload SHA-256: e8917a1db1a68cba06825aa92cb7845a93d237a6e7cdc96fa42a2fb99720c3ee
+
+ACTOR AND ROLE DISCLOSURE
+Named human custodian and Project Owner: Telegram numeric ID 961959058; username Bagusder21; established principal ID 8577005f-37dd-48ce-9250-cf93707d8239.
+Mode: solo-project-owner-bootstrap. Same human combines disclosed reviewer, approver, custodian, verifier, commissioner and operator roles for bounded development/bootstrap governance. No independent human acceptance or independent custody claimed. AI assistance is advisory only.
+Source medium: current direct Project Owner conversation in the established session, not a Telegram transcript. Existing identity/channel-control source cf5371cb-cc83-42ce-b4fd-f2ed8834e98b. This is the current human's personal adoption of the advisory exact-HEAD CLEAN publication review and separate explicit publication/merge authorization, not inferred from earlier payload approval.
+
+BEGIN EXACT PROJECT OWNER STATEMENT
+As Project Owner, I personally adopt the CLEAN exact-HEAD publication review
+findings and explicitly AUTHORIZE publication of PR #311 at exact HEAD:
+
+e72bf02789ee81d82de2674f0377d684d5acc83b
+
+for the sequence-2 supersede decision publication only.
+
+Decision record ID:
+7a3d51ee-1bb9-43c4-9896-f5eab11d305a
+
+Complete record transport SHA-256:
+912d9283e92aea725a0c6f73e5b91cc66fc00710a0bfc4a1d2c4525ae41d4b3b
+
+Custodian:
+- Project Owner
+- Telegram numeric ID: 961959058
+- Telegram username: Bagusder21
+- role_context: solo-project-owner-bootstrap
+
+I confirm:
+- sequence 2 correctly follows the unique sequence-1 register tip
+- the predecessor GitRef is exact
+- the governance_basis GitRefs are correct
+- the supersede effect is intentionally narrow
+- the decision activates only the procedural PR #301 retrospective-acceptance remedy
+- PR #301 historical bytes remain unchanged
+- the original four-subject bootstrap exception remains unchanged
+- PR #301 is not added to the four-record bootstrap array or admission set
+- this does not establish original PR #301 pre-merge acceptance
+- this does not automatically approve or resume PR #302
+- AI assistance is advisory only
+- no independent-human acceptance is claimed
+
+I authorize publication/merge of this exact PR #311 HEAD only.
+
+This authorization does NOT authorize:
+- PR #301 retrospective review yet
+- PR #302 review
+- PR #304 merge
+- bootstrap admission
+- selector publication
+- recovery activation
+- one-shot installation
+- recovery authority consumption
+- runtime/service/database changes
+- Step-4 closure
+- Step-5
+
+Record this publication authorization prospectively with the actual current UTC timestamp.
+Do not backdate.
+
+After recording:
+1. re-check remote PR #311 HEAD is still exactly
+   e72bf02789ee81d82de2674f0377d684d5acc83b
+2. confirm the reviewed 10-file diff is unchanged
+3. report publication authorization receipt ID/path
+4. report whether all pre-merge prerequisites for PR #311 are satisfied
+
+Do not merge automatically.
+Stop before merge.
+END EXACT PROJECT OWNER STATEMENT
+
+DISPOSITION
+Human publication review adoption and explicit authorization naming exact final HEAD and custodian are now retained. Remote HEAD, diff, record digest and current predecessor will be rechecked after recording and retained separately. No future merge or post-merge human adoption is inferred. The current instruction expressly requires stop before merge. Remedy effectiveness remains dependent on actual authorized publication, post-merge verification and authenticated human adoption. No PR301 retrospective review or excluded action is performed.
+
+RETENTION
+Working receipt: /home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/bf4e330d-b156-4e30-834a-871abe3f0769.txt
+Separate exact archive copy: /home/aiosadmin/aios-approval-source-archive/bf4e330d-b156-4e30-834a-871abe3f0769.txt
+Exclusive 0600 creation in existing protected 0700 directories; no overwrite. Common Owner custody; no independent-storage claim. Retain indefinitely for later governed linked retention. This local receipt remains outside the exact reviewed candidate commit.
