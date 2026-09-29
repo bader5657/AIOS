@@ -1,0 +1,187 @@
+{
+  "archive_receipt_path": "/home/aiosadmin/aios-approval-source-archive/0a31e6f0-a378-4f4b-90cd-f2f87a66ae27.txt",
+  "artifact_checks": [
+    {
+      "byte_count": 15344,
+      "byte_identical": true,
+      "merged_sha256": "299296d106d6d661ac2fd55b1442b9980485d7f2bdf64b228fbfebbbb73dcf31",
+      "path": "docs/intelligence/stage-0.33c-p4s7-recovery-activation/00_RECOVERY_ACTIVATION_GOVERNANCE.md",
+      "reviewed_sha256": "299296d106d6d661ac2fd55b1442b9980485d7f2bdf64b228fbfebbbb73dcf31"
+    }
+  ],
+  "authorization_source": "Current direct Owner instruction: Proceed with the bounded legacy retrospective re-validation for PR #300 ONLY. Exact subject is bound above; user requirement 6 mandates STOP if direct authenticated human merge corroboration is missing.",
+  "blocking_findings": [
+    "Missing direct authenticated Owner/merger firsthand confirmation identifying the PR300 historical actor/action. GitHub mergedBy bader5657 is metadata only, not human intent.",
+    "Historical merge occurrence requires authentic human corroboration against repository facts before the mandatory payload timestamp can be completed."
+  ],
+  "canonical_payload_sha256": "Not assigned; no payload frozen",
+  "chain_role_findings": "R34 is the PR300 activation-governance baseline. It preserves R32 runtime ba717f6990d775748f46d62ef03a696f1618077b and executor digest da020dff0974acf0bb7fc22bc1b54f17d149ee8f11ace67420eb16cca73cd6be, defines the prospective eight-key activation contract, and expressly blocks activation pending the separate reader and binding supersession. PR301 provides the external review/merge trust mechanism without rewriting R34. PR303 freezes the prospective reader binding and names this exact 15344-byte R34 artifact and transport digest as the first-record predecessor; it does not alone make the new operational binding effective. These are preliminary scope/lineage findings, not substantive CLEAN review or review of PR302/303.",
+  "classification": "retrospective-revalidation",
+  "commissioning_acceptance_source": "e27640cc-6757-40f9-8c85-f6c364f49cc2",
+  "custody": "Separate exact protected local Owner-controlled copies; common custody, not independent storage. Retain indefinitely. No historical receipts modified.",
+  "findings": "Fresh retrospective re-validation; not the original pre-merge review; original acceptance record unavailable. Identity, topology, lineage and required artifact equality checks PASS. CHANGES_REQUIRED for missing human-merge/time corroboration. Substantive retrospective review and payload freezing STOP before that prerequisite. PR301 later acceptance gate remains unresolved. No production package truth, live runtime state, fresh no-conflict/no-revocation result, execution authorization or approval renewal certified.",
+  "git_identity_controls": "Original raw commit parsed; all Git calls disable replacement objects and use GIT_GRAFT_FILE=/dev/null.",
+  "github_merge_occurrence_observed_at_utc": "2026-09-27T01:17:47Z",
+  "github_metadata": {
+    "files": [
+      {
+        "additions": 274,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/intelligence/stage-0.33c-p4s7-recovery-activation/00_RECOVERY_ACTIVATION_GOVERNANCE.md"
+      }
+    ],
+    "headRefOid": "ed7f75551a118a96fc26e805057c1a875345c55a",
+    "mergeCommit": {
+      "oid": "8e9a8023742773b055e17dba002b2ebf07528118"
+    },
+    "mergedAt": "2026-09-27T01:17:47Z",
+    "mergedBy": {
+      "id": "U_kgDOEkW3BA",
+      "is_bot": false,
+      "login": "bader5657",
+      "name": ""
+    },
+    "number": 300,
+    "state": "MERGED",
+    "title": "P4S7-R34: freeze recovery activation governance",
+    "url": "https://github.com/bader5657/AIOS/pull/300"
+  },
+  "human_evidence_search": {
+    "finding": "No direct authenticated firsthand PR300 historical human-merge statement found. Matching receipts contain scope/inventory, prior PR299 work, or technical identity facts. PR299 human confirmation is restricted to PR299; no inference or reuse for PR300.",
+    "locations": [
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources",
+      "/home/aiosadmin/aios-approval-source-archive"
+    ],
+    "matching_receipts": [
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/820ae899-acf4-48e4-88cb-185dd5b333dc.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/8828c5d9-65a5-4c17-a321-da63becc72ef.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/907350a0-ae12-4bea-97de-489acca3dff7.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/6d6faf6b-0fe1-4756-b871-8c9c8acfa626.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/11bd393c-4a9e-4d72-93ee-babc07676356.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/0912456d-9d0a-4e0b-b88b-cdf65e4f8ac7.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/34c0d5fc-352e-4a84-a7e9-74cc209c583a.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/e826f8cc-b675-4dbd-acc4-1c36198c6f64.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/4cac1845-80b4-407f-be9d-a4e2d88f504c.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/d0b43110-c93c-408a-9e16-ffd47db5ad78.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/9a0c0f54-17e8-4c28-ae9a-4f9dfe549283.txt",
+      "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/59f4513f-71fe-48e5-b930-d97ae11fd3ee.txt",
+      "/home/aiosadmin/aios-approval-source-archive/820ae899-acf4-48e4-88cb-185dd5b333dc.txt",
+      "/home/aiosadmin/aios-approval-source-archive/8828c5d9-65a5-4c17-a321-da63becc72ef.txt",
+      "/home/aiosadmin/aios-approval-source-archive/907350a0-ae12-4bea-97de-489acca3dff7.txt",
+      "/home/aiosadmin/aios-approval-source-archive/6d6faf6b-0fe1-4756-b871-8c9c8acfa626.txt",
+      "/home/aiosadmin/aios-approval-source-archive/11bd393c-4a9e-4d72-93ee-babc07676356.txt",
+      "/home/aiosadmin/aios-approval-source-archive/0912456d-9d0a-4e0b-b88b-cdf65e4f8ac7.txt",
+      "/home/aiosadmin/aios-approval-source-archive/34c0d5fc-352e-4a84-a7e9-74cc209c583a.txt",
+      "/home/aiosadmin/aios-approval-source-archive/e826f8cc-b675-4dbd-acc4-1c36198c6f64.txt",
+      "/home/aiosadmin/aios-approval-source-archive/4cac1845-80b4-407f-be9d-a4e2d88f504c.txt",
+      "/home/aiosadmin/aios-approval-source-archive/d0b43110-c93c-408a-9e16-ffd47db5ad78.txt",
+      "/home/aiosadmin/aios-approval-source-archive/9a0c0f54-17e8-4c28-ae9a-4f9dfe549283.txt",
+      "/home/aiosadmin/aios-approval-source-archive/59f4513f-71fe-48e5-b930-d97ae11fd3ee.txt"
+    ]
+  },
+  "limits": "No publication, PR302 review, PR304 modification, bootstrap admission, selector, activation, install, recovery authority consumption, runtime/service/database change, Step-4 closure or Step-5. No tests/executors or live private-source reads performed.",
+  "lineage_checks": [
+    {
+      "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+      "descendant": "ed7f75551a118a96fc26e805057c1a875345c55a",
+      "relationship": "R32 to R34 reviewed HEAD",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "8e9a8023742773b055e17dba002b2ebf07528118",
+      "descendant": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "relationship": "R34 to PR301 contract",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "descendant": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+      "relationship": "PR301 contract to reader reviewed HEAD",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "8e9a8023742773b055e17dba002b2ebf07528118",
+      "descendant": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "relationship": "R34 to reader runtime",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "descendant": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "relationship": "reader to PR303 first-binding authority",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "descendant": "a7b0c979c0195b91f778d0d5e69b296af6378620",
+      "relationship": "PR303 to commissioned genesis",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "8e9a8023742773b055e17dba002b2ebf07528118",
+      "descendant": "0bc880036ec4d914bb85882f1729afef136c4397",
+      "relationship": "R34 to current publication chain",
+      "result": "PASS"
+    }
+  ],
+  "merge_occurrence_determination": "GitHub reports historical merge occurrence at second resolution; raw commit creation time is retained separately. Required firsthand human corroboration is missing, so no completed payload merge_occurred_at_utc is assigned.",
+  "merge_verified_at_utc": "2026-09-29T05:09:53.555855Z",
+  "next_required_source": "Current direct authenticated Owner/merger firsthand statement identifying who performed or directed the historical merge of PR300 at the exact reviewed HEAD/merge above, basis of firsthand knowledge, and corroboration of GitHub merge occurrence 2026-09-27T01:17:47Z at second resolution. If unavailable or contradicted, disclose rather than guess. This statement does not claim original review acceptance.",
+  "original_merge_parents": [
+    "ba717f6990d775748f46d62ef03a696f1618077b",
+    "ed7f75551a118a96fc26e805057c1a875345c55a"
+  ],
+  "pr299_publication_acceptance_source": "d0b43110-c93c-408a-9e16-ffd47db5ad78",
+  "pr301_contract_preserved_at_reader": true,
+  "preliminary_reviewed_at_utc": "2026-09-29T05:09:53.558835Z",
+  "preserved_r34_checks": [
+    {
+      "commit": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "transport_sha256": "299296d106d6d661ac2fd55b1442b9980485d7f2bdf64b228fbfebbbb73dcf31",
+      "unchanged": true
+    },
+    {
+      "commit": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "transport_sha256": "299296d106d6d661ac2fd55b1442b9980485d7f2bdf64b228fbfebbbb73dcf31",
+      "unchanged": true
+    },
+    {
+      "commit": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "transport_sha256": "299296d106d6d661ac2fd55b1442b9980485d7f2bdf64b228fbfebbbb73dcf31",
+      "unchanged": true
+    },
+    {
+      "commit": "0bc880036ec4d914bb85882f1729afef136c4397",
+      "transport_sha256": "299296d106d6d661ac2fd55b1442b9980485d7f2bdf64b228fbfebbbb73dcf31",
+      "unchanged": true
+    }
+  ],
+  "proposed_record_id": "Not assigned; no payload frozen",
+  "raw_commit_created_at_utc": "2026-09-27T01:17:47Z",
+  "raw_commit_sha256": "343ceef9bfcab73308627b0d9036c938f6616dcf5445bd006207ea025896161e",
+  "recorded_at_utc": "2026-09-29T05:09:53.558835Z",
+  "repository": "bader5657/AIOS",
+  "review_verdict": "CHANGES_REQUIRED",
+  "reviewer_acceptance_next": false,
+  "role_context": {
+    "combined_roles": [
+      "reviewer",
+      "approver",
+      "custodian",
+      "verifier",
+      "commissioner",
+      "operator"
+    ],
+    "disclosure": "One authenticated Project Owner, Telegram numeric ID 961959058, username Bagusder21, combines all listed roles within development/bootstrap governance only. No independent-human acceptance or second human claimed. AI assistance and preliminary checks are advisory only; authorization to review is not personal human adoption of future findings.",
+    "mode": "solo-project-owner-bootstrap"
+  },
+  "source_id": "0a31e6f0-a378-4f4b-90cd-f2f87a66ae27",
+  "subject": {
+    "merge_sha": "8e9a8023742773b055e17dba002b2ebf07528118",
+    "pr_number": 300,
+    "reviewed_head_sha": "ed7f75551a118a96fc26e805057c1a875345c55a"
+  },
+  "timestamp_meaning": "Current prerequisite inspection and recording only; substantive review and retrospective payload not completed. No historical review time invented.",
+  "working_receipt_path": "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/0a31e6f0-a378-4f4b-90cd-f2f87a66ae27.txt"
+}
