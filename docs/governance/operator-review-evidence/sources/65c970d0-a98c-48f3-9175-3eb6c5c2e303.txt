@@ -1,0 +1,172 @@
+{
+  "artifact_checks": [
+    {
+      "byte_length": 9544,
+      "merged_sha256": "9592821f434c9147efa5ef5c69411bec4ab868fbde9cf8fc928bcac78334eaa2",
+      "path": "docs/intelligence/stage-0.33c-p4s7-recovery-binding-supersession/00_FIRST_RECOVERY_EVIDENCE_BINDING_AUTHORITY.md",
+      "reviewed_sha256": "9592821f434c9147efa5ef5c69411bec4ab868fbde9cf8fc928bcac78334eaa2"
+    }
+  ],
+  "blocking_findings": [
+    {
+      "finding": "No direct authenticated firsthand Owner/merger corroboration found for exact PR303 historical merge and occurrence time. GitHub/API/Git metadata alone is insufficient.",
+      "required_resolution": "Current firsthand confirmation of personally performing or directing PR303 merge for exact reviewed HEAD and merge, corroborating historical occurrence 2026-09-27T03:01:01Z; not backdated.",
+      "severity": "High"
+    }
+  ],
+  "canonical_payload_sha256": null,
+  "classification": "retrospective-revalidation",
+  "dependency_review_gitrefs": [
+    {
+      "commit": "0bc880036ec4d914bb85882f1729afef136c4397",
+      "path": "docs/governance/operator-review-evidence/reviews/6dc33ea0-8eca-476a-9513-b49d6415461e.json",
+      "pr": 299,
+      "subject": {
+        "merge_sha": "ba717f6990d775748f46d62ef03a696f1618077b",
+        "pr_number": 299,
+        "reviewed_head_sha": "fd36b9abe6920ea807a070ea63589622e1d2e2cb"
+      },
+      "transport_sha256": "731769ce74976f867e802fb1985d8ebcc2af7084131b0f5762520915332f757e"
+    },
+    {
+      "commit": "8c6fad7dfac5ebd609ad85a71f0147f2272fd2ed",
+      "path": "docs/governance/operator-review-evidence/reviews/e12e6aae-657b-4fde-b8e7-8ec5611fcf6c.json",
+      "pr": 300,
+      "subject": {
+        "merge_sha": "8e9a8023742773b055e17dba002b2ebf07528118",
+        "pr_number": 300,
+        "reviewed_head_sha": "ed7f75551a118a96fc26e805057c1a875345c55a"
+      },
+      "transport_sha256": "5cbb1e3c3bdc1feb0ef1a889f85573283ec2bf020bd21229dfa8ac6b3e7684ca"
+    },
+    {
+      "commit": "ff6ef91748c469ab4fe62b05d79780317b30e52f",
+      "path": "docs/governance/operator-review-evidence/reviews/769a75ca-fe08-4670-97ca-adc6f39fd383.json",
+      "pr": 301,
+      "subject": {
+        "merge_sha": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+        "pr_number": 301,
+        "reviewed_head_sha": "fea48d292ad81182ae6f5327ce01f4e0ee6c6e88"
+      },
+      "transport_sha256": "1fb0f5cabfbb7f4a47a19ede1e2f57df03616c09c74ebad4330ccf519d8512bd"
+    },
+    {
+      "commit": "b07306517070ba18c32cc604ad2515f6704f80f3",
+      "path": "docs/governance/operator-review-evidence/reviews/084bebe9-ee55-4314-99b8-357f418db9e8.json",
+      "pr": 302,
+      "subject": {
+        "merge_sha": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+        "pr_number": 302,
+        "reviewed_head_sha": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368"
+      },
+      "transport_sha256": "9d35598df9c6b3170cb4203b3595a1bb4919cd5e1d41c3605f4f61dde3113d86"
+    }
+  ],
+  "excluded_actions_performed": false,
+  "findings": "Fresh retrospective re-validation; not the original pre-merge review; original acceptance record unavailable. Listed technical prerequisite checks pass. STOP before substantive retrospective review and payload freeze because human-merge evidence is missing.",
+  "frozen_binding_identities": {
+    "approval_id": "3a478d87-5c4f-4778-9f88-2228f4d7167f",
+    "authority_id": "7bc638e2-e1f4-4e87-a54a-4d0df031b130",
+    "executor_sha256": "7b38ce601cbeb930a4277af8f4dfe66bbf4b7b9df9ad94059e504082f58a8beb",
+    "package_payload_sha256": "be7a1750eb77ae77e8f020fc3f29c5f047cf88d1720a387f50f58f58c877962e",
+    "policy_sha256": "39b0768d989c89fa64c6593834220f9846c6013e7e10c03ec5eec34cd78098c0",
+    "r34_predecessor_sha256": "299296d106d6d661ac2fd55b1442b9980485d7f2bdf64b228fbfebbbb73dcf31",
+    "reader_reviewed_head": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+    "runtime_head": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2"
+  },
+  "git_controls": "Replacement disabled, fresh PATH environment, graft overlay disabled, raw object SHA1 validation and raw-parent traversal.",
+  "instruction_summary_not_verbatim": "Current Owner authorizes bounded PR303-only retrospective revalidation; requires STOP for missing firsthand merge evidence, no fabricated acceptance, and payload-only preparation if CLEAN.",
+  "kind": "PR303 prerequisite verification and missing human-merge evidence STOP",
+  "limits": "No PR304 changes, publication, bootstrap admission, selector, recovery activation, install, authority consumption, runtime/service/database changes, Step4 closure or Step5. No live freshness/custody/UNUSED assertion.",
+  "lineage_checks": [
+    {
+      "ancestor": "ba717f6990d775748f46d62ef03a696f1618077b",
+      "descendant": "dfdf98fbee0405b188530e9f374515ebc72ce1b2",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "8e9a8023742773b055e17dba002b2ebf07528118",
+      "descendant": "dfdf98fbee0405b188530e9f374515ebc72ce1b2",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "7f124e307d9a516b4ce278d800c92d29d476cf5e",
+      "descendant": "f379a15eb5f64b5b5a6ffd7cb7ca0d27c847e368",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+      "descendant": "dfdf98fbee0405b188530e9f374515ebc72ce1b2",
+      "result": "PASS"
+    },
+    {
+      "ancestor": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+      "descendant": "b07306517070ba18c32cc604ad2515f6704f80f3",
+      "result": "PASS"
+    }
+  ],
+  "merge_verified_at_utc": "2026-09-29T09:01:16.321036Z",
+  "null_field_meaning": "STOP source receipt only, not a completed closed-schema review payload; unavailable completion fields are not fabricated.",
+  "original_parents": [
+    "b5fa2acaa66db799ebd8ec03d2a06a04e34753a2",
+    "dfdf98fbee0405b188530e9f374515ebc72ce1b2"
+  ],
+  "payload_frozen": false,
+  "pr302_publication_determination_source": {
+    "path": "docs/governance/operator-review-evidence/sources/644a7235-ca0c-4766-941d-3ca3c7c80954.txt",
+    "transport_sha256": "7be6968060591136d907a8fbba7515d5bb3b872fd3576849040a44912132aeab"
+  },
+  "preliminary_chain_role": "One prospective first-record population only; binds exact PR302 reader/runtime/executor/policy and R32/R34 identities, preserves R34 predecessor and operational baseline pending separate evidence supersession and selector publication. No selector, activation or installation authorization follows. Commissioned legacy substitution is prospective only.",
+  "proposed_record_id": null,
+  "raw_commit_time_utc": "2026-09-27T03:01:00Z",
+  "receipt_paths": [
+    "/home/aiosadmin/aios-genesis-commissioning/docs/governance/operator-review-evidence/sources/65c970d0-a98c-48f3-9175-3eb6c5c2e303.txt",
+    "/home/aiosadmin/aios-approval-source-archive/65c970d0-a98c-48f3-9175-3eb6c5c2e303.txt"
+  ],
+  "record_created_at_utc": null,
+  "recorded_at_utc": "2026-09-29T09:01:16.321036Z",
+  "register_state": {
+    "commit": "7e9b5a7bdaa5705297bbb56306c61ce397f825ca",
+    "path": "docs/governance/operator-review-evidence/decisions/7a3d51ee-1bb9-43c4-9896-f5eab11d305a.json",
+    "sequence": 2,
+    "transport_sha256": "912d9283e92aea725a0c6f73e5b91cc66fc00710a0bfc4a1d2c4525ae41d4b3b"
+  },
+  "remote_metadata": {
+    "files": [
+      {
+        "additions": 155,
+        "changeType": "ADDED",
+        "deletions": 0,
+        "path": "docs/intelligence/stage-0.33c-p4s7-recovery-binding-supersession/00_FIRST_RECOVERY_EVIDENCE_BINDING_AUTHORITY.md"
+      }
+    ],
+    "headRefOid": "dfdf98fbee0405b188530e9f374515ebc72ce1b2",
+    "mergeCommit": {
+      "oid": "5e296cd907c2e9f0c016097cb3c97e646893031f"
+    },
+    "mergedAt": "2026-09-27T03:01:01Z",
+    "mergedBy": {
+      "id": "U_kgDOEkW3BA",
+      "is_bot": false,
+      "login": "bader5657",
+      "name": ""
+    },
+    "state": "MERGED",
+    "url": "https://github.com/bader5657/AIOS/pull/303"
+  },
+  "repository_merge_event_time_utc": "2026-09-27T03:01:01Z",
+  "retention": "Exclusive 0600 source and exact separate archive in protected 0700 directories; common Owner custody, retain indefinitely; no historical rewrite.",
+  "review_verdict": "CHANGES_REQUIRED",
+  "reviewed_at_utc": null,
+  "reviewer_acceptance_next": false,
+  "role_context": "solo-project-owner-bootstrap; Project Owner Telegram 961959058 / Bagusder21 combines reviewer, approver, custodian, verifier, commissioner and operator roles in bounded governance. AI advisory only; no independent-human acceptance or independent custody claimed.",
+  "source_id": "65c970d0-a98c-48f3-9175-3eb6c5c2e303",
+  "source_search": "Working receipts and separate archive searched for PR303 and exact HEAD/merge. Relevant matches are authorization to review, repository facts, earlier compatibility findings and exclusions; none supplies firsthand PR303 human merge corroboration.",
+  "subject": {
+    "merge_sha": "5e296cd907c2e9f0c016097cb3c97e646893031f",
+    "pr_number": 303,
+    "reviewed_head_sha": "dfdf98fbee0405b188530e9f374515ebc72ce1b2"
+  },
+  "substantive_review_completed": false,
+  "timestamp_explanation": "GitHub merge event is 2026-09-27T03:01:01Z; raw commit creation is 2026-09-27T03:01:00Z. These distinct events differ by one second; commit creation is not substituted for merge occurrence. Current firsthand human corroboration of merge occurrence remains required."
+}
