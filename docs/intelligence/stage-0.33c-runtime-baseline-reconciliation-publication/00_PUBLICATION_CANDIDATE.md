@@ -45,7 +45,7 @@ Proposed human custodian: Project Owner — Bagusder21, established Telegram num
 
 ## Publication and subsequent gates
 
-The Project Owner explicitly approved this lossless transport/layout adaptation and governance-only PR creation in the current conversation. Approval preserves every reviewed semantic identity and does not authorize tests, runtime changes, execution authority, or automatic merge. The original candidate-preparation source receipts remain unchanged. See `05_RECONSTRUCTION.md`, `06_TRANSPORT_VALIDATION.json`, and the separate `07_TRANSPORT_BINDING.json`.
+The Project Owner explicitly approved this lossless transport/layout adaptation and governance-only PR creation in the current conversation. Approval preserves every reviewed semantic identity and does not authorize tests, runtime changes, execution authority, or automatic merge. The original candidate-preparation source receipts remain unchanged. The exact transport-approval statement is retained in `docs/governance/operator-review-evidence/sources/cb9da724-a922-48b3-baa3-837237519044.txt` (receipt SHA-256 `b8fa4d024ef83915215f81f857a5dc8a5541b952ad5a460fd1a30b378d08658e`). This receipt was recorded prospectively at `2026-10-01T17:34:51.342780Z` from the earlier conversation statement; it was not present at initial PR creation. A byte-identical private archive copy is retained. This evidence correction grants no additional authority. See `05_RECONSTRUCTION.md`, `06_TRANSPORT_VALIDATION.json`, and the separate `07_TRANSPORT_BINDING.json`.
 
 After the governance-only PR is opened, exact-HEAD publication review is next. Do not merge automatically. Separate Owner publication authorization and post-merge verification/adoption remain required.
 
