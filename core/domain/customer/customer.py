@@ -64,6 +64,43 @@ class Customer(AggregateRoot[CustomerId]):
         self._notes = notes
         self.record_event(event)
 
+    @classmethod
+    def reconstitute(
+        cls,
+        customer_id: CustomerId,
+        name: CustomerName,
+        address: CustomerAddress,
+        city: CustomerCity,
+        notes: str | None = None,
+        *,
+        event_id_source: Callable[[], object],
+        occurred_at_source: Callable[[], datetime],
+    ) -> "Customer":
+        """Load validated state without recording a creation event.
+
+        Sources are required for subsequent mutations, but are not invoked
+        during loading. Values are retained verbatim; no persistence occurs.
+        """
+        cls._require_exact(customer_id, CustomerId, "id")
+        cls._require_exact(name, CustomerName, "name")
+        cls._require_exact(address, CustomerAddress, "address")
+        cls._require_exact(city, CustomerCity, "city")
+        # Match the effective creation contract, including CustomerCreated.
+        if notes is not None and type(notes) is not str:
+            raise DomainValidationError("notes must be a str or None")
+        cls._require_callable(event_id_source, "event_id_source")
+        cls._require_callable(occurred_at_source, "occurred_at_source")
+        customer = cls.__new__(cls)
+        AggregateRoot.__init__(customer, customer_id)
+        customer._name = name
+        customer._address = address
+        customer._city = city
+        customer._notes = notes
+        customer._event_factory = CustomerEventFactory()
+        customer._event_id_source = event_id_source
+        customer._occurred_at_source = occurred_at_source
+        return customer
+
     @property
     def name(self) -> CustomerName:
         return self._name

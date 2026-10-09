@@ -405,6 +405,7 @@ class CustomerTests(unittest.TestCase):
                 "change_address",
                 "change_city",
                 "change_notes",
+                "reconstitute",
             },
         )
         import core.domain.customer as package
@@ -458,6 +459,129 @@ class CustomerTests(unittest.TestCase):
                 "find",
             }.isdisjoint(vars(Customer))
         )
+
+
+    def reconstitute(self, **overrides) -> Customer:
+        values = dict(
+            customer_id=self.identity, name=self.name, address=self.address,
+            city=self.city, notes=None, event_id_source=self.event_id_source,
+            occurred_at_source=self.occurred_at_source,
+        )
+        values.update(overrides)
+        return Customer.reconstitute(**values)
+
+    def test_reconstitution_preserves_state_without_creation_or_source_calls(self):
+        def forbidden():
+            self.fail("metadata source called during reconstitution")
+
+        with patch.object(
+            CustomerEventFactory, "create_customer_created",
+            side_effect=AssertionError("creation event must not be constructed"),
+        ):
+            customer = self.reconstitute(
+                notes="  original\nnotes  ",
+                event_id_source=forbidden, occurred_at_source=forbidden,
+            )
+        self.assertIs(type(customer), Customer)
+        self.assertIs(customer.id, self.identity)
+        self.assertIs(customer.name, self.name)
+        self.assertIs(customer.address, self.address)
+        self.assertIs(customer.city, self.city)
+        self.assertEqual(customer.notes, "  original\nnotes  ")
+        self.assertEqual(customer.pending_events(), ())
+        self.assertEqual(customer.pull_events(), ())
+        self.assertEqual(self.source_calls, [])
+
+    def test_reconstitution_preserves_notes_verbatim(self):
+        for notes in (None, "", " ", "  one\ntwo  "):
+            with self.subTest(notes=notes):
+                customer = self.reconstitute(notes=notes)
+                self.assertEqual(customer.notes, notes)
+                self.assertEqual(customer.pending_events(), ())
+        self.assertEqual(self.source_calls, [])
+
+    def test_reconstitution_rejects_invalid_types_without_source_calls(self):
+        class DerivedName(CustomerName):
+            pass
+
+        class DerivedNotes(str):
+            pass
+
+        for field, value in (
+            ("customer_id", None), ("customer_id", "customer-001"),
+            ("name", None), ("name", "Customer One"),
+            ("name", DerivedName("Customer One")),
+            ("address", None), ("address", "First Address"),
+            ("city", None), ("city", "Mojokerto"),
+            ("notes", 1), ("notes", []), ("notes", DerivedNotes("notes")),
+            ("event_id_source", None), ("occurred_at_source", object()),
+        ):
+            with self.subTest(field=field, value=value):
+                with self.assertRaises(DomainValidationError):
+                    self.reconstitute(**{field: value})
+        self.assertEqual(self.source_calls, [])
+
+    def test_reconstitution_requires_metadata_sources_but_does_not_consume_them(self):
+        for sources in (
+            {}, {"event_id_source": self.event_id_source},
+            {"occurred_at_source": self.occurred_at_source},
+        ):
+            with self.subTest(sources=sources), self.assertRaises(TypeError):
+                Customer.reconstitute(
+                    self.identity, self.name, self.address, self.city, **sources
+                )
+        self.assertEqual(self.source_calls, [])
+
+    def test_reconstituted_customer_mutations_record_only_change_events(self):
+        customer = self.reconstitute(notes="original")
+        customer.change_name(CustomerName("Changed Name"))
+        customer.change_address(CustomerAddress("Changed Address"))
+        customer.change_city(CustomerCity("Surabaya"))
+        customer.change_notes("changed")
+        events = customer.pending_events()
+        self.assertEqual(
+            tuple(type(event) for event in events),
+            (CustomerNameChanged, CustomerAddressChanged,
+             CustomerCityChanged, CustomerNotesChanged),
+        )
+        self.assertEqual(events[0].previous_name, self.name)
+        self.assertEqual(events[1].previous_address, self.address)
+        self.assertEqual(events[2].previous_city, self.city)
+        self.assertEqual(events[3].previous_notes, "original")
+        self.assertEqual([event.id for event in events],
+                         ["event-1", "event-2", "event-3", "event-4"])
+        self.assertEqual(self.source_calls, ["id", "occurred_at"] * 4)
+
+    def test_reconstituted_noops_invalid_updates_and_source_failure_are_atomic(self):
+        customer = self.reconstitute()
+        customer.change_name(self.name)
+        customer.change_address(self.address)
+        customer.change_city(self.city)
+        customer.change_notes(None)
+        with self.assertRaises(DomainValidationError):
+            customer.change_name("invalid")
+        self.assertEqual(self.source_calls, [])
+        self.assertEqual(customer.pending_events(), ())
+
+        def fail():
+            raise RuntimeError("source unavailable")
+
+        customer = self.reconstitute(event_id_source=fail)
+        with self.assertRaises(RuntimeError):
+            customer.change_name(CustomerName("Changed Name"))
+        self.assertIs(customer.name, self.name)
+        self.assertEqual(customer.pending_events(), ())
+
+    def test_reconstituted_instances_have_independent_events_and_identity_semantics(self):
+        first = self.reconstitute()
+        second = self.reconstitute()
+        self.assertIsNot(first, second)
+        self.assertEqual(first, second)
+        self.assertEqual(hash(first), hash(second))
+        first.change_notes("changed")
+        self.assertEqual(len(first.pending_events()), 1)
+        self.assertEqual(second.pending_events(), ())
+        self.assertIsNone(second.notes)
 
 
 if __name__ == "__main__":
