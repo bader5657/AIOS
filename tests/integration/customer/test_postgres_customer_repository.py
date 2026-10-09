@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Barrier
+from unittest.mock import patch
 
 import psycopg
 from psycopg import conninfo
@@ -45,9 +46,55 @@ def disposable_parameters():
         or values.get("sslmode") not in (None, "disable")
     ):
         raise RuntimeError("target is not an admitted disposable PostgreSQL database")
+    # Explicit hostaddr overrides PGHOSTADDR and service-file address defaults.
+    values["hostaddr"] = "127.0.0.1"
     values["sslmode"] = "disable"
     values["connect_timeout"] = 5
     return values
+
+
+class DisposableTargetAdmissionTests(unittest.TestCase):
+    def environment(self, **changes):
+        parameters = dict(
+            host="127.0.0.1", port="55439",
+            dbname="aios_customer_disposable_guard", user="postgres",
+            password="test-only-password", sslmode="disable",
+        )
+        parameters.update(changes)
+        return {
+            "AIOS_CUSTOMER_DISPOSABLE_TESTS": "1",
+            "AIOS_CUSTOMER_TEST_DATABASE_URL": conninfo.make_conninfo(**parameters),
+        }
+
+    def test_environment_cannot_override_explicit_loopback_address(self):
+        environment = self.environment()
+        environment.update(PGHOSTADDR="203.0.113.10", PGSERVICE="untrusted")
+        with patch.dict(os.environ, environment, clear=True):
+            parameters = disposable_parameters()
+        self.assertEqual(parameters["host"], "127.0.0.1")
+        self.assertEqual(parameters["hostaddr"], "127.0.0.1")
+        self.assertEqual(parameters["dbname"], "aios_customer_disposable_guard")
+        self.assertEqual(parameters["user"], "postgres")
+
+    def test_unsafe_targets_are_rejected_before_connecting(self):
+        for changes in (
+            {"host": "example.com"}, {"port": "5432"},
+            {"dbname": "aios"}, {"user": "aios"},
+            {"hostaddr": "203.0.113.10"}, {"service": "production"},
+            {"password": ""}, {"sslmode": "require"},
+        ):
+            with self.subTest(changes=changes):
+                with patch.dict(os.environ, self.environment(**changes), clear=True):
+                    with self.assertRaises(RuntimeError):
+                        disposable_parameters()
+
+    def test_missing_opt_in_skips_and_missing_url_with_opt_in_fails(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(unittest.SkipTest):
+                disposable_parameters()
+        with patch.dict(os.environ, {"AIOS_CUSTOMER_DISPOSABLE_TESTS": "1"}, clear=True):
+            with self.assertRaises(RuntimeError):
+                disposable_parameters()
 
 
 class PostgresCustomerIntegrationTests(unittest.TestCase):
