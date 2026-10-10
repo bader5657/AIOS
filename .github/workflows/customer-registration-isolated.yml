@@ -1,0 +1,43 @@
+name: Customer registration isolated verification
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'core/app/customer*.py'
+      - 'core/domain/**'
+      - 'core/adapters/postgres_customer*.py'
+      - 'core/adapters/telegram/**'
+      - 'migrations/postgres/0006*'
+      - 'migrations/postgres/0007*'
+      - 'tests/**'
+      - 'scripts/bootstrap_business_owner.py'
+      - 'scripts/verify_customer_registration_disposable.sh'
+      - 'requirements.txt'
+      - '.github/workflows/customer-registration-isolated.yml'
+permissions: {}
+concurrency:
+  group: customer-registration-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      TARGET_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Verify exact PR head using disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "TARGET_SHA=$TARGET_SHA"
+          echo "RUN_ID=$GITHUB_RUN_ID ATTEMPT=$GITHUB_RUN_ATTEMPT"
+          git --version
+          python3 --version
+          docker version
+          git init -q source
+          git -C source fetch --quiet https://github.com/bader5657/AIOS.git "$TARGET_SHA"
+          git -C source checkout --detach "$TARGET_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$TARGET_SHA"
+          bash source/scripts/verify_customer_registration_disposable.sh "$TARGET_SHA"
