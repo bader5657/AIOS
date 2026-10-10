@@ -13,6 +13,7 @@ from telegram.ext import (
 from core.ingestion.universal_ingestion import ingest_telegram_message
 from core.mission.status import mission_status
 from core.adapters.telegram.auth_evidence import CAPTURE_DISPATCHER
+from core.adapters.telegram.customer_registration import configured_registration, handle_customer_registration
 
 load_dotenv("/opt/aios/runtime/config/runtime.env")
 
@@ -31,6 +32,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if getattr(update, "edited_message", None) is not None:
+        registration = getattr(context, "bot_data", {}).get("customer_registration")
+        await handle_customer_registration(update, registration)
+        return
     if (
         update.message is None
         or update.effective_user is None
@@ -41,6 +46,10 @@ async def handle_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Only the immutable allowlisted snapshot is prepared here. Disk work has a
     # single nonblocking admission slot and never delays unrelated ingestion.
     CAPTURE_DISPATCHER.submit(update)
+
+    registration = getattr(context, "bot_data", {}).get("customer_registration")
+    if await handle_customer_registration(update, registration):
+        return
 
     text = (update.message.text or "").strip().lower()
 
@@ -88,6 +97,9 @@ def main():
 
     app = Application.builder().token(TOKEN).build()
 
+    app.bot_data["customer_registration"] = configured_registration()
+    # All edits, including slash-command edits, invalidate before command routing.
+    app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_update))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(~filters.COMMAND, handle_update))
 
