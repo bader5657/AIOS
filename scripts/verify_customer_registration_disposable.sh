@@ -29,6 +29,7 @@ done < <(git diff --name-only "$BASE" HEAD)
 python3 -m venv "$WORK/venv"
 PY="$WORK/venv/bin/python"
 "$PY" -m pip install -r requirements.txt
+"$PY" -m pip install pytest==8.3.5
 DB="aios_customer_disposable_p1_$(date +%s)"
 PASSWORD="$("$PY" -c 'import secrets; print(secrets.token_hex(24))')"
 CID="$(docker run -d --rm -p 127.0.0.1::5432 -e POSTGRES_DB="$DB" -e POSTGRES_PASSWORD="$PASSWORD" postgres:16-alpine)"
@@ -54,13 +55,27 @@ if count == 0:
     raise SystemExit(2)
 result = unittest.TextTestRunner(verbosity=2).run(suite)
 code = 0 if result.wasSuccessful() and not result.skipped else 1
-print(f"{label}_EXIT_CODE={code} SKIPPED={len(result.skipped)}", flush=True)
+print(f"{label}_EXIT_CODE={code} PASS={result.testsRun - len(result.failures) - len(result.errors) - len(result.skipped)} FAIL={len(result.failures)} ERROR={len(result.errors)} SKIPPED={len(result.skipped)}", flush=True)
 raise SystemExit(code)
 PY
 }
 run_suite DOMAIN tests/unit/domain 'test_*.py'
 run_suite APP tests/unit/app 'test_customer*.py'
 run_suite ADAPTER tests/unit/adapters 'test_*customer*.py'
-run_suite TELEGRAM_REGRESSION tests/unit/core_platform 'test_telegram*.py'
+run_suite TELEGRAM_BOUNDARY tests/unit/core_platform 'test_telegram_input_boundary.py'
+"$PY" - "$WORK/pytest" <<'PY'
+import sys, pytest
+class Evidence:
+    def pytest_sessionfinish(self, session, exitstatus):
+        reporter = session.config.pluginmanager.getplugin("terminalreporter")
+        counts = {key: len(reporter.stats.get(key, [])) for key in ("passed", "failed", "error", "skipped")}
+        print("TELEGRAM_AUTH_COUNTS=" + repr(counts), flush=True)
+        if counts["skipped"]:
+            session.exitstatus = 1
+code = pytest.main(["-q", "tests/unit/core_platform/test_telegram_auth_evidence.py",
+                    "--basetemp", sys.argv[1]], plugins=[Evidence()])
+print(f"TELEGRAM_AUTH_EXIT_CODE={int(code)}", flush=True)
+raise SystemExit(code)
+PY
 run_suite INTEGRATION tests/integration/customer 'test_*.py'
 git diff --exit-code
