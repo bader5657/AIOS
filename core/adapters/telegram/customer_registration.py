@@ -14,9 +14,9 @@ def configured_registration():
 async def handle_customer_registration(update, registration):
     edited = getattr(update, "edited_message", None)
     message = update.message or edited
-    if message is None or type(message.text) is not str:
+    if message is None or (edited is None and type(message.text) is not str):
         return False
-    command = message.text.partition(" ")[0]
+    command = (message.text or "").partition(" ")[0]
     if edited is None and command not in ("catat_pelanggan", "konfirmasi_pelanggan"):
         return False
     # Business messages never fall through to the generic ingestion/storage path.

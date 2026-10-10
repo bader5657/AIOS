@@ -192,6 +192,20 @@ class CustomerRegistrationTests(unittest.TestCase):
         self.assertIn("tidak valid", self.send(text="catat_pelanggan " + json.dumps(payload)))
         self.assertFalse(self.tx.rows)
 
+    def test_database_incompatible_unicode_and_deep_json_cancel_old_draft(self):
+        import json
+        for payload in (
+            json.dumps(dict(name="Ani", address="Jalan 1", city="Solo", notes="\u0000")),
+            json.dumps(dict(name="Ani", address="Jalan 1", city="Solo", notes="\ud800")),
+            "[" * 1100 + "0" + "]" * 1100,
+        ):
+            with self.subTest(payload=payload[:80]):
+                self.setUp()
+                token = self.prepare()
+                self.assertIn("tidak valid", self.send(2, "catat_pelanggan " + payload))
+                self.assertIn("berlaku", self.confirm(token, 3))
+                self.assertFalse(self.tx.customers)
+
     def test_token_syntax_and_message_id_fail_closed(self):
         for value in (True, 0, -1, "1"):
             self.assertIn("ditolak", self.send(value))

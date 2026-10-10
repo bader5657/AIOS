@@ -63,3 +63,25 @@ class TelegramCustomerRegistrationTests(unittest.IsolatedAsyncioTestCase):
     def test_configuration_defaults_disabled(self):
         with patch.dict("os.environ", {}, clear=True):
             self.assertIsNone(configured_registration())
+
+class TelegramHandlerSelectionTests(unittest.TestCase):
+    def test_command_edits_select_invalidation_before_start_or_generic_handler(self):
+        from datetime import datetime, timezone
+        from telegram import Chat, Message, MessageEntity, Update, User
+        from telegram.ext import Application
+        from core.adapters.telegram import main
+        app = Application.builder().token("123456:TEST_ONLY_TOKEN").build()
+        builder = Mock()
+        builder.token.return_value.build.return_value = app
+        with patch.object(main, "TOKEN", "123456:TEST_ONLY_TOKEN"), \
+             patch.object(main.Application, "builder", return_value=builder), \
+             patch.object(main, "configured_registration", return_value=None), \
+             patch.object(Application, "run_polling"):
+            main.main()
+        for text in ("/start", "/unknown", "ordinary edit"):
+            entities = [MessageEntity("bot_command", 0, len(text))] if text.startswith("/") else []
+            message = Message(10, datetime.now(timezone.utc), Chat(42, "private"),
+                              from_user=User(42, "Owner", False), text=text, entities=entities)
+            event = Update(2, edited_message=message)
+            first = next(handler for handler in app.handlers[0] if handler.check_update(event))
+            self.assertIs(first.callback, main.handle_update)

@@ -98,6 +98,8 @@ def main():
     app = Application.builder().token(TOKEN).build()
 
     app.bot_data["customer_registration"] = configured_registration()
+    # All edits, including slash-command edits, invalidate before command routing.
+    app.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, handle_update))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(~filters.COMMAND, handle_update))
 

@@ -37,7 +37,13 @@ def _snapshot(payload):
     data = json.loads(payload, object_pairs_hook=_object)
     if type(data) is not dict or set(data) - {"name", "address", "city", "notes"}:
         raise ValueError("unexpected fields")
-    return CustomerDraft(**data).snapshot()
+    snapshot = CustomerDraft(**data).snapshot()
+    for value in snapshot.values():
+        if isinstance(value, str):
+            if "\u0000" in value:
+                raise ValueError("NUL is not supported by PostgreSQL text/JSONB")
+            value.encode("utf-8", errors="strict")
+    return snapshot
 
 class CustomerRegistration:
     """One transaction per message; reply only after the context commits."""
@@ -93,7 +99,7 @@ class CustomerRegistration:
             if previous and message_id == last_message_id:
                 try:
                     same_snapshot = previous["snapshot"] == _snapshot(payload)
-                except (ValueError, TypeError, DomainValidationError):
+                except (ValueError, TypeError, RecursionError, DomainValidationError):
                     same_snapshot = False
                 if same_snapshot and previous["state"] == "consumed":
                     return self._receipt(previous["customer_id"])
@@ -108,7 +114,7 @@ class CustomerRegistration:
             snapshot = _snapshot(payload)
             if len(json.dumps(snapshot, ensure_ascii=False)) > 3000:
                 raise ValueError("preview too large")
-        except (ValueError, TypeError, DomainValidationError):
+        except (ValueError, TypeError, RecursionError, DomainValidationError):
             return ('Data tidak valid. Gunakan catat_pelanggan '
                     '{"name":"Ani","address":"Jalan 1","city":"Solo","notes":null}')
         now = tx.clock()

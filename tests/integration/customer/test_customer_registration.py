@@ -170,6 +170,14 @@ class CustomerRegistrationIntegrationTests(unittest.TestCase):
                     connection.execute(statement)
         self.assertEqual(self.counts(), (1,1))
 
+    def test_postgresql_invalid_unicode_replacement_commits_invalidation(self):
+        import json
+        token = self.prepare()
+        payload = json.dumps(dict(name="Ani", address="Jalan 1", city="Solo", notes="\u0000"))
+        self.assertIn("tidak valid", self.send(2, "catat_pelanggan " + payload))
+        self.assertIn("berlaku", self.confirm(token, 3))
+        self.assertEqual(self.counts(), (0,0))
+
     def test_existing_customer_identity_is_never_overwritten(self):
         token = self.prepare()
         with self.admin() as connection:
