@@ -14,7 +14,7 @@ import time
 logging.disable(logging.CRITICAL)
 BASELINE = "1cdd11c229a2409c72a0d68b4bc94d536b0eebaf"
 EXPECTED_BOT = "AIOSTesting_bot"
-CHALLENGE_SHA256 = "2758472cbadd5925642a00c0640e16a2a352ed5f3b842bb85c385f8cedc26c28"
+CHALLENGE_SHA256 = "5ba015f4fe1568b2ed039ca4d387b77d455171662f72bde7f3862223474c1f67"
 FIXTURE = 'catat_pelanggan {"name":"AIOS E2E Synthetic","address":"Disposable test address","city":"Test City","notes":"nonproduction-e2e"}'
 evidence = dict(baseline=BASELINE, E2E_STATUS="RUNNING", TELEGRAM_CONNECTION="NOT_RUN",
                 OWNER_ENROLLMENT="NOT_RUN", CUSTOMER_PERSISTENCE="NOT_RUN",
@@ -200,6 +200,12 @@ async def main():
                         report("E2E_STATUS", "PASS")
                         await bot.send_message(owner, "E2E Telegram → PostgreSQL PASS: satu pelanggan sintetis, satu audit, retry tanpa duplikasi. Database dan enrollment uji akan dibuang.")
                         return
+                    else:
+                        # Only a challenge-verified private sender receives guidance.
+                        # Do not silently discard mistyped or partial commands.
+                        report("OWNER_MESSAGE_NEEDS_CORRECTION", state)
+                        instruction = FIXTURE if state == "draft" else expected_confirmation
+                        await bot.send_message(owner, "Pesan belum cocok. Salin dan kirim SATU BARIS LENGKAP berikut, termasuk kata perintah di awal:\n" + instruction)
         raise TimeoutError("telegram_interaction_timeout")
 
 if __name__ == "__main__":
