@@ -41,7 +41,7 @@ EVENT_NAMES = {
 }
 
 PAYLOAD_FIELDS = {
-    CustomerCreated: ("customer_id", "name", "address", "city", "notes"),
+    CustomerCreated: ("customer_id", "name", "address", "city", "notes", "phone"),
     CustomerNameChanged: ("customer_id", "previous_name", "new_name"),
     CustomerAddressChanged: (
         "customer_id",
@@ -77,6 +77,7 @@ class CustomerEventTests(unittest.TestCase):
                 "address": self.address,
                 "city": self.city,
                 "notes": "  notes verbatim  ",
+                "phone": "00123",
             },
             CustomerNameChanged: {
                 "previous_name": self.name,
@@ -292,6 +293,7 @@ class CustomerEventTests(unittest.TestCase):
             "address": self.new_address,
             "city": self.new_city,
             "notes": "different",
+            "phone": "00456",
             "previous_name": self.new_name,
             "new_name": self.name,
             "previous_address": self.new_address,
@@ -345,6 +347,7 @@ class CustomerEventTests(unittest.TestCase):
                 {"address": self.new_address},
                 {"city": self.new_city},
                 {"notes": "different"},
+                {"phone": "00456"},
             ),
             CustomerNameChanged: (
                 {"customer_id": CustomerId("customer-002")},
@@ -431,6 +434,7 @@ class CustomerEventTests(unittest.TestCase):
                 "core.domain.customer.customer_city",
                 "core.domain.customer.customer_id",
                 "core.domain.customer.customer_name",
+                "core.domain.customer.customer_phone",
                 "core.domain.domain_event",
                 "core.domain.exceptions",
             },
