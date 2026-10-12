@@ -1,0 +1,56 @@
+name: Telegram form real E2E disposable verification
+on:
+  push:
+    branches: ['feat/customer-telegram-form-v1-20261012']
+    paths: ['.github/workflows/telegram-form-e2e.yml']
+permissions: {}
+concurrency:
+  group: telegram-e2e-nonproduction
+  cancel-in-progress: false
+jobs:
+  telegram-real-e2e:
+    if: github.repository == 'bader5657/AIOS' && github.ref == 'refs/heads/feat/customer-telegram-form-v1-20261012'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      APP_BASELINE_SHA: d945109b59129064d2f7d35db3e3d930c7dc138a
+      RUNNER_SHA: 834ddb390cc3a49d67ff1d19ad52e108170507e1
+    steps:
+      - name: Fetch pinned baseline and E2E runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init -q baseline
+          git -C baseline fetch --quiet https://github.com/bader5657/AIOS.git "$APP_BASELINE_SHA"
+          git -C baseline checkout --detach "$APP_BASELINE_SHA"
+          test "$(git -C baseline rev-parse HEAD)" = "$APP_BASELINE_SHA"
+          git init -q harness
+          git -C harness fetch --quiet https://github.com/bader5657/AIOS.git "$RUNNER_SHA"
+          git -C harness checkout --detach "$RUNNER_SHA"
+          test "$(git -C harness rev-parse HEAD)" = "$RUNNER_SHA"
+          echo "BASELINE=$APP_BASELINE_SHA RUNNER=$RUNNER_SHA"
+          sha256sum harness/scripts/verify_telegram_form_e2e.py
+          python3 -m py_compile harness/scripts/verify_telegram_form_e2e.py
+          python3 -m venv venv
+          venv/bin/python -m pip install -r baseline/requirements.txt
+          docker pull postgres:16-alpine
+      - name: Real nonproduction Telegram enrollment and customer verification
+        env:
+          AIOS_E2E_TELEGRAM_BOT_TOKEN: ${{ secrets.AIOS_E2E_TELEGRAM_BOT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/baseline"
+          export BASELINE_ROOT="$GITHUB_WORKSPACE/baseline"
+          venv/bin/python -u harness/scripts/verify_telegram_form_e2e.py
+      - name: Remove only this run's disposable database
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="aios-telegram-e2e-$GITHUB_RUN_ID"
+          if docker container inspect "$name" >/dev/null 2>&1; then
+            test "$(docker inspect --format '{{ index .Config.Labels "aios.disposable.telegram-e2e" }}' "$name")" = true
+            docker rm -f "$name" >/dev/null
+          fi
+          echo "DISPOSABLE_CLEANUP=COMPLETE"
