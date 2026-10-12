@@ -32,7 +32,7 @@ class CustomerRegistrationIntegrationTests(unittest.TestCase):
         password = uuid4().hex
         with self.admin() as connection:
             # No IF NOT EXISTS / destructive pre-clean: unknown state must fail.
-            for filename in ("0006_create_customers.up.sql", "0007_customer_registration.up.sql"):
+            for filename in ("0006_create_customers.up.sql", "0007_customer_registration.up.sql", "0008_customer_phone.up.sql"):
                 connection.execute((ROOT / "migrations/postgres" / filename).read_text())
             connection.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEROLE NOINHERIT").format(sql.Identifier(self.role), sql.Literal(password)))
             for grant in (
@@ -187,3 +187,61 @@ class CustomerRegistrationIntegrationTests(unittest.TestCase):
         with self.admin() as connection:
             self.assertEqual(connection.execute("SELECT name FROM customers").fetchone()[0], "Original")
         self.assertEqual(self.counts(), (1,0))
+
+    def test_form_phone_roundtrip_audit_and_restart(self):
+        text = "Nama: Pelanggan Fiktif\nAlamat: Jalan Uji 123\nKota: Solo\nNo. Telp: 001234567\nKet:"
+        self.assertIn("Nama:", self.send(1, "catat pelanggan"))
+        self.assertIn("konfirmasi_pelanggan", self.send(2, text))
+        self.assertEqual(self.counts(), (0, 0))
+        with self.admin() as connection:
+            token, snapshot = connection.execute("SELECT token,snapshot FROM customer_confirmations").fetchone()
+            self.assertEqual(snapshot["phone"], "001234567")
+        receipt = self.confirm(token, 3)
+        self.app = CustomerRegistration(PostgresCustomerRegistrationTransactions(self.dsn))
+        self.assertEqual(self.confirm(token, 4), receipt)
+        self.assertEqual(self.counts(), (1, 1))
+        with self.admin() as connection:
+            self.assertEqual(connection.execute("SELECT phone,notes FROM customers").fetchone(), ("001234567", None))
+            self.assertEqual(connection.execute("SELECT state FROM customer_confirmations").fetchone()[0], "consumed")
+        from core.adapters.postgres_customer_repository import PostgresCustomerRepository
+        from core.domain.customer import CustomerId
+        from datetime import datetime, timezone
+        with psycopg.connect(self.dsn) as connection, connection.transaction():
+            repo = PostgresCustomerRepository(connection, event_id_source=lambda: "unused",
+                                               occurred_at_source=lambda: datetime.now(timezone.utc))
+            loaded = repo.get(CustomerId("tg-customer-" + token))
+            self.assertEqual(loaded.phone, "001234567")
+            self.assertEqual(loaded.pending_events(), ())
+
+    def test_form_cancel_and_invalid_replacement_cannot_save(self):
+        text = "Nama: Ani\nAlamat: Jalan Uji 123\nKota: Solo\nNo. Telp: +62 0812\nKet:"
+        for mid, replacement in ((1, "batal pelanggan"), (4, text + "\nNama: Duplicate")):
+            self.send(mid, text)
+            with self.admin() as connection:
+                token = connection.execute("SELECT token FROM customer_confirmations WHERE state='pending'").fetchone()[0]
+            self.send(mid+1, replacement)
+            self.assertNotIn("tersimpan", self.confirm(token, mid+2))
+        self.assertEqual(self.counts(), (0, 0))
+
+    def test_form_phone_audit_failure_rolls_back(self):
+        self.send(1, "Nama: Ani\nAlamat: Jalan Uji 123\nKota: Solo\nNo. Telp: 001234\nKet:")
+        with self.admin() as connection:
+            token = connection.execute("SELECT token FROM customer_confirmations").fetchone()[0]
+        with patch.object(_Transaction, "audit", side_effect=RuntimeError("injected")):
+            with self.assertRaises(RuntimeError):
+                self.confirm(token, 2)
+        self.assertEqual(self.counts(), (0, 0))
+        with self.admin() as connection:
+            self.assertEqual(connection.execute("SELECT state FROM customer_confirmations").fetchone()[0], "pending")
+
+    def test_phone_migration_preserves_legacy_rows_and_old_writer(self):
+        with self.admin() as connection:
+            connection.execute((ROOT / "migrations/postgres/0008_customer_phone.down.sql").read_text())
+            connection.execute("INSERT INTO customers(customer_id,name,address,city,notes) VALUES ('legacy','Ani','Jalan Uji 123','Solo','keep')")
+            before = connection.execute("SELECT customer_id,name,address,city,notes,created_at FROM customers").fetchone()
+            connection.execute((ROOT / "migrations/postgres/0008_customer_phone.up.sql").read_text())
+            after = connection.execute("SELECT customer_id,name,address,city,notes,created_at,phone FROM customers").fetchone()
+            self.assertEqual(after[:-1], before)
+            self.assertIsNone(after[-1])
+            connection.execute("INSERT INTO customers(customer_id,name,address,city) VALUES ('old-writer','Budi','Jalan Uji 456','Solo')")
+            self.assertIsNone(connection.execute("SELECT phone FROM customers WHERE customer_id='old-writer'").fetchone()[0])
