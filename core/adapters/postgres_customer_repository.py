@@ -12,7 +12,7 @@ from core.domain.customer.repository import CustomerRepository
 from core.domain.exceptions import DomainValidationError
 
 
-_COLUMNS = "customer_id, name, address, city, notes"
+_COLUMNS = "customer_id, name, address, city, notes, phone"
 
 
 class PostgresCustomerRepository(CustomerRepository):
@@ -52,7 +52,7 @@ class PostgresCustomerRepository(CustomerRepository):
     def _customer(self, row: tuple) -> Customer:
         return Customer.reconstitute(
             CustomerId(row[0]), CustomerName(row[1]), CustomerAddress(row[2]),
-            CustomerCity(row[3]), row[4],
+            CustomerCity(row[3]), row[4], phone=row[5],
             event_id_source=self._event_id_source,
             occurred_at_source=self._occurred_at_source,
         )
@@ -64,13 +64,13 @@ class PostgresCustomerRepository(CustomerRepository):
         self._require_transaction()
         with self._connection.cursor(row_factory=tuple_row) as cursor:
             cursor.execute(
-                """INSERT INTO customers (customer_id, name, address, city, notes)
-                   VALUES (%s, %s, %s, %s, %s)
+                """INSERT INTO customers (customer_id, name, address, city, notes, phone)
+                   VALUES (%s, %s, %s, %s, %s, %s)
                    ON CONFLICT (customer_id) DO UPDATE SET
                        name = EXCLUDED.name, address = EXCLUDED.address,
-                       city = EXCLUDED.city, notes = EXCLUDED.notes""",
+                       city = EXCLUDED.city, notes = EXCLUDED.notes, phone = EXCLUDED.phone""",
                 (identity, aggregate.name.value, aggregate.address.value,
-                 aggregate.city.value, aggregate.notes),
+                 aggregate.city.value, aggregate.notes, aggregate.phone),
             )
 
     def get(self, entity_id: CustomerId) -> Customer | None:

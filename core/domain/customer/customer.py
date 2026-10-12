@@ -10,6 +10,7 @@ from core.domain.customer.customer_id import CustomerId
 from core.domain.customer.customer_name import CustomerName
 from core.domain.customer.event_factory import CustomerEventFactory
 from core.domain.exceptions import DomainValidationError
+from core.domain.customer.customer_phone import validate_phone
 
 
 class Customer(AggregateRoot[CustomerId]):
@@ -20,6 +21,7 @@ class Customer(AggregateRoot[CustomerId]):
         "_address",
         "_city",
         "_notes",
+        "_phone",
         "_event_factory",
         "_event_id_source",
         "_occurred_at_source",
@@ -33,6 +35,7 @@ class Customer(AggregateRoot[CustomerId]):
         city: CustomerCity,
         notes: str | None = None,
         *,
+        phone: str | None = None,
         event_id_source: Callable[[], object],
         occurred_at_source: Callable[[], datetime],
     ) -> None:
@@ -42,6 +45,7 @@ class Customer(AggregateRoot[CustomerId]):
         self._require_exact(address, CustomerAddress, "address")
         self._require_exact(city, CustomerCity, "city")
         self._require_notes(notes)
+        validate_phone(phone)
         self._require_callable(event_id_source, "event_id_source")
         self._require_callable(occurred_at_source, "occurred_at_source")
         super().__init__(customer_id)
@@ -57,11 +61,13 @@ class Customer(AggregateRoot[CustomerId]):
             address=address,
             city=city,
             notes=notes,
+            phone=phone,
         )
         self._name = name
         self._address = address
         self._city = city
         self._notes = notes
+        self._phone = phone
         self.record_event(event)
 
     @classmethod
@@ -73,6 +79,7 @@ class Customer(AggregateRoot[CustomerId]):
         city: CustomerCity,
         notes: str | None = None,
         *,
+        phone: str | None = None,
         event_id_source: Callable[[], object],
         occurred_at_source: Callable[[], datetime],
     ) -> "Customer":
@@ -88,6 +95,7 @@ class Customer(AggregateRoot[CustomerId]):
         # Match the effective creation contract, including CustomerCreated.
         if notes is not None and type(notes) is not str:
             raise DomainValidationError("notes must be a str or None")
+        validate_phone(phone)
         cls._require_callable(event_id_source, "event_id_source")
         cls._require_callable(occurred_at_source, "occurred_at_source")
         customer = cls.__new__(cls)
@@ -96,6 +104,7 @@ class Customer(AggregateRoot[CustomerId]):
         customer._address = address
         customer._city = city
         customer._notes = notes
+        customer._phone = phone
         customer._event_factory = CustomerEventFactory()
         customer._event_id_source = event_id_source
         customer._occurred_at_source = occurred_at_source
@@ -116,6 +125,10 @@ class Customer(AggregateRoot[CustomerId]):
     @property
     def notes(self) -> str | None:
         return self._notes
+
+    @property
+    def phone(self) -> str | None:
+        return self._phone
 
     def change_name(self, name: CustomerName) -> None:
         self._require_exact(name, CustomerName, "name")

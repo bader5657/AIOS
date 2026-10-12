@@ -10,6 +10,7 @@ on:
       - 'core/adapters/telegram/**'
       - 'migrations/postgres/0006*'
       - 'migrations/postgres/0007*'
+      - 'migrations/postgres/0008*'
       - 'tests/**'
       - 'scripts/bootstrap_business_owner.py'
       - 'scripts/verify_customer_registration_disposable.sh'

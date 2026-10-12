@@ -32,6 +32,7 @@ class CustomerEventFactory:
         address: CustomerAddress,
         city: CustomerCity,
         notes: str | None,
+        phone: str | None = None,
     ) -> CustomerCreated:
         return CustomerCreated(
             id=id,
@@ -42,6 +43,7 @@ class CustomerEventFactory:
             address=address,
             city=city,
             notes=notes,
+            phone=phone,
         )
 
     def create_customer_name_changed(

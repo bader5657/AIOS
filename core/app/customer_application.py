@@ -37,6 +37,7 @@ class CustomerApplication:
             address=CustomerAddress(snapshot["address"]),
             city=CustomerCity(snapshot["city"]),
             notes=snapshot["notes"],
+            phone=snapshot.get("phone"),
             event_id_source=event_id_source,
             occurred_at_source=occurred_at_source,
         )
