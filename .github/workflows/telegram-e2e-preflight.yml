@@ -1,0 +1,42 @@
+name: Telegram E2E nonproduction preflight
+on:
+  push:
+    branches: ['test/telegram-e2e-20261012']
+    paths: ['.github/workflows/telegram-e2e-preflight.yml']
+permissions: {}
+concurrency:
+  group: telegram-e2e-nonproduction
+  cancel-in-progress: false
+jobs:
+  secret-presence:
+    if: github.repository == 'bader5657/AIOS' && github.ref == 'refs/heads/test/telegram-e2e-20261012'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Check dedicated E2E secret without disclosing its value
+        env:
+          E2E_TOKEN: ${{ secrets.AIOS_E2E_TELEGRAM_BOT_TOKEN }}
+        shell: python
+        run: |
+          import os
+          present = bool(os.environ.get("E2E_TOKEN", "").strip())
+          print("AIOS_E2E_TELEGRAM_BOT_TOKEN_AVAILABLE=" + str(present).lower())
+          print("TELEGRAM_CONNECTION=NOT_ATTEMPTED")
+          print("OWNER_ENROLLMENT=NOT_ATTEMPTED")
+          print("LIVE_E2E=WAITING_FOR_NONPRODUCTION_BOT_IDENTITY_AND_VERIFIED_CHALLENGE")
+          raise SystemExit(0 if present else 1)
+  baseline-regression:
+    needs: secret-presence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Verify pinned post-325 baseline with disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASELINE=1cdd11c229a2409c72a0d68b4bc94d536b0eebaf
+          git init -q source
+          git -C source fetch --quiet https://github.com/bader5657/AIOS.git "$BASELINE"
+          git -C source checkout --detach "$BASELINE"
+          test "$(git -C source rev-parse HEAD)" = "$BASELINE"
+          bash source/scripts/verify_customer_registration_disposable.sh "$BASELINE"
