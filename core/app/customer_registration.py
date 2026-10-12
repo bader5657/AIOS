@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from core.app.customer_application import CustomerApplication
 from core.app.customer_draft import CustomerDraft
+from core.app.customer_form import TEMPLATE, input_kind, parse_form
 from core.domain.customer import CustomerId
 from core.domain.exceptions import DomainValidationError
 
@@ -33,9 +34,9 @@ def _object(pairs):
         result[key] = value
     return result
 
-def _snapshot(payload):
-    data = json.loads(payload, object_pairs_hook=_object)
-    if type(data) is not dict or set(data) - {"name", "address", "city", "notes"}:
+def _snapshot(payload, form=False):
+    data = parse_form(payload) if form else json.loads(payload, object_pairs_hook=_object)
+    if type(data) is not dict or set(data) - {"name", "address", "city", "notes", "phone"}:
         raise ValueError("unexpected fields")
     snapshot = CustomerDraft(**data).snapshot()
     for value in snapshot.values():
@@ -54,8 +55,9 @@ class CustomerRegistration:
     def handle(self, actor, message_id, text):
         if type(text) is not str:
             return None
+        kind = input_kind(text)
         command, _, payload = text.partition(" ")
-        if command not in ("catat_pelanggan", "konfirmasi_pelanggan"):
+        if kind is None:
             return None
         if (
             not isinstance(actor, Actor)
@@ -71,8 +73,14 @@ class CustomerRegistration:
             owner = tx.lock_owner()
             if owner is None or owner[0] != actor.user_id or owner[1] is not True:
                 return "Akses ditolak."
-            if command == "catat_pelanggan":
-                reply = self._prepare(tx, actor, message_id, payload, owner[2])
+            if kind in ("start", "cancel"):
+                if message_id < owner[2]:
+                    return "Pesan lama tidak berlaku; gunakan pesan baru."
+                if message_id > owner[2]:
+                    tx.advance_draft(message_id)
+                reply = TEMPLATE if kind == "start" else "Draft pelanggan dibatalkan."
+            elif command == "catat_pelanggan" or kind == "form":
+                reply = self._prepare(tx, actor, message_id, text if kind == "form" else payload, owner[2], form=kind == "form")
             else:
                 reply = self._confirm(tx, actor, message_id, payload)
         return reply
@@ -91,14 +99,14 @@ class CustomerRegistration:
                 tx.advance_draft(message_id)
         return "Edit tidak disimpan. Konfirmasi draft terkait dibatalkan; kirim draft baru."
 
-    def _prepare(self, tx, actor, message_id, payload, last_message_id):
+    def _prepare(self, tx, actor, message_id, payload, last_message_id, form=False):
         # Telegram message IDs are monotonic within this private chat.
         # Stale deliveries must never invalidate a newer draft.
         previous = tx.by_request(message_id)
         if message_id <= last_message_id:
             if previous and message_id == last_message_id:
                 try:
-                    same_snapshot = previous["snapshot"] == _snapshot(payload)
+                    same_snapshot = previous["snapshot"] == _snapshot(payload, form=form)
                 except (ValueError, TypeError, RecursionError, DomainValidationError):
                     same_snapshot = False
                 if same_snapshot and previous["state"] == "consumed":
@@ -111,12 +119,13 @@ class CustomerRegistration:
         try:
             if len(payload) > 3500:
                 raise ValueError("payload too large")
-            snapshot = _snapshot(payload)
+            snapshot = _snapshot(payload, form=form)
             if len(json.dumps(snapshot, ensure_ascii=False)) > 3000:
                 raise ValueError("preview too large")
         except (ValueError, TypeError, RecursionError, DomainValidationError):
-            return ('Data tidak valid. Gunakan catat_pelanggan '
-                    '{"name":"Ani","address":"Jalan 1","city":"Solo","notes":null}')
+            return ("Data tidak valid. Nama dan Kota minimal 2 karakter; Alamat minimal 5. "
+                    "No. Telp opsional: angka, + di awal, spasi, kurung atau tanda hubung; maksimal 64 karakter. "
+                    "Gunakan satu baris per field; jangan ulangi label.\n\n" + TEMPLATE)
         now = tx.clock()
         row = dict(
             token=secrets.token_hex(32), owner_id=actor.user_id,
@@ -154,7 +163,10 @@ class CustomerRegistration:
     @staticmethod
     def _preview(row):
         # Plain text; JSON escapes prevent notes from impersonating instructions.
-        snapshot = json.dumps(row["snapshot"], ensure_ascii=False, sort_keys=True)
+        labels = (("Nama", "name"), ("Alamat", "address"), ("Kota", "city"),
+                  ("No. Telp", "phone"), ("Ket", "notes"))
+        snapshot = "\n".join(label + ": " + json.dumps(row["snapshot"].get(key), ensure_ascii=False)
+                             for label, key in labels)
         return ("Periksa data pelanggan:\n" + snapshot +
                 "\nBerlaku paling lama 600 detik sejak dibuat (retry tidak memperpanjang)." +
                 "\nKirim: konfirmasi_pelanggan " + row["token"])
