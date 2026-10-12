@@ -71,11 +71,15 @@ class CustomerTests(unittest.TestCase):
                 "address",
                 "city",
                 "notes",
+                "phone",
                 "event_id_source",
                 "occurred_at_source",
             ),
         )
         self.assertEqual(signature.parameters["notes"].default, None)
+        self.assertIsNone(signature.parameters["phone"].default)
+        self.assertEqual(signature.parameters["phone"].kind, inspect.Parameter.KEYWORD_ONLY)
+        self.assertIsNone(self.make().phone)
         for name in ("event_id_source", "occurred_at_source"):
             self.assertEqual(
                 signature.parameters[name].kind,
@@ -401,6 +405,7 @@ class CustomerTests(unittest.TestCase):
                 "address",
                 "city",
                 "notes",
+                "phone",
                 "change_name",
                 "change_address",
                 "change_city",
