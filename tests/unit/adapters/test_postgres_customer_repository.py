@@ -92,12 +92,12 @@ class PostgresCustomerRepositoryTests(unittest.TestCase):
         sql, values = self.connection.statements[0]
         self.assertIn("ON CONFLICT (customer_id) DO UPDATE", sql)
         self.assertNotIn("created_at =", sql)
-        self.assertEqual(values, ("id-1", "AB", "12345", "CD", "  notes\n "))
+        self.assertEqual(values, ("id-1", "AB", "12345", "CD", "  notes\n ", None))
         self.assertEqual(customer.pending_events(), before)
         self.assertEqual(self.calls, ["id", "time"])
 
     def test_get_reconstitutes_without_events_and_retains_mutation_sources(self):
-        self.connection.row = ("id-1", "AB", "12345", "CD", None)
+        self.connection.row = ("id-1", "AB", "12345", "CD", None, None)
         customer = self.repo.get(CustomerId("id-1"))
         self.assertEqual(customer.id, CustomerId("id-1"))
         self.assertEqual(customer.name.value, "AB")
@@ -122,7 +122,7 @@ class PostgresCustomerRepositoryTests(unittest.TestCase):
 
     def test_list_uses_python_order_and_returns_tuple(self):
         self.connection.rows = [
-            (identity, "AB", "12345", "CD", "")
+            (identity, "AB", "12345", "CD", "", None)
             for identity in ("é", "a", "Z", "😀")
         ]
         customers = self.repo.list()
@@ -135,14 +135,14 @@ class PostgresCustomerRepositoryTests(unittest.TestCase):
 
     def test_notes_are_preserved_and_corrupt_rows_are_rejected(self):
         for notes in (None, "", " ", "  line\n "):
-            self.connection.row = ("id", "AB", "12345", "CD", notes)
+            self.connection.row = ("id", "AB", "12345", "CD", notes, None)
             self.assertEqual(self.repo.get(CustomerId("id")).notes, notes)
         for row in (
-            (" id", "AB", "12345", "CD", None),
-            ("id", " A", "12345", "CD", None),
-            ("id", "AB", "1234", "CD", None),
-            ("id", "AB", "12345", "C", None),
-            ("id", "AB", "12345", "CD", 1),
+            (" id", "AB", "12345", "CD", None, None),
+            ("id", " A", "12345", "CD", None, None),
+            ("id", "AB", "1234", "CD", None, None),
+            ("id", "AB", "12345", "C", None, None),
+            ("id", "AB", "12345", "CD", 1, None),
         ):
             self.connection.row = row
             with self.assertRaises(DomainValidationError):
