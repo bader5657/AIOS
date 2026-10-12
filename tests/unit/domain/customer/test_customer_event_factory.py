@@ -27,7 +27,7 @@ from core.domain.exceptions import DomainValidationError
 METHOD_CASES = {
     "create_customer_created": (
         CustomerCreated,
-        ("id", "occurred_at", "customer_id", "name", "address", "city", "notes"),
+        ("id", "occurred_at", "customer_id", "name", "address", "city", "notes", "phone"),
         "customer.created",
     ),
     "create_customer_name_changed": (
@@ -78,6 +78,7 @@ class CustomerEventFactoryTests(unittest.TestCase):
                 "address": self.address,
                 "city": self.city,
                 "notes": "  notes verbatim  ",
+                "phone": "00123",
             },
             "create_customer_name_changed": {
                 "previous_name": self.name,
