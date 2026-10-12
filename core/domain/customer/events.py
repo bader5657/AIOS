@@ -10,6 +10,7 @@ from core.domain.customer.customer_id import CustomerId
 from core.domain.customer.customer_name import CustomerName
 from core.domain.domain_event import DomainEvent
 from core.domain.exceptions import DomainValidationError
+from core.domain.customer.customer_phone import validate_phone
 
 
 __all__ = (
@@ -85,8 +86,8 @@ class _CustomerEventRecord:
 class CustomerCreated(_CustomerEventRecord, DomainEvent):
     """Customer creation fact."""
 
-    __slots__ = ("_customer_id", "_name", "_address", "_city", "_notes")
-    _payload_fields = ("customer_id", "name", "address", "city", "notes")
+    __slots__ = ("_customer_id", "_name", "_address", "_city", "_notes", "_phone")
+    _payload_fields = ("customer_id", "name", "address", "city", "notes", "phone")
     _EVENT_NAME = "customer.created"
 
     def __init__(
@@ -100,18 +101,21 @@ class CustomerCreated(_CustomerEventRecord, DomainEvent):
         address: CustomerAddress,
         city: CustomerCity,
         notes: str | None,
+        phone: str | None = None,
     ) -> None:
         _require_exact(customer_id, CustomerId, "customer_id")
         _require_exact(name, CustomerName, "name")
         _require_exact(address, CustomerAddress, "address")
         _require_exact(city, CustomerCity, "city")
         _require_notes(notes, "notes")
+        validate_phone(phone)
         self._initialize_event(id, occurred_at, event_name, self._EVENT_NAME)
         self._customer_id = customer_id
         self._name = name
         self._address = address
         self._city = city
         self._notes = notes
+        self._phone = phone
 
     @property
     def customer_id(self) -> CustomerId:
@@ -132,6 +136,11 @@ class CustomerCreated(_CustomerEventRecord, DomainEvent):
     @property
     def notes(self) -> str | None:
         return self._notes
+
+
+    @property
+    def phone(self) -> str | None:
+        return self._phone
 
 
 class CustomerNameChanged(_CustomerEventRecord, DomainEvent):
