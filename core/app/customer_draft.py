@@ -6,6 +6,7 @@ from core.domain.customer.customer_address import CustomerAddress
 from core.domain.customer.customer_city import CustomerCity
 from core.domain.customer.customer_name import CustomerName
 from core.domain.exceptions import DomainValidationError
+from core.domain.customer.customer_phone import validate_phone
 
 
 @dataclass(slots=True)
@@ -21,6 +22,7 @@ class CustomerDraft:
     address: str | None = None
     city: str | None = None
     notes: str | None = None
+    phone: str | None = None
 
     def __post_init__(self) -> None:
         self._validate_supplied()
@@ -37,6 +39,10 @@ class CustomerDraft:
     def set_notes(self, value: str | None) -> None:
         self._validate_notes(value)
         self.notes = value
+
+    def set_phone(self, value: str | None) -> None:
+        validate_phone(value)
+        self.phone = value
 
     def missing_fields(self) -> tuple[str, ...]:
         return tuple(
@@ -64,12 +70,16 @@ class CustomerDraft:
     def snapshot(self) -> dict[str, str | None]:
         """Return a fresh complete snapshot without changing the draft."""
         self.validate()
-        return {
+        result = {
             "name": self.name,
             "address": self.address,
             "city": self.city,
             "notes": self.notes,
         }
+        # Preserve legacy snapshots and pending confirmations when phone is absent.
+        if self.phone is not None:
+            result["phone"] = self.phone
+        return result
 
     def _validate_supplied(self) -> None:
         if self.name is not None:
@@ -79,6 +89,7 @@ class CustomerDraft:
         if self.city is not None:
             CustomerCity(self.city)
         self._validate_notes(self.notes)
+        validate_phone(self.phone)
 
     @staticmethod
     def _validate_notes(value: str | None) -> None:
