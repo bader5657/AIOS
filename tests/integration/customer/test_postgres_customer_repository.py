@@ -109,6 +109,7 @@ class PostgresCustomerIntegrationTests(unittest.TestCase):
         # Fail if a prior table exists: no destructive cleanup of unknown state.
         with self.connect() as connection:
             connection.execute(UP.read_text(encoding="utf-8"))
+            connection.execute((ROOT / "migrations/postgres/0008_customer_phone.up.sql").read_text(encoding="utf-8"))
 
     def tearDown(self):
         with self.connect() as connection:
@@ -235,6 +236,7 @@ class PostgresCustomerIntegrationTests(unittest.TestCase):
             connection.execute(DOWN.read_text(encoding="utf-8"))
             self.assertIsNone(connection.execute("SELECT to_regclass('customers')").fetchone()[0])
             connection.execute(UP.read_text(encoding="utf-8"))
+            connection.execute((ROOT / "migrations/postgres/0008_customer_phone.up.sql").read_text(encoding="utf-8"))
             self.repo(connection).save(self.customer())
             created_at = connection.execute("SELECT created_at FROM customers").fetchone()[0]
             self.assertIsInstance(created_at, datetime)
