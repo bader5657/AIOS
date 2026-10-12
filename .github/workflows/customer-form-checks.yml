@@ -20,4 +20,4 @@ jobs:
           test "$(git -C source rev-parse HEAD)" = "$TARGET_SHA"
           bash source/scripts/verify_customer_registration_disposable.sh "$TARGET_SHA"
 
-# Verification round: form-v1 implementation
+# Verification round: optional phone contract assertions
