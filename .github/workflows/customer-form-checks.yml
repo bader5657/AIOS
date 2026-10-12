@@ -1,0 +1,21 @@
+name: Customer Telegram form isolated checks
+on:
+  push:
+    branches: ['feat/customer-telegram-form-v1-20261012']
+    paths: ['.github/workflows/customer-form-checks.yml']
+permissions: {}
+jobs:
+  isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Fetch exact branch commit and verify
+        env:
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q source
+          git -C source fetch --quiet https://github.com/bader5657/AIOS.git "$TARGET_SHA"
+          git -C source checkout --detach "$TARGET_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$TARGET_SHA"
+          bash source/scripts/verify_customer_registration_disposable.sh "$TARGET_SHA"
